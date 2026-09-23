@@ -15,21 +15,23 @@ the caller — it never claims intent.
 
 ## Detected classes
 
-Eight branches fire. Six need no lexicon — only `leet` and `segmentation` do.
+Fifteen kinds fire. Thirteen need no lexicon: only `leet` and `segmentation` do.
 
 The table below is grouped by kind, not by evaluation order. `control` is checked
 **first**, ahead of the ASCII fast-path, because `NUL`, `ESC`, `BEL` and `DEL` are
 themselves ASCII: a check placed after that fast-path would never see the vectors it
-exists for. The remaining branches split on `!tok.is_ascii()`, so `invisible`, `bidi`,
-`zalgo`, `bidi_mixed` and `mixed_script` only run on non-ASCII tokens, and `leet` and
-`segmentation` run last on everything.
+exists for. The per-token branches after it split on `!tok.is_ascii()`:
+`mixed_numbers`, `invisible`, `bidi`, `enclosing_mark`, `zalgo`, `duplicate_mark`,
+`bidi_mixed`, `mixed_script` and `compat_fold` only run on non-ASCII tokens, `leet` and
+`segmentation` then run on everything, and `confusable` runs last, on non-ASCII tokens.
+`deletion` and `smuggled` are not per-token at all: they read the whole text.
 
 Most branches are script-agnostic and port across writing systems. `mixed_script` is the
 exception — it is anchored on Latin, and fires on Latin combined with Cyrillic or Greek.
 
 | Kind | Fires on | Spared (false-positive guards) |
 |---|---|---|
-| `invisible` | a zero-width / formatting codepoint inside a Latin word; a run of **tag**, **variation-selector**, zero-width or **Private Use Area** characters standing on their own (#700, #812); the twelve `Default_Ignorable` `Cf` code points that are invisible by property rather than by name — Duployan `U+1BCA0`–`U+1BCA3` and musical `U+1D173`–`U+1D17A` (#813) | emoji ZWJ sequences; ZWJ/ZWNJ joiners in Indic & Arabic; soft hyphen; a **single** Private Use Area code point, which is an icon-font glyph — it takes four in a row, the same reason `strip_format` keeps the block at all (#413); the 29 `Cf` code points that render and carry meaning, such as the Arabic number signs and the Egyptian hieroglyph layout controls |
+| `invisible` | a zero-width / formatting codepoint inside a Latin word; a run of **tag**, **variation-selector**, zero-width or **Private Use Area** characters standing on their own (#700, #812); the twelve `Default_Ignorable` `Cf` code points that are invisible by property rather than by name — Duployan `U+1BCA0`–`U+1BCA3` and musical `U+1D173`–`U+1D17A` (#813); the deprecated format controls `U+206A`-`U+206F` and the interlinear annotation characters `U+FFF9`-`U+FFFB`, which `strip_bidi`, `strip_format` and `canonicalize` delete from a word; and any **noncharacter** (`U+FDD0`-`U+FDEF` and the last two code points of every plane), even one standing alone: nothing legitimate emits one, and `canonicalize` deletes it. Those two were found by the Lean model in `formal/lean/Detection` (Finding 1) | emoji ZWJ sequences; ZWJ/ZWNJ joiners in Indic & Arabic; soft hyphen; a **single** Private Use Area code point, which is an icon-font glyph — it takes four in a row, the same reason `strip_format` keeps the block at all (#413); the 29 `Cf` code points that render and carry meaning, such as the Arabic number signs and the Egyptian hieroglyph layout controls |
 | `bidi` | an LRO/RLO override anywhere; an isolate or an LRE..PDF embedding in a token that is majority-Latin **or has no letters at all** (`12<isolate>34` — a bare account number is exactly the carrier, so numeric tokens are in scope, Trojan Source, #643); an `RLM`/`ALM` immediately before a run of European numbers in the same context — `Transfer <RLM>100 200 300 to Bob` renders `Transfer 300 200 100 to Bob` (#741) | `LRM`, which produced no reordering over any carrier measured; `RLM`/`ALM` anywhere other than in front of a number run, so RTL prose and hashtags do not fire |
 | `zalgo` | excessive stacked combining marks | ordinary accents |
 | `enclosing_mark` | two or more **enclosing marks** (`Me`) in one token — `I⃝g⃝n⃝o⃝r⃝e⃝`. Its own kind rather than a `zalgo` finding, because it is a different fact: not "too many marks" but a mark whose category is never an accent. One per base is below every threshold — `is_zalgo` fires above three, `strip_zalgo` keeps two — so the class was clean at every surface while `strip_obfuscation` removed it (#724) | keycap sequences (`1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what makes it an RGI keycap); Cyrillic `Me` on a Cyrillic base, which is historic notation; a single enclosing mark, which is a character someone may have typed |
@@ -43,7 +45,7 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 | `deletion` | a lone **carriage return** that overwrites text — `ZZZZZZ<CR>paypal` renders as `paypal` on any terminal, and nothing in the code points says so. The fourth class in the Boucher et al. taxonomy (§IV-G), and the one the other three generators in `tests/test_attack_corpus.py` did not cover. Its own kind rather than a `control` finding because the kind names the treatment path, and since #937 the two paths diverge further: `BS` and `DEL` are **resolved** — the preset applies the erase, so `pXaXyXpXaXlX` comes back as `paypal` — while a lone `CR` is resolved by nothing unless the caller sets `resolve_cr`, because it is byte-identical to a classic Mac OS line ending. Detection is unchanged either way: a reader who saw a control picture is still told. Text-level, not per-token: a lone `CR` is whitespace, so it splits the tokens either side of it and both halves are clean on their own (#739) | a `CRLF` line ending; a `CR` at end of text, which overwrites nothing; a `CR` at the start of a line, which has no prefix to hide — after any UAX #14 mandatory break (`LF`, `VT`, `FF`, `NEL`, `LS`, `PS`), not just `LF`. **Known false positive:** a classic Mac OS file, which used a lone `CR` as its line ending until 2001 — indistinguishable from an overwrite in the bytes, so the report is a technical fact and the judgement is yours |
 | `smuggled` | a run of smuggling carriers that **decodes to readable text** — `tag_ascii` (`U+E0020`–`U+E007E`), `variation_bytes` (`U+FE00`–`U+FE0F`, `U+E0100`–`U+E01EF`) or `zero_width_binary` (`U+200B` = 0, `U+200C` = 1, MSB first). `invisible` reports that a carrier is *present*; this reports what it *says*. Different strengths of evidence: an invisible character can arrive by accident — a copy-paste artefact, a BOM, an editor quirk — but a run that decodes to printable text cannot, because random damage does not spell words. It therefore needs no threshold and no policy to interpret, and leads the `kinds` list when it fires. **Additive:** the run is still reported as `invisible` too, so a caller already matching that kind keeps working (#701) | `percent_escape`, the fourth scheme `decode_smuggled` reports — a `%XX` run spelling readable text is ordinary in any URL, so it is decoded for inspection and deliberately never reported here (#727); a run whose bytes are not valid printable UTF-8 — left to `invisible`, which is the right verdict for it; a well-formed emoji subdivision flag, using the stripper's own allowlist rather than a second copy of it; a lone variation selector, which is emoji presentation |
 | `compat_fold` | a token mixing a Unicode **compatibility** form with ASCII, where the non-ASCII part folds *to ASCII* — `ａdmin`, `ｅxample.com`, `＜script＞`. `canonicalize` performs that fold as its first step, so the class was neutralized and reported clean | ordinary fullwidth typography with no ASCII letter (`ＮＨＫ`, `Ｑ＆Ａ`, `１９９５年`, `ＣＤ－ＲＯＭ`); unit symbols whose fold is Greek, not ASCII (`kΩ`, `µF`), and the squared CJK units that do fold to ASCII but carry no letter (`10㎏` → `10kg`, `5㎞` → `5km`); and a token spelled *wholly* in a compatibility form (`ｐａｙｐａｌ`), which cannot be told from `ＮＨＫ` by character class |
-| `confusable` | a token where the **confusable fold** — not NFKC — produces ASCII the input did not carry: `pɑypal` (`U+0251`), `gıthub` (`U+0131`), `ord∶end` (`U+2236` → `:`). `canonicalize` has two ASCII-producing steps and `compat_fold` reported only the first; the second is the largest table disarm ships and the detector never consulted it. The slice with no compatibility decomposition is also single-script, so `mixed_script` cannot see it either. 232 code points reach ASCII by the fold alone, 76 producing one of `: = % & ? # / \` | text where every letter folds to Latin and none is ASCII — `Привет`, `Ελλάδα`, which is the whole-legitimate-non-Latin-web over-flagging #545 removed from `is_suspicious_hostname`; accented Latin, which the fold leaves alone (`café`, `naïve`, `straße`); unit symbols (`µF`, `kΩ`); and a word boundary — `IT-специалист` is two words, judged separately |
+| `confusable` | a token where the **confusable fold** — not NFKC — produces ASCII the input did not carry: `pɑypal` (`U+0251`), `gıthub` (`U+0131`), `ord∶end` (`U+2236` → `:`). The fold also reaches **187 Latin letters** that differ from an ASCII letter in shape rather than by an accent: a stroke, bar or hook (`\u00f8`, `\u0142`, `\u0111`, `\u0127`), a dotless or turned form (`\u0131`, `\u01dd`), a small capital, an IPA letter. Those folds are deliberate and report, so `K\u00f8benhavn` and `\u0141\u00f3d\u017a` fire. 186 of them have no decomposition; the other, `\u01fe`, is `\u00d8` plus an acute and reports exactly when `\u00d8` does. `canonicalize` has two ASCII-producing steps and `compat_fold` reported only the first; the second is the largest table disarm ships and the detector never consulted it. The slice with no compatibility decomposition is also single-script, so `mixed_script` cannot see it either. 232 code points reach ASCII by the fold alone, 76 producing one of `: = % & ? # / \` | text where every letter folds to Latin and none is ASCII — `Привет`, `Ελλάδα`, which is the whole-legitimate-non-Latin-web over-flagging #545 removed from `is_suspicious_hostname`; accented Latin, where the fold leaves the letter alone (`café`, `naïve`, `straße`) or only drops the accent: a letter whose canonical decomposition begins with the ASCII letter it folds to, so `Fran\u00e7ais` and `ch\u1ec9` are spared (found by the Lean model in `formal/lean/Detection`, Finding 4); unit symbols (`µF`, `kΩ`); and a word boundary — `IT-специалист` is two words, judged separately |
 
 ### The `bidi` kind is a judgement, not a census (#778)
 
@@ -69,6 +71,27 @@ The three predicates are disjoint answers to different questions: `has_bidi_cont
 raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
 strong-direction **letters** and is structurally blind to controls altogether.
 
+
+### One verdict for every canonically equivalent spelling
+
+`\u00e9` is one code point in NFC and two in NFD, and a reader cannot tell them apart. The
+detector gives both spellings the same report: it classifies each token in its composed
+form (NFC), and the tests that ask for an ASCII letter read a letter through its
+canonical decomposition, so `\u00e9` counts as the `e` it is. Before this, `\u00e9t\u00e9`
+followed by an isolate was clean in NFC and `bidi` in NFD, and the NFC spelling, the one
+nearly all text arrives in, was the unreported one (found by the Lean model in
+`formal/lean/Detection`, Finding 3). `tests/exhaustive_anomalies.rs` checks the property
+over every Unicode scalar.
+
+The exception is a character NFC **replaces** with a different one rather than
+composing: the canonical singletons, such as `U+212A KELVIN SIGN` (to `K`) and
+`U+037E GREEK QUESTION MARK` (to `;`), and duplicate encodings such as `U+1FEE`. Those are
+not a spelling of the letters they stand for, they are different characters that look
+like them, so the detector judges them as spelled: `\u212Aey` reports `compat_fold`
+where `Key` reports nothing, and `canonicalize` rewrites it. Neither NFC nor NFD
+contains such a character, so any text's two normal forms still get one verdict. A
+caller who must refuse bytes that are not already normalized wants `is_normalized` or
+`is_canonical`, not this detector.
 
 !!! note "`canonicalize` preserves enclosing marks; `strip_obfuscation` removes them"
 
@@ -159,8 +182,8 @@ finding's plain-language sentence). Each **finding** carries the offending
 `kind`, `token`, byte `start`/`end` span, `detail` (the codepoint, the scripts,
 or the decoded word), and its own `reason`.
 
-A `False` result is not a safety guarantee — it means only that none of the six
-branches fired on the lexicon you supplied. Compose this with your own policy, as
+A `False` result is not a safety guarantee — it means only that none of the fifteen
+kinds fired on the lexicon you supplied. Compose this with your own policy, as
 you would the hostname analysis.
 
 ## Checking a transform at the seam
@@ -210,8 +233,9 @@ assert inspect_anomalies(normalize_confusables(hostile)).kinds == ["invisible"]
 
     At that recall this is a useful alarm and a useless all-clear. Wire it into CI
     as an acceptance test and it will read "clean" on well over half the inputs that
-    are not. The PUA column is the sharpest case: private-use characters are not an
-    anomaly kind, so every transform that forwards one is reported clean.
+    are not. The PUA column is the sharpest case: a single private-use character is
+    not an anomaly (it takes a run of four, #812), so a transform that forwards one is
+    reported clean.
 
     See [#643](https://github.com/raeq/disarm/issues/643) for classes the panel
     does not cover.

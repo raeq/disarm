@@ -59,6 +59,27 @@ pub(crate) fn is_default_ignorable_format(ch: char) -> bool {
     matches!(ch, '\u{1BCA0}'..='\u{1BCA3}' | '\u{1D173}'..='\u{1D17A}')
 }
 
+/// The deprecated format controls and the interlinear annotation characters: the one
+/// set of invisible `Cf` code points that only the bidi strip used to know about.
+///
+/// - `U+206A`-`U+206F` INHIBIT/ACTIVATE SYMMETRIC SWAPPING, INHIBIT/ACTIVATE ARABIC FORM
+///   SHAPING, NATIONAL/NOMINAL DIGIT SHAPES. Deprecated since Unicode 3.0, and
+///   `Default_Ignorable_Code_Point=Yes`: they render as nothing.
+/// - `U+FFF9`-`U+FFFB` INTERLINEAR ANNOTATION ANCHOR, SEPARATOR, TERMINATOR. Not
+///   `Default_Ignorable`, but invisible formatting by definition, and the Core Spec
+///   (section 23.8) reserves them for use under prior agreement.
+///
+/// One predicate, used by both of its readers, which is the reason it lives here. The set
+/// used to be restated inside `presets::is_bidi_or_format` (#67.2), so `strip_bidi`,
+/// `strip_format` and `canonicalize` deleted `pay` + `U+206A` + `pal` down to `paypal`
+/// while the anomaly detector, which reads only this module, reported it clean. That is
+/// the shape #813 closed for `U+1D173` and #700 for `U+2064`, found again by the Lean
+/// model in `formal/lean/Detection` (Finding 1).
+#[inline]
+pub(crate) fn is_deprecated_or_annotation_format(ch: char) -> bool {
+    matches!(ch, '\u{206A}'..='\u{206F}' | '\u{FFF9}'..='\u{FFFB}')
+}
+
 /// Variation selectors: VS1–VS16 (`U+FE00`–`U+FE0F`) and the Variation
 /// Selectors Supplement VS17–VS256 (`U+E0100`–`U+E01EF`).
 #[inline]

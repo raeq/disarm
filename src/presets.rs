@@ -1062,8 +1062,10 @@ fn is_bidi_or_format(ch: char) -> bool {
     // U+FFF9–U+FFFB (interlinear annotation anchor/separator/terminator) are
     // invisible/format characters; strip them here too so strip_bidi /
     // strip_format don't leave them behind (they were previously only handled
-    // as transliteration-table entries).
-    matches!(ch, '\u{206A}'..='\u{206F}' | '\u{FFF9}'..='\u{FFFB}')
+    // as transliteration-table entries). Defined in `invisibles`, not here, so the
+    // anomaly detector reads the same set this strip deletes (Finding 1 of the Lean
+    // model in `formal/lean/Detection`).
+    invisibles::is_deprecated_or_annotation_format(ch)
 }
 
 // ---------------------------------------------------------------------------

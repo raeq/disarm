@@ -52,6 +52,12 @@ fn is_invisible_in_word(c: char) -> bool {
         // which is the inconsistency that makes it a defect rather than a coverage gap —
         // the argument #643 made for the fillers on the line above.
         || crate::invisibles::is_default_ignorable_format(c)
+        // The deprecated format controls and the interlinear annotation characters, which
+        // `strip_bidi`, `strip_format` and `canonicalize` all delete. They were defined
+        // only inside the bidi strip, so the detector never saw them and `pay` + `U+206A`
+        // + `pal` screened clean while every comparison preset returned `paypal` (Finding
+        // 1 of the Lean model in `formal/lean/Detection`).
+        || crate::invisibles::is_deprecated_or_annotation_format(c)
 }
 
 /// Soft hyphen — legitimate hyphenation between letters, so it is a run-rule carrier only.
@@ -82,10 +88,21 @@ const CGJ: char = '\u{034F}';
 /// above one, unlike the tag block where nothing legitimate emits even one. Four is the
 /// shortest run that no icon font produces and that still catches the shape
 /// `canonicalize` was already deleting silently.
+///
+/// Noncharacters take one, for the tag block's reason. `U+FDD0`-`U+FDEF` and the last two
+/// code points of every plane are permanently reserved for a process's internal use
+/// (Core Spec section 23.7), so none belongs in text a guardrail is screening, and one is
+/// already the anomaly: `canonicalize` deletes it, and `pay` + `U+FDD0` + `pal` became
+/// `paypal` while the detector reported clean. The library already classes them as
+/// invisible in both its other readers: `is_invisible_in_hostname` and the smuggled-payload
+/// decoder's `is_visible`. Not a neighbour rule, because a letter beside one adds nothing
+/// to the evidence, and a byte-swapped BOM (`U+FFFE`) standing alone at the start of a text
+/// is exactly the input a neighbour rule cannot see.
 const RUN_THRESHOLD_TAG: usize = 1;
 const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
 const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
 const RUN_THRESHOLD_PRIVATE_USE: usize = 4;
+const RUN_THRESHOLD_NONCHARACTER: usize = 1;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,6 +114,9 @@ enum Carrier {
     /// a guardrail screening with `has_anomalies` passed exactly what the comparison
     /// presets had decided was not text.
     PrivateUse,
+    /// The 66 noncharacters, which `canonicalize` deletes and nothing reported (the
+    /// secondary finding under Finding 1 of the Lean model in `formal/lean/Detection`).
+    Noncharacter,
 }
 
 impl Carrier {
@@ -109,6 +129,8 @@ impl Carrier {
             Some(Self::ZeroWidth)
         } else if crate::invisibles::is_pua(c) {
             Some(Self::PrivateUse)
+        } else if crate::invisibles::is_noncharacter(c) {
+            Some(Self::Noncharacter)
         } else {
             None
         }
@@ -120,6 +142,7 @@ impl Carrier {
             Self::VariationSelector => RUN_THRESHOLD_VARIATION_SELECTOR,
             Self::ZeroWidth => RUN_THRESHOLD_ZERO_WIDTH,
             Self::PrivateUse => RUN_THRESHOLD_PRIVATE_USE,
+            Self::Noncharacter => RUN_THRESHOLD_NONCHARACTER,
         }
     }
 }
@@ -415,10 +438,13 @@ pub enum AnomalyKind {
     /// `is_zalgo`'s threshold by construction.
     ///
     /// It is not removable by the cap either. `strip_zalgo` keeps up to
-    /// `DEFAULT_MAX_MARKS` per position, so a duplicate survives canonicalization
-    /// whatever the cap is set to: a base with two acutes does not canonicalize to the
-    /// same string as the same base with one. Two spellings a reader sees as one word
-    /// produce different keys, and nothing reported it (#835).
+    /// `DEFAULT_MAX_MARKS` per position whatever the cap is set to, so a base with two
+    /// acutes survives `strip_zalgo` next to the same base with one. Two spellings a
+    /// reader sees as one word, and nothing reported it (#835). The key builders now run
+    /// a separate step for it (`drop_repeated_marks_into`, ahead of the cap), so
+    /// `canonicalize` gives `x` + two acutes and `x` + one the same key; the detector
+    /// still reports the repeat, because the text that has not been through a key builder
+    /// still carries two spellings.
     ///
     /// Restricted to marks of **nonzero combining class**, which is #842's discriminator:
     /// a class-0 mark is positioned by the renderer rather than stacked, and a repeated
@@ -719,15 +745,96 @@ fn leet_demangle(s: &str) -> Option<String> {
     Some(out)
 }
 
+/// Whether `c` is an ASCII letter once it is read through its canonical decomposition:
+/// `e`, and also `\u{e9}`, whose NFD is `e` + `U+0301`.
+///
+/// The four tests in [`classify`] that ask "is there an ASCII letter here" used to ask it
+/// of the code points as spelled, so `\u{e9}t\u{e9}` was not "majority Latin" and
+/// `e\u{301}te\u{301}` was: one word, two verdicts, and the unreported one was NFC, the
+/// form nearly all text arrives in (Finding 3 of the Lean model in `formal/lean/Detection`).
+/// Reading the base letter is what `duplicate_stacking_mark` already did by running over
+/// NFD.
+///
+/// Per character rather than over the NFD string, so a Hangul syllable stays one letter
+/// instead of becoming its two or three jamo: the classifier counts letters, and a
+/// decomposition that multiplies them would move `is_majority_latin` on Korean.
+///
+/// A [`nfc_replaces`] scalar is excluded: `\u{212A}` KELVIN SIGN decomposes to `K`, but it
+/// is not `K` plus an accent, it is a different character that looks like one.
+fn is_ascii_letter_base(c: char) -> bool {
+    c.is_ascii_alphabetic()
+        || (!c.is_ascii()
+            && !nfc_replaces(c)
+            && c.nfd().next().is_some_and(|b| b.is_ascii_alphabetic()))
+}
+
+/// Whether NFC replaces `c` on its own with one **different** scalar.
+///
+/// That is every canonical singleton (`\u{212A}` KELVIN SIGN to `K`, `\u{2126}` OHM SIGN
+/// to Greek omega, `\u{37E}` GREEK QUESTION MARK to `;`, the CJK compatibility
+/// ideographs), and the duplicate encodings that recompose to another code point
+/// (`\u{1FEE}` to `\u{385}`, `\u{1F71}` to `\u{3AC}`). None of them is a composition of the
+/// letters it stands for: NFC substitutes a different character, which is exactly what a
+/// homoglyph is, and `canonicalize` rewrites it. So [`composed`] keeps them as spelled
+/// and the detector reports them as it always did. A scalar whose NFC is a sequence
+/// (`\u{958}`, `\u{344}`) is a precomposed spelling of that sequence and is composed like
+/// any other.
+///
+/// Computed from the normalization tables the crate already carries, rather than a list:
+/// the set is a property of the data, and a list would drift with it.
+fn nfc_replaces(c: char) -> bool {
+    let mut nfc = c.nfc();
+    let first = nfc.next();
+    first.is_some_and(|f| f != c) && nfc.next().is_none()
+}
+
+/// The token in NFC, borrowed when it already is, with [`nfc_replaces`] scalars kept.
+///
+/// [`classify`] reads this rather than the token as spelled, so the tests it runs give
+/// canonically equivalent spellings of the same letters one verdict: `\u{e9}t\u{e9}` and
+/// `e\u{301}te\u{301}` are one word to a reader and now one word to the detector (Finding 3
+/// of the Lean model in `formal/lean/Detection`). Composed rather than decomposed because
+/// the tables it consults are keyed on composed characters, as the confusable fold is
+/// (`fold_and_detect_are_form_invariant`, #475), and because a caller's lexicon is almost
+/// always NFC. The letter tests still see through a precomposed character, via
+/// [`is_ascii_letter_base`].
+///
+/// The property is therefore stated over spellings that contain no [`nfc_replaces`]
+/// scalar. That costs nothing for NFC and NFD, since neither form can contain one, so
+/// every text's NFC and NFD still get one verdict. What it keeps is the report on a raw
+/// `\u{212A}ey` or `a\u{37E}b`, which composing would have read as `Key` and `a;b` and
+/// passed as clean text that `canonicalize` changes, the silence Finding 1 is about.
+fn composed(tok: &str) -> std::borrow::Cow<'_, str> {
+    use unicode_normalization::{is_nfc_quick, IsNormalized};
+    if tok.is_ascii() || is_nfc_quick(tok.chars()) == IsNormalized::Yes {
+        return std::borrow::Cow::Borrowed(tok);
+    }
+    let mut out = String::with_capacity(tok.len());
+    let mut run = String::new();
+    for c in tok.chars() {
+        if nfc_replaces(c) {
+            out.extend(run.nfc());
+            run.clear();
+            out.push(c);
+        } else {
+            run.push(c);
+        }
+    }
+    out.extend(run.nfc());
+    std::borrow::Cow::Owned(out)
+}
+
 fn is_majority_latin(tok: &str) -> bool {
     // Single pass with two integer counters (no Vec allocation): count alphabetic
-    // letters and how many of them are ASCII (Latin).
+    // letters and how many of them are Latin: an ASCII letter, or one read through its
+    // decomposition (`\u{e9}` is `e`), which is what makes the count the same for NFC
+    // and NFD spellings (Finding 3 of the Lean model in `formal/lean/Detection`).
     let mut letters = 0usize;
     let mut ascii = 0usize;
     for c in tok.chars() {
         if c.is_alphabetic() {
             letters += 1;
-            if c.is_ascii() {
+            if is_ascii_letter_base(c) {
                 ascii += 1;
             }
         }
@@ -898,7 +1005,23 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
             return None;
         }
         if let Some(target) = ascii_target(c) {
-            return Some((c, target));
+            // A letter whose decomposition begins with its own fold target is that letter
+            // plus an accent, and the fold only drops the accent: `\u{e7}` is `c` + cedilla
+            // and folds to `c`, `\u{1ec9}` is `i` + hook above and folds to `i`. That is
+            // orthography, not a disguise, and the guide spares accented Latin, so
+            // `Fran\u{e7}ais` must not report. It did, and its NFD spelling did not
+            // (Findings 3 and 4 of the Lean model in `formal/lean/Detection`).
+            //
+            // The letters the fold changes in shape stay reported: `\u{f8}`, `\u{142}`,
+            // `\u{111}` have no decomposition, and `\u{1fe}` decomposes to `\u{d8}` +
+            // acute, so it reports exactly when `\u{d8}` does. Those folds are deliberate
+            // (`tests/integration_unmapped_confusables.rs`).
+            //
+            // A scalar NFC replaces outright is excluded: `\u{212A}` KELVIN SIGN decomposes to
+            // exactly its target `K`, and it is a different character, not `K` + an accent.
+            let mut nfd = c.nfd();
+            let accent_only = !nfc_replaces(c) && target.chars().all(|t| nfd.next() == Some(t));
+            return (!accent_only).then_some((c, target));
         }
         // The composed case, which #719 calls the subtle one: `U+00BD` NFKC-decomposes to
         // `1⁄2`, whose middle character is `U+2044` and is NOT ASCII — so the `CompatFold`
@@ -941,9 +1064,15 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         //
         // And the script comes from `detect_char_script`, the one resolver, rather than
         // from a hand-written range: the first draft listed `U+0400-04FF` and
-        // `U+A640-A69F` and so missed Cyrillic Supplement and Extended-C, reporting
-        // ordinary `\u{501}\u{488}` and `\u{1C80}\u{488}`. Restating a range that the
-        // library already resolves is the failure #774 was about.
+        // `U+A640-A69F` and so missed Cyrillic Supplement, reporting ordinary
+        // `\u{501}\u{488}`. Restating a range that the library already resolves is the
+        // failure #774 was about.
+        //
+        // It does not reach Extended-C. `U+1C80` resolves to no script at all, because
+        // the block table in `src/scripts.rs` omits `U+1C80`-`U+1C8F`, so
+        // `\u{1C80}\u{488}\u{1C81}\u{489}` still reports `enclosing_mark`: a known
+        // limit, pinned by `test_cyrillic_extended_c_is_a_known_negative` in
+        // `tests/test_marks_and_bidi_marks.py` rather than fixed here.
         let base_is_cyrillic = chars[..i]
             .iter()
             .rev()
@@ -1133,15 +1262,20 @@ fn carrier_run(chars: &[char]) -> Option<(char, usize)> {
     best
 }
 
-fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Finding> {
-    let end = start + tok.len();
+fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Finding> {
+    let end = start + raw.len();
     let mk = |kind: AnomalyKind, detail: String| Finding {
         kind,
-        token: tok.to_string(),
+        token: raw.to_string(),
         start,
         end,
         detail,
     };
+    // Every test below reads the token's NFC, not its spelling, so canonically equivalent
+    // tokens get one verdict (Finding 3 of the Lean model in `formal/lean/Detection`). The
+    // finding still reports the token and span as they appear in the input.
+    let composed = composed(raw);
+    let tok: &str = &composed;
 
     // `core` (token with wrapping punctuation trimmed) is needed by both the mixed-script
     // branch and the leet/segmentation branches; compute it once.
@@ -1204,7 +1338,9 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             let joiner = c == '\u{200C}' || c == '\u{200D}';
             let letter = |slice: &[char]| {
                 if joiner {
-                    slice.iter().any(char::is_ascii_alphabetic)
+                    // Read through the decomposition, so `\u{e9}` counts as the `e` it
+                    // is: `\u{e9}` ZWJ `\u{e9}` and its NFD spelling were split verdicts.
+                    slice.iter().copied().any(is_ascii_letter_base)
                 } else {
                     slice.iter().copied().any(char::is_alphabetic)
                 }
@@ -1255,10 +1391,19 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // The carrier is always a number run: an account number, an amount, a date.
             // Each group keeps its internal digits and the groups swap places, which is
             // what makes the rendering stay plausible.
-            if let Some(i) = chars.iter().position(|c| BIDI_RTL_MARKS.contains(c)) {
-                if chars.get(i + 1).is_some_and(char::is_ascii_digit) {
-                    return Some(mk(AnomalyKind::Bidi, codepoint(chars[i])));
-                }
+            //
+            // EVERY mark, not the first. `position` found the first mark and tested only
+            // that one, so a second mark in front of the first defeated the rule:
+            // `Transfer <RLM><RLM>100 200 300 to Bob` still renders reversed, since the
+            // second mark is one more strong R beside the first and changes no resolved
+            // level, and it screened clean (Finding 2 of the Lean model in
+            // `formal/lean/Detection`, whose `anyRlmBeforeDigit_iff` proves this form is
+            // exactly the documented rule).
+            if let Some(w) = chars
+                .windows(2)
+                .find(|w| BIDI_RTL_MARKS.contains(&w[0]) && w[1].is_ascii_digit())
+            {
+                return Some(mk(AnomalyKind::Bidi, codepoint(w[0])));
             }
         }
         // #724: checked BEFORE the count-based zalgo rule, because it is a different fact
@@ -1383,7 +1528,8 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // `detail` stays the whole token's NFKC fold (#722 §4), so a caller still sees
         // `paypal` rather than a fragment.
         for part in word_parts(tok) {
-            let has_ascii_letter = part.chars().any(|c| c.is_ascii_alphabetic());
+            // Read through the decomposition, as `is_majority_latin` is (Finding 3).
+            let has_ascii_letter = part.chars().any(is_ascii_letter_base);
             let compat: Vec<char> = part
                 .chars()
                 .filter(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
@@ -1492,7 +1638,9 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // #815: no ASCII letter is not automatically clean. A token where EVERY
             // character imitates a Latin letter is the finished form of the attack this
             // branch exists to catch, and #633's gate went quiet on exactly that.
-            if !part.chars().any(|c| c.is_ascii_alphabetic()) && !is_wholly_confusable_word(part) {
+            // An ASCII letter read through its decomposition, as `is_majority_latin` is
+            // (Finding 3).
+            if !part.chars().any(is_ascii_letter_base) && !is_wholly_confusable_word(part) {
                 continue;
             }
             // The same `UNITS` exemption the mixed-script branch takes. `µF` folds to
@@ -2157,5 +2305,224 @@ mod tests {
         );
         assert_eq!(r.findings[0].token, "44 | hi");
         assert!(r.kinds.contains(&AnomalyKind::Invisible));
+    }
+
+    // -- Findings of the Lean model in `formal/lean/Detection` ------------------
+
+    /// Finding 1: the deprecated format controls and the interlinear annotation
+    /// characters are deleted by `strip_bidi` and must be reported inside a word.
+    #[test]
+    fn deprecated_format_and_annotation_controls_are_reported_in_a_word() {
+        let l = lex(&[]);
+        for cp in (0x206A..=0x206F).chain(0xFFF9..=0xFFFB) {
+            let c = char::from_u32(cp).unwrap();
+            let split = format!("pay{c}pal");
+            assert_eq!(crate::presets::strip_bidi(&split), "paypal", "U+{cp:04X}");
+            let r = inspect_anomalies(&split, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Invisible], "U+{cp:04X}");
+            assert_eq!(r.findings[0].detail, codepoint(c));
+        }
+    }
+
+    /// Finding 1, stated as the property rather than the list: whatever the bidi strip
+    /// deletes from inside a word, the detector reports, except the soft hyphen, which
+    /// is a documented spare, and the bidi controls, which the `bidi` kind judges by its
+    /// own rules. A second copy of the set in either reader fails this.
+    #[test]
+    fn what_strip_bidi_deletes_from_a_word_is_reported() {
+        let l = lex(&[]);
+        let missed: Vec<String> = (0u32..=0x0010_FFFF)
+            .filter_map(char::from_u32)
+            .filter(|&c| !crate::scripts::is_bidi_control(c) && c != SOFT_HYPHEN)
+            .filter(|&c| crate::presets::strip_bidi(&format!("a{c}b")) == "ab")
+            .filter(|&c| !has_anomalies(&format!("pay{c}pal"), &l))
+            .map(codepoint)
+            .collect();
+        assert!(
+            missed.is_empty(),
+            "deleted by strip_bidi, not reported: {missed:?}"
+        );
+    }
+
+    /// The secondary finding under Finding 1: a noncharacter is deleted by `canonicalize`
+    /// and was reported by nothing. One is enough, alone or inside a word.
+    #[test]
+    fn a_noncharacter_is_reported_alone_and_in_a_word() {
+        let l = lex(&[]);
+        let nonchars = (0xFDD0..=0xFDEF)
+            .chain((0..=0x10).flat_map(|plane| [plane << 16 | 0xFFFE, plane << 16 | 0xFFFF]));
+        let mut n = 0;
+        for cp in nonchars {
+            let c = char::from_u32(cp).unwrap();
+            assert!(crate::invisibles::is_noncharacter(c));
+            for text in [format!("pay{c}pal"), c.to_string(), format!("12{c}34")] {
+                let r = inspect_anomalies(&text, &l);
+                assert_eq!(r.kinds, vec![AnomalyKind::Invisible], "{text:?}");
+                assert_eq!(r.findings[0].detail, format!("{} \u{d7}1", codepoint(c)));
+            }
+            n += 1;
+        }
+        assert_eq!(n, 66);
+        // U+FFFD, the replacement character beside the plane-0 pair, renders and is not
+        // one of them.
+        assert!(!has_anomalies("pay\u{FFFD}pal", &l));
+    }
+
+    /// Finding 2: every RTL mark is tested, not only the first one in the token.
+    #[test]
+    fn a_second_rtl_mark_does_not_hide_the_number_run() {
+        let l = lex(&[]);
+        for text in [
+            "Transfer \u{200F}\u{200F}100 200 300 to Bob",
+            "acct \u{061C}\u{061C}4321-9876",
+            "acct \u{200F}\u{061C}4321-9876",
+            // A decoy mark first, with the real one in front of the digits.
+            "acct a\u{200F},\u{200F}4321-9876",
+        ] {
+            let r = inspect_anomalies(text, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Bidi], "{text:?}");
+        }
+        // Still spared anywhere other than in front of a number run.
+        assert!(!has_anomalies("hello\u{200F}\u{200F}world", &l));
+        assert!(!has_anomalies("acct \u{200F}\u{200F}a4321", &l));
+    }
+
+    /// Finding 3: the README's counterexamples, each in its NFC and NFD spelling. The
+    /// NFC spelling of the first three used to be the unreported one.
+    #[test]
+    fn canonically_equivalent_tokens_get_one_verdict() {
+        use unicode_normalization::UnicodeNormalization;
+        let l = lex(&[]);
+        for (nfc, nfd, kinds) in [
+            (
+                "\u{e9}t\u{e9}\u{2067}",
+                "e\u{301}te\u{301}\u{2067}",
+                vec![AnomalyKind::Bidi],
+            ),
+            (
+                "\u{e9}\u{200D}\u{e9}",
+                "e\u{301}\u{200D}e\u{301}",
+                vec![AnomalyKind::Invisible],
+            ),
+            (
+                "\u{e0}\u{e9}\u{200F}1",
+                "a\u{300}e\u{301}\u{200F}1",
+                vec![AnomalyKind::Bidi],
+            ),
+            // The model's minimal counterexample, `[p, rli]`.
+            (
+                "\u{e9}\u{2067}",
+                "e\u{301}\u{2067}",
+                vec![AnomalyKind::Bidi],
+            ),
+            ("Fran\u{e7}ais", "Franc\u{327}ais", vec![]),
+            ("ch\u{1ec9}", "chi\u{309}", vec![]),
+        ] {
+            assert_eq!(nfc.nfc().collect::<String>(), nfc, "{nfc:?} is not NFC");
+            assert_eq!(nfd.nfd().collect::<String>(), nfd, "{nfd:?} is not NFD");
+            assert_eq!(inspect_anomalies(nfc, &l).kinds, kinds, "{nfc:?}");
+            assert_eq!(inspect_anomalies(nfd, &l).kinds, kinds, "{nfd:?}");
+        }
+        // With a lexicon too: the leet decode reads the composed word, so a lexicon
+        // written in NFC matches either spelling.
+        let words = lex(&["caf\u{e9}"]);
+        assert!(has_anomalies("c4f\u{e9}", &words));
+        assert!(has_anomalies("c4fe\u{301}", &words));
+    }
+
+    /// The four ASCII-letter tests read a letter through its decomposition, per
+    /// character: a Hangul syllable is one letter, not its jamo.
+    #[test]
+    fn a_letter_is_read_through_its_decomposition() {
+        assert!(is_ascii_letter_base('e'));
+        assert!(is_ascii_letter_base('\u{e9}'));
+        assert!(is_ascii_letter_base('\u{1ec9}'));
+        assert!(!is_ascii_letter_base('\u{f8}')); // no decomposition
+        assert!(!is_ascii_letter_base('\u{3ac}')); // Greek, decomposes to Greek
+        assert!(!is_ascii_letter_base('1'));
+        assert!(is_majority_latin("\u{e9}t\u{e9}"));
+        // Two ASCII letters and one syllable: majority Latin, as before.
+        assert!(is_majority_latin("ab\u{D55C}"));
+    }
+
+    /// Finding 4: an accented Latin letter whose fold only drops the accent is spared;
+    /// the letters the fold changes in shape still report.
+    #[test]
+    fn confusable_spares_an_accent_and_reports_a_shape() {
+        let l = lex(&[]);
+        for word in [
+            "Fran\u{e7}ais",
+            "gar\u{e7}on",
+            "T\u{fc}rk\u{e7}e",
+            "a\u{e7}\u{e3}o",
+            "ch\u{1ec9}",
+            "\u{c7}ay",
+            "caf\u{e9}",
+            "na\u{ef}ve",
+            "stra\u{df}e",
+        ] {
+            assert!(inspect_anomalies(word, &l).kinds.is_empty(), "{word:?}");
+        }
+        for (word, source) in [
+            ("K\u{f8}benhavn", '\u{f8}'),
+            ("\u{141}\u{f3}d\u{17a}", '\u{141}'),
+            ("\u{111}\u{1b0}\u{1edd}ng", '\u{111}'),
+            // U+01FE is U+00D8 + acute: reported exactly when U+00D8 is.
+            ("\u{1fe}slo", '\u{1fe}'),
+            ("\u{d8}slo", '\u{d8}'),
+            ("g\u{131}thub", '\u{131}'),
+        ] {
+            let r = inspect_anomalies(word, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Confusable], "{word:?}");
+            assert!(r.findings[0].detail.starts_with(source), "{word:?}");
+        }
+    }
+
+    /// A scalar NFC replaces with a different one is still reported as spelled. Composing
+    /// the token read `\u{212A}ey` as `Key` and `a\u{37E}b` as `a;b` and called both clean,
+    /// while `canonicalize` rewrites them: a detector silent on text its cleaner changes.
+    /// The kinds are the ones `main` gives without the canonical-equivalence fix; since
+    /// #1023 made U+037E, U+0387 and U+0374 Script=Common, none of them is `mixed_script`.
+    #[test]
+    fn a_character_nfc_replaces_keeps_its_report() {
+        use AnomalyKind::{CompatFold, Confusable, MixedScript};
+        let l = lex(&[]);
+        for (c, alone, in_word) in [
+            ('\u{212A}', vec![], vec![CompatFold]), // KELVIN SIGN -> K
+            ('\u{2126}', vec![], vec![]),           // OHM SIGN -> Greek omega
+            ('\u{212B}', vec![], vec![]),           // ANGSTROM SIGN -> A with ring
+            ('\u{37E}', vec![CompatFold], vec![CompatFold]), // GREEK QUESTION MARK -> ;
+            ('\u{387}', vec![], vec![]),            // GREEK ANO TELEIA -> middle dot (Common)
+            ('\u{1FEF}', vec![CompatFold], vec![MixedScript]), // GREEK VARIA -> `
+            ('\u{374}', vec![], vec![Confusable]),  // GREEK NUMERAL SIGN
+            ('\u{1FFD}', vec![], vec![MixedScript]), // GREEK OXIA -> acute
+        ] {
+            assert!(nfc_replaces(c), "U+{:04X}", c as u32);
+            assert_eq!(
+                inspect_anomalies(&c.to_string(), &l).kinds,
+                alone,
+                "U+{:04X}",
+                c as u32
+            );
+            for word in [format!("pay{c}pal"), format!("ab{c}cd")] {
+                assert_eq!(inspect_anomalies(&word, &l).kinds, in_word, "{word:?}");
+            }
+        }
+        assert!(has_anomalies("\u{212A}ey", &l));
+        assert!(has_anomalies("a\u{37E}b", &l));
+        // The letter test and the Finding 4 skip do not see through one either: KELVIN
+        // SIGN is not `K` plus an accent, so a word led by it names it as the disguise.
+        assert!(!is_ascii_letter_base('\u{212A}'));
+        let r = inspect_anomalies("\u{212A}\u{1D00}\u{1D05}\u{1D0D}", &l);
+        assert_eq!(r.kinds, vec![AnomalyKind::Confusable]);
+        assert!(
+            r.findings[0].detail.starts_with('\u{212A}'),
+            "{:?}",
+            r.findings[0].detail
+        );
+        // A composition is not a replacement: it is the letters it spells.
+        assert!(!nfc_replaces('\u{e9}'));
+        assert!(!nfc_replaces('\u{958}')); // NFC is the two-scalar sequence
+        assert!(!nfc_replaces('a'));
     }
 }

@@ -6,13 +6,13 @@
 //! substrate to the JNI binding (which calls the core directly for the JVM hot
 //! path), intended for iOS/Swift, Kotlin-Native, Panama/FFM, and C/C++ consumers.
 //!
-//! Strings cross the boundary as NUL-terminated UTF-8 (`char *`). Every string a
-//! `disarm_*` function returns (directly or inside a [`DisarmResult`]) transfers
+//! Strings cross the boundary as NUL-terminated `char *`. Every string a `disarm_*`
+//! function returns is UTF-8 (directly or inside a [`DisarmResult`]), transfers
 //! ownership to the caller, who must free it with [`disarm_string_free`], and is
-//! read-only until then. Nullable arguments (e.g. `lang`) are passed as a NULL
-//! `char *`; every other pointer argument must be non-NULL. Input bytes that are not
-//! UTF-8 are decoded lossily (U+FFFD) at the boundary; see [`disarm_string_free`] for
-//! the whole contract.
+//! read-only until then. Arguments should be UTF-8; bytes that are not are decoded
+//! lossily (U+FFFD) at the boundary, never trusted. Nullable arguments (e.g. `lang`)
+//! are passed as a NULL `char *`; every other pointer argument must be non-NULL. See
+//! [`disarm_string_free`] for the whole contract.
 //!
 //! Scalar transforms return a `char *` (or [`DisarmResult`]) directly. The
 //! **structured reports** — [`disarm_analyze_hostname`], [`disarm_inspect_anomalies`],

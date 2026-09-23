@@ -1,0 +1,30 @@
+# cargo-mutants configuration, read automatically by `cargo mutants` at the repository
+# root. Used by .github/workflows/mutants.yml; see CONTRIBUTING.md, "Mutation testing".
+#
+# cargo itself never reads this file (it reads .cargo/config.toml), so it changes no
+# ordinary build.
+
+# The pure core, as `cargo test --no-default-features` builds it. The Python extension
+# (`extension-module`) links libpython and must be built by maturin (AGENTS.md).
+no_default_features = true
+
+exclude_globs = [
+    # Generated PHF tables and their data: mutating a table entry tests the data, and
+    # the build.rs assertions and the exhaustive tier-3 sweeps already own that.
+    "src/tables/**",
+    # The PyO3 shims: behind `extension-module`, so not compiled here at all.
+    "src/py/**",
+]
+
+exclude_re = [
+    # Formatting impls (Display / Debug) and the logging macros carry no behaviour a
+    # caller depends on, and a surviving mutant there is noise in the report.
+    "<impl (std::fmt::)?(Display|Debug) for ",
+    "tl_(trace|debug|info|warn)",
+]
+
+# A mutant can turn a loop that terminates into one that does not. The default timeout
+# is derived from the unmutated test run; the floor keeps a fast baseline from timing
+# out ordinary mutants on a loaded runner.
+timeout_multiplier = 3.0
+minimum_test_timeout = 120

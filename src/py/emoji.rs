@@ -129,18 +129,20 @@ fn demojize_impl(
         // Skip orphaned variation selectors and ZWJ characters
         if ch == VS16 || ch == VS15 || ch == ZWJ {
             win.advance(1);
+            // A removal: close the seam, as the pure-Rust scanner does.
+            drop_marks_the_seam_would_bind(&mut win, &result);
             continue;
         }
 
         // Try custom Python provider first (if set).
         //
-        // The window fed to the provider is `win.as_slice()`, capped at
-        // `MAX_WINDOW` (9) chars by `CharWindow`'s stack buffer, so a custom
-        // provider can only ever match sequences up to 9 codepoints — the
-        // longest built-in CLDR sequence (`max_emoji_seq_len()`). Longer
+        // The provider is offered at most `max_emoji_seq_len()` code points, the
+        // longest built-in CLDR sequence, through the `max_len` argument below. The
+        // window itself is wider (`MAX_WINDOW` is twice that, for fully qualified
+        // sequences), but the cap is this argument, not the buffer. Longer
         // provider-supported sequences are silently unmatchable; this cap is
         // documented on `set_emoji_provider` / `EmojiProvider.lookup` (#199).
-        // Widening it would enlarge the per-position scan window for every
+        // Widening it would mean more provider calls at every position of every
         // demojize call, so it is intentionally fixed.
         if let Some(prov) = provider {
             if let Some((name, consumed)) =
@@ -195,22 +197,25 @@ fn demojize_impl(
                 }
             }
             win.advance(consumed);
-            // Parity with the recognized-emoji path (#200): flag the position so
-            // a following alphanumeric is separated by a space — but only when a
-            // *visible* token was actually emitted, otherwise we inject a
-            // spurious leading space. Preserve always writes the raw mark;
-            // Replace writes `replace_with`, which may be empty ("drop it");
-            // Ignore writes nothing.
-            last_was_emoji = match error_mode {
+            // Parity with the recognized-emoji path (#200): a visible token flags the
+            // position so a following alphanumeric is separated. Preserve always writes
+            // the raw mark; Replace writes `replace_with`, which may be empty; Ignore
+            // writes nothing. When nothing is written both flags keep their values, so a
+            // name written *before* the dropped emoji is still separated from what
+            // follows: resetting them glued it on, `😀🇦x` giving `grinning facex` (Lean
+            // model, `formal/lean/Emoji`).
+            let wrote = match error_mode {
                 ErrorMode::Preserve => true,
                 ErrorMode::Replace => !replace_with.is_empty(),
                 ErrorMode::Ignore => false,
             };
-            last_was_raw = matches!(error_mode, ErrorMode::Preserve);
-            // Nothing visible written: what follows now meets what came before, and a
-            // keycap or selector that binds to it would be an emoji the input never had
-            // (the seam `replace_emoji` closes, #995 follow-up).
-            if !last_was_emoji {
+            if wrote {
+                last_was_emoji = true;
+                last_was_raw = matches!(error_mode, ErrorMode::Preserve);
+            } else {
+                // Nothing visible written: what follows now meets what came before, and a
+                // keycap or selector that binds to it would be an emoji the input never
+                // had (the seam `replace_emoji` closes, #995 follow-up).
                 drop_marks_the_seam_would_bind(&mut win, &result);
             }
             continue;

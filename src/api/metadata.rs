@@ -245,6 +245,12 @@ pub fn unicode_version() -> &'static str {
 /// fixture, which had none. A zero-width character at the start of a line no longer
 /// takes a cell (found by the Lean model in `formal/lean/Deletions`); no key moves for
 /// that, since every key builder then strips it.
+///
+/// And `ml_normalize`, the key surface that demojizes, moves for two emoji fixes from
+/// the Lean model in `formal/lean/Emoji`: a fully qualified ZWJ sequence is named whole
+/// (`❤\u{FE0F}\u{200D}🔥` is `heart on fire`, not `red heart fire`; 306 of 1,021 such
+/// sequences), and an emoji dropped for want of a name no longer glues the next word to
+/// the name before it (`I 😀🇦x ok` is `i grinning face x ok`, not `…facex ok`).
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).

@@ -943,8 +943,10 @@ pub fn lookup_emoji_multi(key: &str) -> Option<&'static str> {
 /// `window` rather than indexing it, so an empty slice simply yields `None`
 /// (no bounds risk, C4).
 ///
-/// Byte-identical to the former per-length hex-key PHF probe; `emoji_trie_matches_phf`
-/// verifies the two agree against `lookup_emoji_multi`. A sequence is a
+/// Byte-identical to the former per-length hex-key PHF probe on every table key;
+/// `emoji_trie_matches_phf` verifies the two agree against `lookup_emoji_multi`. Unlike
+/// the probe it also accepts the fully qualified form of a key — a U+FE0F after any
+/// component — which the table stores unqualified. A sequence is a
 /// match only at a terminal node of length ≥ 2 whose **last** code point is not
 /// ZWJ/VS-15/VS-16 — replicating the original "skip incomplete sequences" rule
 /// (a trailing variation selector or ZWJ is a presentation/joiner mark handled
@@ -967,6 +969,13 @@ pub fn match_emoji_sequence(window: &[char]) -> Option<(&'static str, usize)> {
         let end = EDGE_START[node + 1] as usize;
         match EDGE_CP[start..end].binary_search(&cp) {
             Ok(idx) => node = EDGE_TARGET[start + idx] as usize,
+            // CLDR keys a ZWJ sequence without its presentation selectors, and people
+            // type the fully qualified form: `❤\u{FE0F}\u{200D}🔥`. Stopping here named
+            // it piece by piece — "red heart fire" for "heart on fire", 306 of the 1,021
+            // fully qualified sequences (Lean model, `formal/lean/Emoji`). A selector
+            // with no edge of its own is consumed and the walk goes on from the same
+            // node; the terminal check below never accepts a match ending on one.
+            Err(_) if cp == VS16 && i >= 1 => continue,
             Err(_) => break,
         }
         // len = i + 1 (≥ 2 for any real sequence); skip a terminal whose last

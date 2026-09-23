@@ -212,9 +212,21 @@ class TestACarrierOfTheSameSchemeNextDoor:
         text = f"a{ZWSP}{zero_width('hi')}"
         found = disarm.decode_smuggled(text)
         assert [(p.data, p.text) for p in found] == [(b"44", None)]
-        kinds = disarm.inspect_anomalies(text).kinds
-        assert "smuggled" not in kinds
-        assert "invisible" in kinds
+
+    def test_an_ambiguous_frame_still_reports_smuggled(self) -> None:
+        """Undecided is not unreadable: the detector must not lose the signal.
+
+        Both frames read as text, so a stray `U+200B` in front of a payload chosen that
+        way would otherwise switch `smuggled` off. The finding carries both readings,
+        head-aligned first, joined by `" | "`.
+        """
+        text = f"a{ZWSP}{zero_width('hi')}"
+        assert disarm.has_anomalies(text) is True
+        report = disarm.inspect_anomalies(text)
+        assert report.kinds[0] == "smuggled", report.kinds
+        assert "invisible" in report.kinds
+        assert report.findings[0].token == "44 | hi"
+        assert disarm.has_anomalies(text) == report.anomalous
 
     @pytest.mark.parametrize(("scheme", "encode"), list(ENCODERS.items())[:3])
     def test_every_carrier_scheme_still_round_trips(self, scheme: str, encode) -> None:

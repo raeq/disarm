@@ -2675,6 +2675,8 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     bit count is not a multiple of 8 has two candidate frames, stray bits dropped from
     the end or from the start: ``text`` is set only when exactly one frame is
     printable, and otherwise the head-aligned bytes come back with ``text=None``.
+    When both frames are printable, `inspect_anomalies` still reports the run as
+    ``smuggled``, with both readings as the token (``"44 | hi"``).
 
     ``units`` counts the characters the run **consumed**, which is not the same as
     the carriers that carried a byte: the zero-width scheme counts its

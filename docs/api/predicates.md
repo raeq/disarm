@@ -310,7 +310,9 @@ selector whenever the rest reads as text. A zero-width run whose bit count is no
 multiple of 8 has two candidate frames, stray bits dropped from the end or from the start,
 and `text` is set only when exactly one of them is printable: one stray `U+200B` before an
 encoded `hi` makes the head-aligned frame read `44`, and a decode that could be either is
-reported as bytes with `text=None`.
+reported as bytes with `text=None`. `inspect_anomalies` still reports that run as
+`smuggled`, since it reads as text either way: the finding's token is both readings,
+head-aligned first, joined by ` | ` (`44 | hi`).
 
 ```python
 from disarm import decode_smuggled

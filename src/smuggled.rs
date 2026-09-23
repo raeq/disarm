@@ -100,7 +100,34 @@ const MIN_PERCENT_RUN: usize = 2;
 /// The allowlist is the stripper's own, borrowed rather than
 /// restated — #700 is about exactly that kind of drift.
 pub fn decode_smuggled(text: &str) -> Vec<Payload> {
-    decode(text, true)
+    decode(text, true).into_iter().map(|c| c.payload).collect()
+}
+
+/// A decoded run as the anomaly detector sees it: the public [`Payload`], plus what it
+/// reads as when that is not the payload's own `text`.
+///
+/// The two differ in one case. A zero-width run whose bit count is not a multiple of 8
+/// has two byte frames, and when both are printable and disagree the payload's `text` is
+/// `None`: `decode_smuggled` does not claim a decode it cannot tell apart from another.
+/// The detector still has to fire, or one stray `U+200B` in front of a payload chosen so
+/// both frames read as text would switch `smuggled` off. So `reading` carries both
+/// readings, head-aligned first, joined by [`AMBIGUOUS_READINGS_SEPARATOR`].
+pub(crate) struct Carried {
+    pub(crate) payload: Payload,
+    /// Some frame of the run decodes as printable text: the payload's `text` when it has
+    /// one, otherwise the ambiguous readings joined. `None` when nothing reads as text.
+    pub(crate) reading: Option<String>,
+}
+
+/// Joins the two readings of an ambiguous zero-width frame in the detector's token:
+/// `"44 | hi"` for one stray `U+200B` before an encoded `hi`.
+pub(crate) const AMBIGUOUS_READINGS_SEPARATOR: &str = " | ";
+
+impl Carried {
+    fn plain(payload: Payload) -> Self {
+        let reading = payload.text.clone();
+        Self { payload, reading }
+    }
 }
 
 /// The three invisible carriers only — what the anomaly detector consumes (#727).
@@ -110,11 +137,11 @@ pub fn decode_smuggled(text: &str) -> Vec<Payload> {
 /// `%XX` run in a URL-bearing input for a result it discarded — on the hot path (raised in
 /// review on #945). This never runs the percent scanner. A test asserts it equals
 /// `decode_smuggled` minus `PercentEscape`, so the two cannot drift.
-pub(crate) fn decode_carriers(text: &str) -> Vec<Payload> {
+pub(crate) fn decode_carriers(text: &str) -> Vec<Carried> {
     decode(text, false)
 }
 
-fn decode(text: &str, with_percent: bool) -> Vec<Payload> {
+fn decode(text: &str, with_percent: bool) -> Vec<Carried> {
     let chars: Vec<(usize, char)> = text.char_indices().collect();
     let just_chars: Vec<char> = chars.iter().map(|&(_, c)| c).collect();
     let mut out = Vec::new();
@@ -129,18 +156,18 @@ fn decode(text: &str, with_percent: bool) -> Vec<Payload> {
         }
         if let Some(p) = scan_tag_ascii(&chars, i, offset) {
             i += p.units;
-            out.push(p);
+            out.push(Carried::plain(p));
             continue;
         }
         if let Some((p, consumed)) = scan_variation(&chars, i, offset) {
             i += consumed;
-            out.push(p);
+            out.push(Carried::plain(p));
             continue;
         }
         if with_percent {
             if let Some(p) = scan_percent(&chars, i, offset) {
                 i += p.units;
-                out.push(p);
+                out.push(Carried::plain(p));
                 continue;
             }
         }
@@ -367,7 +394,7 @@ fn scan_zero_width(
     chars: &[(usize, char)],
     i: usize,
     offset: usize,
-) -> Option<(Option<Payload>, usize)> {
+) -> Option<(Option<Carried>, usize)> {
     if !matches!(chars[i].1, '\u{200B}' | '\u{200C}') {
         return None;
     }
@@ -400,29 +427,46 @@ fn scan_zero_width(
     // exactly one of them is printable. When both or neither are, the frame is ambiguous
     // and the head-aligned bytes are reported with no text, which is the documented
     // answer for a run that does not decode.
+    //
+    // Both printable is still readable text, only not one text: the detector must keep
+    // firing on it, so the two readings travel with the payload (see [`Carried`]).
     let extra = bits.len() % 8;
-    let payload = if extra == 0 {
-        finish(PayloadScheme::ZeroWidthBinary, offset, end, units, head)
+    let carried = if extra == 0 {
+        Carried::plain(finish(
+            PayloadScheme::ZeroWidthBinary,
+            offset,
+            end,
+            units,
+            head,
+        ))
     } else {
         let tail = pack_bits(&bits[extra..]);
         let (head_text, tail_text) = (printable(&head), printable(&tail));
-        let (bytes, text) = match (head_text, tail_text) {
-            (Some(t), None) => (head, Some(t)),
-            (None, Some(t)) => (tail, Some(t)),
+        let (bytes, text, reading) = match (head_text, tail_text) {
+            (Some(t), None) => (head, Some(t.clone()), Some(t)),
+            (None, Some(t)) => (tail, Some(t.clone()), Some(t)),
             // Both frames spell the same text: nothing is ambiguous about what it says.
-            (Some(h), Some(t)) if h == t => (head, Some(h)),
-            _ => (head, None),
+            (Some(h), Some(t)) if h == t => (head, Some(h.clone()), Some(h)),
+            (Some(h), Some(t)) => (
+                head,
+                None,
+                Some(format!("{h}{AMBIGUOUS_READINGS_SEPARATOR}{t}")),
+            ),
+            (None, None) => (head, None, None),
         };
-        Payload {
-            scheme: PayloadScheme::ZeroWidthBinary,
-            start: offset,
-            end,
-            units,
-            bytes,
-            text,
+        Carried {
+            payload: Payload {
+                scheme: PayloadScheme::ZeroWidthBinary,
+                start: offset,
+                end,
+                units,
+                bytes,
+                text,
+            },
+            reading,
         }
     };
-    Some((Some(payload), units))
+    Some((Some(carried), units))
 }
 
 /// Whole bytes from MSB-first bits. Trailing bits that do not fill a byte are dropped.
@@ -600,6 +644,9 @@ mod tests {
         let found = decode_smuggled(&format!("a\u{200B}{}", zw("hi")));
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].bytes, b"44".to_vec());
+        // ...but it is readable text, both ways, and the detector's path says so.
+        let carried = decode_carriers(&format!("a\u{200B}{}", zw("hi")));
+        assert_eq!(carried[0].reading.as_deref(), Some("44 | hi"));
         assert_eq!(
             found[0].text, None,
             "an ambiguous frame must not be decoded"
@@ -754,7 +801,8 @@ mod tests {
                 .into_iter()
                 .filter(|p| p.scheme != PayloadScheme::PercentEscape)
                 .collect();
-            assert_eq!(decode_carriers(s), expect, "{s:?}");
+            let carried: Vec<Payload> = decode_carriers(s).into_iter().map(|c| c.payload).collect();
+            assert_eq!(carried, expect, "{s:?}");
         }
         // ...and it really does skip percent: a percent-only input yields nothing.
         assert!(decode_carriers("%48%69%20%41").is_empty());

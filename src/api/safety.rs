@@ -1354,7 +1354,8 @@ pub use crate::anomalies::{
 /// the run decodes as text. A zero-width run whose bit count is not a multiple of 8 has
 /// two candidate frames, stray bits dropped from the end or from the start: `text` is set
 /// only when exactly one frame is printable, and otherwise the head-aligned bytes are
-/// reported with no text.
+/// reported with no text. When both frames are printable the anomaly detector still
+/// reports the run as `smuggled`, with both readings as the token (`"44 | hi"`).
 ///
 /// A well-formed emoji subdivision flag is not a payload: `U+1F3F4` + tag letters +
 /// `U+E007F` spelling one of the three RGI values is the Scotland flag, and the allowlist

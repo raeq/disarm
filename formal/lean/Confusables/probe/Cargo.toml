@@ -1,0 +1,19 @@
+[package]
+name = "confusables-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Large-scale property sweeps of disarm's confusable surface (formal/lean/Confusables)"
+
+# Standalone: not a member of any workspace above it.
+[workspace]
+
+[dependencies]
+# The in-repo core, pure build (no pyo3).
+disarm = { path = "../../../..", default-features = false }
+# The same crate and version the core composes with, so "is a mark" and "NFC" here
+# mean exactly what they mean inside `compose.rs`.
+unicode-normalization = "=0.1.25"
+
+[profile.release]
+debug = false

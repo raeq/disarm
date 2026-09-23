@@ -1,0 +1,61 @@
+--- a/src/presets.rs
++++ b/src/presets.rs
+@@ -790,7 +790,7 @@
+ /// blocks is a conservative superset — some archaic jamo never compose — which only
+ /// forgoes the fast path (over-marking is sound; under-marking would not be).
+ const fn is_conjoining_jamo(ch: char) -> bool {
+-    matches!(ch as u32, 0x1100..=0x11FF | 0xA960..=0xA97F | 0xD7B0..=0xD7FF)
++    matches!(ch as u32, 0x1100..=0x11FF | 0xA960..=0xA97F | 0xD7B0..=0xD7FF | 0x16D63 | 0x16D67)
+ }
+ 
+ /// Three-way verdict from the fast-path guard (#458 + #464).
+@@ -2079,6 +2079,8 @@
+             //    class here is a way to vary the key invisibly (#805).
+             Step::StripBidi,
+             Step::StripInvisible(COMPARISON_STRIP),
++            Step::StripControl,
++            Step::StripZeroWidth,
+             // 3. The confusable fold, under the caller's policy. This is what brings the
+             //    capital-I family to `I` and every non-Latin homoglyph to its Latin
+             //    prototype.
+@@ -2100,10 +2102,7 @@
+             //    or step 4 has nothing to work with, and folding case first is what turns
+             //    six collisions into 264. So the fix is another pass, never a reorder
+             //    (#467's shape, and the reason `catalog_key` has a `FixedPoint` too).
+-            Step::FixedPoint(&[Step::FoldCase, Step::ConfusablesCtx("latin")]),
+-            // 6. Controls, zero-width, whitespace (#433).
+-            Step::StripControl,
+-            Step::StripZeroWidth,
++            Step::FixedPoint(&[Step::FoldCase, Step::ConfusablesCtx("latin"), Step::Nfkc]),
+             Step::CollapseWs,
+         ]
+     }
+--- a/src/compose.rs
++++ b/src/compose.rs
+@@ -89,7 +89,7 @@
+     if u < 0x0590 {
+         return (0x0300..=0x036F).contains(&u) || (0x0483..=0x0489).contains(&u);
+     }
+-    is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&u)
++    is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&u) || u == 0x16D67
+ }
+ 
+ pub(crate) struct Composed<'a> {
+@@ -176,7 +176,7 @@
+         // precomposed letter or presentation form, or a lone trailing mark) is yielded
+         // verbatim — the hot path. Only a cluster that hits the widening map or canonical
+         // NFC actually changes; everything else round-trips.
+-        let next_is_mark = self.iter.peek().is_some_and(|&(_, c)| is_combining_mark(c));
++        let next_is_mark = self.iter.peek().is_some_and(|&(_, c)| is_combining_mark(c) || c == '\u{16D67}');
+         if !next_is_mark {
+             return Some((ch, start));
+         }
+@@ -184,7 +184,7 @@
+         // Collect the cluster: anchor + the run of following combining marks.
+         let mut end = start + ch.len_utf8();
+         while let Some(&(j, c)) = self.iter.peek() {
+-            if !is_combining_mark(c) {
++            if !is_combining_mark(c) && c != '\u{16D67}' {
+                 break;
+             }
+             end = j + c.len_utf8();

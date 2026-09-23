@@ -1,0 +1,13 @@
+name = "text"
+version = "0.1.0"
+defaultTargets = ["Text", "textmodel"]
+
+[[lean_lib]]
+name = "Text"
+# `native_decide` in the `Bounded*` modules evaluates the models millions of times;
+# precompiling makes that native code instead of the IR interpreter.
+precompileModules = true
+
+[[lean_exe]]
+name = "textmodel"
+root = "Main"

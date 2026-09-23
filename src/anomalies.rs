@@ -438,10 +438,13 @@ pub enum AnomalyKind {
     /// `is_zalgo`'s threshold by construction.
     ///
     /// It is not removable by the cap either. `strip_zalgo` keeps up to
-    /// `DEFAULT_MAX_MARKS` per position, so a duplicate survives canonicalization
-    /// whatever the cap is set to: a base with two acutes does not canonicalize to the
-    /// same string as the same base with one. Two spellings a reader sees as one word
-    /// produce different keys, and nothing reported it (#835).
+    /// `DEFAULT_MAX_MARKS` per position whatever the cap is set to, so a base with two
+    /// acutes survives `strip_zalgo` next to the same base with one. Two spellings a
+    /// reader sees as one word, and nothing reported it (#835). The key builders now run
+    /// a separate step for it (`drop_repeated_marks_into`, ahead of the cap), so
+    /// `canonicalize` gives `x` + two acutes and `x` + one the same key; the detector
+    /// still reports the repeat, because the text that has not been through a key builder
+    /// still carries two spellings.
     ///
     /// Restricted to marks of **nonzero combining class**, which is #842's discriminator:
     /// a class-0 mark is positioned by the renderer rather than stacked, and a repeated
@@ -1015,9 +1018,15 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         //
         // And the script comes from `detect_char_script`, the one resolver, rather than
         // from a hand-written range: the first draft listed `U+0400-04FF` and
-        // `U+A640-A69F` and so missed Cyrillic Supplement and Extended-C, reporting
-        // ordinary `\u{501}\u{488}` and `\u{1C80}\u{488}`. Restating a range that the
-        // library already resolves is the failure #774 was about.
+        // `U+A640-A69F` and so missed Cyrillic Supplement, reporting ordinary
+        // `\u{501}\u{488}`. Restating a range that the library already resolves is the
+        // failure #774 was about.
+        //
+        // It does not reach Extended-C. `U+1C80` resolves to no script at all, because
+        // the block table in `src/scripts.rs` omits `U+1C80`-`U+1C8F`, so
+        // `\u{1C80}\u{488}\u{1C81}\u{489}` still reports `enclosing_mark`: a known
+        // limit, pinned by `test_cyrillic_extended_c_is_a_known_negative` in
+        // `tests/test_marks_and_bidi_marks.py` rather than fixed here.
         let base_is_cyrillic = chars[..i]
             .iter()
             .rev()

@@ -15,14 +15,16 @@ the caller — it never claims intent.
 
 ## Detected classes
 
-Eight branches fire. Six need no lexicon — only `leet` and `segmentation` do.
+Fifteen kinds fire. Thirteen need no lexicon: only `leet` and `segmentation` do.
 
 The table below is grouped by kind, not by evaluation order. `control` is checked
 **first**, ahead of the ASCII fast-path, because `NUL`, `ESC`, `BEL` and `DEL` are
 themselves ASCII: a check placed after that fast-path would never see the vectors it
-exists for. The remaining branches split on `!tok.is_ascii()`, so `invisible`, `bidi`,
-`zalgo`, `bidi_mixed` and `mixed_script` only run on non-ASCII tokens, and `leet` and
-`segmentation` run last on everything.
+exists for. The per-token branches after it split on `!tok.is_ascii()`:
+`mixed_numbers`, `invisible`, `bidi`, `enclosing_mark`, `zalgo`, `duplicate_mark`,
+`bidi_mixed`, `mixed_script` and `compat_fold` only run on non-ASCII tokens, `leet` and
+`segmentation` then run on everything, and `confusable` runs last, on non-ASCII tokens.
+`deletion` and `smuggled` are not per-token at all: they read the whole text.
 
 Most branches are script-agnostic and port across writing systems. `mixed_script` is the
 exception — it is anchored on Latin, and fires on Latin combined with Cyrillic or Greek.
@@ -175,8 +177,8 @@ finding's plain-language sentence). Each **finding** carries the offending
 `kind`, `token`, byte `start`/`end` span, `detail` (the codepoint, the scripts,
 or the decoded word), and its own `reason`.
 
-A `False` result is not a safety guarantee — it means only that none of the six
-branches fired on the lexicon you supplied. Compose this with your own policy, as
+A `False` result is not a safety guarantee — it means only that none of the fifteen
+kinds fired on the lexicon you supplied. Compose this with your own policy, as
 you would the hostname analysis.
 
 ## Checking a transform at the seam
@@ -226,8 +228,9 @@ assert inspect_anomalies(normalize_confusables(hostile)).kinds == ["invisible"]
 
     At that recall this is a useful alarm and a useless all-clear. Wire it into CI
     as an acceptance test and it will read "clean" on well over half the inputs that
-    are not. The PUA column is the sharpest case: private-use characters are not an
-    anomaly kind, so every transform that forwards one is reported clean.
+    are not. The PUA column is the sharpest case: a single private-use character is
+    not an anomaly (it takes a run of four, #812), so a transform that forwards one is
+    reported clean.
 
     See [#643](https://github.com/raeq/disarm/issues/643) for classes the panel
     does not cover.

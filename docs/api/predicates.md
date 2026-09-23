@@ -395,10 +395,15 @@ excluding unassigned and surrogates):
 | clean to the detector **and** not canonical | 142,762 (5,294 excluding the Private Use Area) |
 | flagged by the detector **and** already canonical | 0 |
 
-The relationship is one-way: the detector never fires on text the canonicalizer would
-leave alone, but it stays silent on 5,294 non-PUA code points that are not their own
-canonical form, including CJK compatibility ideographs, Arabic presentation forms,
-Kangxi radicals and all of fullwidth Latin.
+For single code points the relationship is one-way: the detector never fires on a code
+point the canonicalizer would leave alone, but it stays silent on 5,294 non-PUA code
+points that are not their own canonical form, including CJK compatibility ideographs,
+Arabic presentation forms, Kangxi radicals and all of fullwidth Latin.
+
+It is not one-way for strings. `a\u03bb` is already canonical and reports `mixed_script`,
+and `a\u05d0` is already canonical and reports `bidi_mixed`: the detector judges how
+characters sit together in a token, which `canonicalize` has no reason to change. A
+clean detector is not a canonical string, and a canonical string is not a clean one.
 
 Widening the detector is the wrong fix. `ＮＨＫ` is how a Japanese broadcaster writes its
 own name and `㎏` is an ordinary unit, so a detector that flagged them is one callers

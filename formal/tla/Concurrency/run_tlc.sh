@@ -21,7 +21,17 @@ if java -cp "$jar" tlc2.TLC -help 2>&1 | grep -q -- -noGenerateSpecTE; then
 fi
 
 cd "$here"
-for cfg in $pattern; do
+# An array under nullglob: a pattern that matches nothing is an error, not a run of
+# TLC on the literal pattern.
+shopt -s nullglob
+# shellcheck disable=SC2206  # the pattern is meant to glob
+cfgs=($pattern)
+shopt -u nullglob
+if [ "${#cfgs[@]}" -eq 0 ]; then
+    echo "no configuration matches $pattern in $here" >&2
+    exit 1
+fi
+for cfg in "${cfgs[@]}"; do
     name="${cfg%.cfg}"
     spec="${name%%_*}.tla"
     java -XX:+UseParallelGC -cp "$jar" tlc2.TLC -workers auto $te_flag \

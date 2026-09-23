@@ -6,7 +6,8 @@ python3 formal/bindings/summarize.py target/formal-bindings/work/full.json
 import json
 import sys
 
-r = json.load(open(sys.argv[1]))
+with open(sys.argv[1]) as f:
+    r = json.load(f)
 print(
     f"inputs per case: {r['inputs']:,} ({r['scalars']:,} scalars + {r['corpus']:,} corpus strings)"
 )

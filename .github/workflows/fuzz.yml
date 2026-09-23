@@ -1,0 +1,148 @@
+name: Fuzz
+
+# cargo-fuzz over the Rust core: the targets in fuzz/fuzz_targets/, each asserting the
+# documented properties of its surface (idempotence, detector agreement, the sanitizer
+# postconditions, round trips) rather than only the absence of a panic. See
+# CONTRIBUTING.md, "Fuzzing".
+#
+# Two shapes:
+#
+# - Pull requests that touch the core or the fuzz crate get a smoke run: every target for
+#   60 seconds, one after another in one job, from the committed seeds. One job rather
+#   than a matrix because a job is billed by the started minute and the build is shared.
+# - The schedule (and a manual dispatch) runs every target in parallel for 15 minutes,
+#   and uploads whatever libFuzzer wrote to fuzz/artifacts/ when a target fails.
+#
+# NOT part of the "All checks passed" roll-up in ci.yml, deliberately:
+#
+# - It needs a nightly toolchain (libFuzzer's sanitizer-coverage flags), and a nightly
+#   regression is not a regression in this library. A required check that can go red
+#   for a reason no pull request caused teaches reviewers to override it.
+# - A fuzzer is a search. A 60-second run that finds nothing proves nothing, and one
+#   that finds something has usually found a defect that predates the pull request.
+#   That is a report for a human, like nightly-hypothesis.yml, not a merge gate.
+#
+# The job still goes red on a finding, so the pull request shows it.
+#
+# Pinned: the nightly by date, cargo-fuzz by version, every action by SHA. No secrets,
+# read-only token, and no checkout keeps its credentials.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "fuzz/**"
+      - ".github/workflows/fuzz.yml"
+  schedule:
+    # 02:41 UTC, off the hour and clear of nightly-hypothesis.yml's 03:17.
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "Seconds per target"
+        required: false
+        default: "900"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # libFuzzer needs nightly. Pinned by date so a nightly regression cannot turn this red
+  # overnight; bump it deliberately, like any other pin.
+  RUSTUP_TOOLCHAIN: nightly-2026-09-01
+  CARGO_FUZZ_VERSION: "0.13.2"
+
+jobs:
+  smoke:
+    name: Fuzz smoke (every target, 60 s)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned nightly
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz (pinned)
+        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+
+      - name: Build every target
+        run: cargo fuzz build
+
+      - name: Run every target for 60 seconds
+        env:
+          FUZZ_SECONDS: "60"
+        run: bash fuzz/run.sh
+
+      - name: Upload findings
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: fuzz-artifacts-smoke
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+
+  scheduled:
+    name: Fuzz (${{ matrix.target }})
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - anomalies
+          - confusables
+          - decode_bytes
+          - emoji
+          - filename
+          - hostname
+          - presets
+          - slugify
+          - text
+          - transliterate
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned nightly
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz (pinned)
+        run: cargo install cargo-fuzz --version "$CARGO_FUZZ_VERSION" --locked
+
+      - name: Fuzz ${{ matrix.target }}
+        env:
+          # The input is a free-text field, so it goes through `env:` and is checked as a
+          # number before anything uses it.
+          FUZZ_SECONDS: ${{ github.event.inputs.seconds || '900' }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          [[ "$FUZZ_SECONDS" =~ ^[0-9]+$ ]] || { echo "::error::seconds must be a number"; exit 1; }
+          bash fuzz/run.sh "$TARGET"
+
+      - name: Upload findings
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore

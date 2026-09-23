@@ -225,6 +225,16 @@ pub(crate) struct CharWindow<'a> {
 /// holds every table key to it.
 const MAX_WINDOW: usize = 2 * tables::max_emoji_seq_len();
 
+// The window's growth loop stops once a doubled scan leaves the match unchanged, and that
+// stop is sound only from four code points up (`grow_stop_sound` in the Lean model,
+// `formal/lean/Emoji`). At three, `👨 U+FE0E U+FE0E ZWJ 1 U+FE0F U+20E3` stops one
+// character short of the keycap that completes it (`window3_is_not_enough`). Nothing
+// asserted it; a table update that shrank the longest key would have broken it silently.
+const _: () = assert!(
+    MAX_WINDOW >= 4,
+    "CharWindow needs at least four code points"
+);
+
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.
     pub(crate) fn new(mut chars: std::str::Chars<'a>) -> Self {

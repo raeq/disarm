@@ -715,6 +715,12 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: BINDING=bindings/java/rust bash scripts/perf_lint.sh
 
+      # `./gradlew` executes the committed gradle-wrapper.jar, so check it is a jar
+      # Gradle published before running it: a swapped wrapper would run with every
+      # credential this job has. Checked against Gradle's published checksums.
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
+
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:
           distribution: temurin

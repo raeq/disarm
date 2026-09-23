@@ -6569,7 +6569,7 @@
 1FEA	Y
 1FEB	Y
 1FEC	R
-1FEE	x
+1FEE	"
 1FF2	oi
 1FF3	oi
 1FF4	oi
@@ -6580,7 +6580,7 @@
 1FFA	O
 1FFB	O
 1FFC	Oi
-1FFD	x
+1FFD	 
 
 # === General Punctuation (U+2000–U+206F) ===
 # Source: Functional ASCII equivalents

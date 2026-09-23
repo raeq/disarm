@@ -1525,6 +1525,37 @@ mod tests {
         );
     }
 
+    /// The selector rule, class by class (Copilot review on #1015).
+    #[test]
+    fn a_selector_follows_only_an_emoji_base() {
+        for base in [
+            '\u{2764}',
+            '\u{1F3F3}',
+            '1',
+            '#',
+            '*',
+            '\u{00A9}',
+            '\u{1F468}',
+        ] {
+            assert!(tables::selector_may_follow(base), "{base:?}");
+        }
+        for not_base in [
+            '\u{200D}',
+            '\u{FE0E}',
+            '\u{FE0F}',
+            '\u{20E3}',
+            '\u{1F1E6}',
+            '\u{1F1FF}',
+            '\u{1F3FB}',
+            '\u{1F3FF}',
+            '\u{E0067}',
+            'a',
+            '\u{20AC}',
+        ] {
+            assert!(!tables::selector_may_follow(not_base), "{not_base:?}");
+        }
+    }
+
     #[test]
     fn test_is_emoji_codepoint() {
         assert!(is_emoji_codepoint('\u{1F600}'));

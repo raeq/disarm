@@ -119,7 +119,7 @@ assert search_key("ΩMEGA", lang="auto") == "omega"
 
 ### Pipeline steps
 
-`NFKC → strip_bidi → strip invisibles → confusables → **prototype fold** → fixed-point(fold_case → confusables) → strip_control → strip_zero_width → collapse_whitespace`
+`strip_bidi → strip invisibles → strip_control → strip_zero_width → NFKC → confusables → **prototype fold** → fixed-point(fold_case → confusables → NFKC) → collapse_whitespace`
 
 ### The class the other builders cannot reach
 

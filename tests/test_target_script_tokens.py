@@ -79,3 +79,15 @@ def test_four_tables_against_the_scripts_disarm_knows() -> None:
     """What is left of #884 once the spelling question is answered — see #963."""
     assert len(SUPPORTED) == 4
     assert len(disarm.list_scripts()) > 50
+
+
+@pytest.mark.parametrize("name", SUPPORTED)
+def test_is_confusable_documents_every_target_it_takes(name: str) -> None:
+    """The docstring said only ``"latin"`` was accepted and anything else raised (F7).
+
+    All four have worked since #792, and #888 fixed the error message but not this. Found by
+    the Lean model of the confusable fold (`formal/lean/Confusables`).
+    """
+    token = name.lower()
+    assert disarm.is_confusable("x", target_script=token) is False
+    assert f'``"{token}"``' in (disarm.is_confusable.__doc__ or "")

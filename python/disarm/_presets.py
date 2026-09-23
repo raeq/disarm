@@ -536,9 +536,9 @@ def search_key(
 def skeleton_key(text: str, *, digit_policy: str = "numeric", on_empty: str | None = None) -> str:
     """A spoof key: the TR39 skeleton plus the prototype classes disarm keeps apart.
 
-    Pipeline: NFKC → strip_bidi → strip invisibles → confusables → **prototype
-    fold** → fixed-point(fold_case → confusables) → strip_control →
-    strip_zero_width → collapse_whitespace
+    Pipeline: strip_bidi → strip invisibles → strip_control → strip_zero_width →
+    NFKC → confusables → **prototype fold** →
+    fixed-point(fold_case → confusables → NFKC) → collapse_whitespace
 
     The confusable fold runs **twice**, and the second pass is not redundant. The
     table's entry for a homoglyph is often on the *lowercase* form, so a capital
@@ -548,6 +548,14 @@ def skeleton_key(text: str, *, digit_policy: str = "numeric", on_empty: str | No
     ``skeleton_key("ω")`` returned ``w`` — and a key that is not a fixed point is
     not a key. A second pass rather than a reorder: the first has to see cased
     text or the prototype fold has nothing to work with.
+
+    NFKC runs inside the loop too, because the case fold and the confusable fold
+    can each leave the text decomposed: U+0390 case-folds to three code points,
+    and U+00A5 + U+0300 folds to ``Y`` beside a grave it composes with. The strip
+    steps run first, ahead of NFKC: a character they remove that sits between a
+    base and its mark would otherwise block the composition, and the key would see
+    the bare base. Both were found by the Lean model in ``formal/lean/Confusables``,
+    and before them the key was not always a fixed point.
 
     TR39 puts ``I``, ``l`` and ``1`` in one equivalence class and ``O``/``0`` in
     another. disarm's table stops short of both — every member of the capital-I

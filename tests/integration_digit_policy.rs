@@ -59,7 +59,7 @@ fn tr39_policy_makes_the_skeleton_collide() {
     );
 }
 
-/// The policy must be surgical: everything outside the 45 divergent rows is untouched.
+/// The policy must be surgical: everything outside the 47 divergent rows is untouched.
 #[test]
 fn the_policy_touches_only_the_divergent_rows() {
     for text in [

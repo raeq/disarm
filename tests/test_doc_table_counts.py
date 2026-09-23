@@ -148,6 +148,44 @@ CASES = [
 ]
 
 
+#: The `tr39` digit-policy overrides (#561). The count was written as 45 in every place
+#: below while the table held 47, and nothing noticed: the Lean model of the confusable
+#: fold (`formal/lean/Confusables`, F5) measured 47 code points on which the two
+#: policies differ, which is the row count. Stated in the docs of every binding, so
+#: every statement is gated, not a sample.
+_TR39_OVERRIDES = "confusables_digit_tr39.tsv"
+_TR39_THREE = r"Three of the (\d+) divergent rows"
+_TR39_DIFFER = r"The two differ on (\d+) rows"
+_TR39_STATEMENTS = [
+    ("docs/user-guide/confusables.md", _TR39_THREE),
+    ("docs/user-guide/confusables.md", _TR39_DIFFER),
+    ("docs/node/api.md", _TR39_THREE),
+    ("docs/node/api.md", _TR39_DIFFER),
+    ("docs/ruby/api.md", _TR39_THREE),
+    ("docs/ruby/api.md", _TR39_DIFFER),
+    ("docs/rust/getting-started.md", _TR39_THREE),
+    ("docs/rust/getting-started.md", _TR39_DIFFER),
+    ("src/api/safety.rs", r"disagree on (\d+) rows"),
+    ("src/confusables.rs", _TR39_THREE),
+    ("python/disarm/_api.py", r"Three of the\s+(\d+) rows do not land"),
+    ("python/disarm/_api.py", r"policies differ on (\d+) rows"),
+    ("python/disarm/_text.py", r"Three of\s+the (\d+) rows land"),
+    ("bindings/node/index.ts", _TR39_DIFFER),
+    ("bindings/java/disarm-java/src/main/java/dev/disarm/Disarm.java", _TR39_DIFFER),
+    (
+        "bindings/java/disarm-java/src/main/java/dev/disarm/DigitPolicy.java",
+        r"disagree on (\d+) rows",
+    ),
+    ("bindings/ruby/lib/disarm.rb", r"three of the (\d+) rows"),
+    ("bindings/ruby/lib/disarm.rb", r"The two differ on (\d+) rows"),
+    ("bindings/cabi/src/lib.rs", r"the (\d+) rows are not"),
+]
+CASES += [
+    pytest.param(Path(doc), pattern, _TR39_OVERRIDES, id=f"tr39-{Path(doc).name}-{i}")
+    for i, (doc, pattern) in enumerate(_TR39_STATEMENTS)
+]
+
+
 @pytest.mark.parametrize(("doc", "pattern", "tsv"), CASES)
 def test_documented_count_matches_the_table(doc: Path, pattern: str, tsv: str) -> None:
     doc_path, tsv_path = ROOT / doc, DATA / tsv

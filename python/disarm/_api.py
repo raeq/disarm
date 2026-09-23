@@ -831,17 +831,17 @@ def normalize_confusables(
         **The presets fold a different table, because NFKC runs first (#834).**
         Every preset and profile that folds confusables normalizes to NFKC
         before doing it, so the fold sees a decomposed image of the input and
-        **68 code points get a different answer** than they do here (8 for the
+        **65 code points get a different answer** than they do here (5 for the
         Cyrillic target)::
 
             normalize_confusables("\u017f")   # 'f'  — TR39: a long s looks like an f
             canonicalize("\u017f")            # 's'  — NFKC decomposed it first
 
-        Neither order is right everywhere, which is why both ship: 44 of the 68
+        Neither order is right everywhere, which is why both ship: 43 of the 65
         favour the preset answer (``\u2474`` is ``(1)`` rather than ``(l)``, and
         the mathematical ``m`` is ``m`` rather than ``rn``), 15 favour this one
         (``\u00b4`` is ``'`` here and a space plus a combining acute there), and
-        9 are judgment calls. What matters is that they differ.
+        7 are judgment calls. What matters is that they differ.
 
         The consequence for keys: this function alone is **not** a canonical
         skeleton. ``\u2474`` folds to ``(l)`` while ASCII ``(1)`` stays ``(1)``,
@@ -876,13 +876,13 @@ def normalize_confusables(
 
             ``"tr39"`` uses upstream's targets, which send most of these digits to a
             Latin *letter* (``०`` → ``o``, ``೦`` → ``O``, ``١`` → ``l``). Three of the
-            45 rows do not land on a letter: ``٠`` and ``۰`` fold to ``.``, and ``𑣣``
+            47 rows do not land on a letter: ``٠`` and ``۰`` fold to ``.``, and ``𑣣``
             folds to the two characters ``rn`` — which matters if the result feeds a
             label- or path-shaped key. That is what an
             identifier *skeleton* wants: its only job is to make two confusable
             identifiers collide, and it does not care whether the collision target
             reads sensibly. Reach for it when comparing against a TR39-derived
-            benchmark. The two policies differ on 45 rows and agree everywhere else.
+            benchmark. The two policies differ on 47 rows and agree everywhere else.
 
             Scoped to the Latin target: the override rows are generated from the
             Latin table and carry TR39's Latin-script targets, so with
@@ -2388,8 +2388,10 @@ def is_confusable(
 
     Args:
         text: Input string.
-        target_script: Script to check confusability against. Currently only
-            ``"latin"`` is supported; any other value raises ``DisarmError``.
+        target_script: Script to check confusability against: ``"latin"``
+            (default), ``"cyrillic"``, ``"arabic"`` or ``"hebrew"``, the same four
+            targets `normalize_confusables` takes. Any other value raises
+            ``DisarmError``.
         greedy: ``confusable_homoglyphs`` compatibility — ignored, with a
             ``DeprecationWarning`` *when explicitly passed*. disarm always checks
             all characters.
@@ -2401,7 +2403,7 @@ def is_confusable(
         True if any confusable homoglyphs are present.
 
     Raises:
-        DisarmError: If *target_script* is not ``"latin"``.
+        DisarmError: If *target_script* is not one of the four targets.
 
     Examples:
         >>> is_confusable("pаypal")  # Cyrillic а looks like Latin a

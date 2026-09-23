@@ -921,7 +921,20 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
             return None;
         }
         if let Some(target) = ascii_target(c) {
-            return Some((c, target));
+            // A letter whose decomposition begins with its own fold target is that letter
+            // plus an accent, and the fold only drops the accent: `\u{e7}` is `c` + cedilla
+            // and folds to `c`, `\u{1ec9}` is `i` + hook above and folds to `i`. That is
+            // orthography, not a disguise, and the guide spares accented Latin, so
+            // `Fran\u{e7}ais` must not report. It did, and its NFD spelling did not
+            // (Findings 3 and 4 of the Lean model in `formal/lean/Detection`).
+            //
+            // The letters the fold changes in shape stay reported: `\u{f8}`, `\u{142}`,
+            // `\u{111}` have no decomposition, and `\u{1fe}` decomposes to `\u{d8}` +
+            // acute, so it reports exactly when `\u{d8}` does. Those folds are deliberate
+            // (`tests/integration_unmapped_confusables.rs`).
+            let mut nfd = c.nfd();
+            let accent_only = target.chars().all(|t| nfd.next() == Some(t));
+            return (!accent_only).then_some((c, target));
         }
         // The composed case, which #719 calls the subtle one: `U+00BD` NFKC-decomposes to
         // `1⁄2`, whose middle character is `U+2044` and is NOT ASCII — so the `CompatFold`
@@ -2271,4 +2284,36 @@ mod tests {
         assert!(!has_anomalies("acct \u{200F}\u{200F}a4321", &l));
     }
 
+    /// Finding 4: an accented Latin letter whose fold only drops the accent is spared;
+    /// the letters the fold changes in shape still report.
+    #[test]
+    fn confusable_spares_an_accent_and_reports_a_shape() {
+        let l = lex(&[]);
+        for word in [
+            "Fran\u{e7}ais",
+            "gar\u{e7}on",
+            "T\u{fc}rk\u{e7}e",
+            "a\u{e7}\u{e3}o",
+            "ch\u{1ec9}",
+            "\u{c7}ay",
+            "caf\u{e9}",
+            "na\u{ef}ve",
+            "stra\u{df}e",
+        ] {
+            assert!(inspect_anomalies(word, &l).kinds.is_empty(), "{word:?}");
+        }
+        for (word, source) in [
+            ("K\u{f8}benhavn", '\u{f8}'),
+            ("\u{141}\u{f3}d\u{17a}", '\u{141}'),
+            ("\u{111}\u{1b0}\u{1edd}ng", '\u{111}'),
+            // U+01FE is U+00D8 + acute: reported exactly when U+00D8 is.
+            ("\u{1fe}slo", '\u{1fe}'),
+            ("\u{d8}slo", '\u{d8}'),
+            ("g\u{131}thub", '\u{131}'),
+        ] {
+            let r = inspect_anomalies(word, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Confusable], "{word:?}");
+            assert!(r.findings[0].detail.starts_with(source), "{word:?}");
+        }
+    }
 }

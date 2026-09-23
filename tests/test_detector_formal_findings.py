@@ -9,6 +9,8 @@ Each class below is one finding, reproduced on the library before it was fixed:
   which ``canonicalize`` deletes and nothing reported.
 * **Finding 2**: the #741 number-run rule tested only the first ``RLM``/``ALM`` in the
   token, so a doubled mark defeated it.
+* **Finding 4**: ``confusable`` fired on ordinary Latin orthography (``Fran\u00e7ais``)
+  that the guide says is spared.
 
 Every assertion marked as a regression fails on the ``main`` these fixes were written
 against. Escapes throughout, per #802: most of these characters render as nothing.
@@ -16,11 +18,16 @@ against. Escapes throughout, per #802: most of these characters render as nothin
 
 from __future__ import annotations
 
+import re
 import unicodedata
+from pathlib import Path
 
 import pytest
 
 import disarm
+
+ROOT = Path(__file__).resolve().parent.parent
+GUIDE = ROOT / "docs" / "user-guide" / "anomaly-detection.md"
 
 DEPRECATED_OR_ANNOTATION = [chr(c) for c in [*range(0x206A, 0x2070), *range(0xFFF9, 0xFFFC)]]
 
@@ -127,3 +134,80 @@ class TestFinding2DoubledRtlMark:
     @pytest.mark.parametrize("text", ["hello\u200f\u200fworld", "acct \u200f\u200fa4321"])
     def test_marks_not_before_a_number_run_are_still_spared(self, text: str) -> None:
         assert not disarm.has_anomalies(text)
+
+
+#: Latin letters with a confusable fold that only drops the accent.
+ACCENT_ONLY = [
+    "Fran\u00e7ais",
+    "gar\u00e7on",
+    "T\u00fcrk\u00e7e",
+    "a\u00e7\u00e3o",
+    "ch\u1ec9",
+    "\u00c7a",
+]
+#: Latin letters the fold changes in shape, with the source the finding names.
+SHAPE = [
+    ("K\u00f8benhavn", "\u00f8"),
+    ("\u0141\u00f3d\u017a", "\u0141"),
+    ("\u0111\u01b0\u1eddng", "\u0111"),
+    ("\u01feslo", "\u01fe"),
+    ("\u00d8slo", "\u00d8"),
+    ("g\u0131thub", "\u0131"),
+]
+
+
+def _latin_letters_the_fold_reaches() -> list[str]:
+    return [
+        chr(cp)
+        for cp in range(0x80, 0x110000)
+        if unicodedata.category(chr(cp)) in ("Ll", "Lu", "Lt")
+        and [s.value for s in disarm.detect_scripts(chr(cp))] == ["Latin"]
+        and "confusable" in disarm.inspect_anomalies(f"ab{chr(cp)}cd").kinds
+    ]
+
+
+class TestFinding4AccentedLatin:
+    @pytest.mark.parametrize("word", ACCENT_ONLY)
+    def test_an_accent_the_fold_drops_is_spared(self, word: str) -> None:
+        """Regression: ``confusable`` on ``main``."""
+        assert disarm.inspect_anomalies(word).kinds == []
+
+    @pytest.mark.parametrize("word", ["caf\u00e9", "na\u00efve", "stra\u00dfe"])
+    def test_the_guides_examples_are_spared(self, word: str) -> None:
+        assert disarm.inspect_anomalies(word).kinds == []
+
+    @pytest.mark.parametrize(("word", "source"), SHAPE)
+    def test_a_letter_the_fold_changes_in_shape_still_reports(self, word: str, source: str) -> None:
+        """The fold is deliberate (``tests/integration_unmapped_confusables.rs``): the
+        guide now says which Latin letters it reaches rather than the detector going
+        quiet on them."""
+        report = disarm.inspect_anomalies(word)
+        assert report.kinds == ["confusable"]
+        assert report.findings[0].detail.startswith(source)
+
+    def test_the_folds_themselves_are_unchanged(self) -> None:
+        """The detector changed, not the fold: ``canonicalize`` still folds all of them."""
+        assert disarm.normalize_confusables("\u00e7") == "c"
+        assert disarm.normalize_confusables("\u00c7") == "C"
+        assert disarm.normalize_confusables("\u01fe") == "O"
+        assert disarm.normalize_confusables("\u00f8") == "o"
+
+    def test_no_letter_the_fold_reaches_is_an_accent_only_fold(self) -> None:
+        """Anchored to the data rather than the examples: no Latin letter still reported
+        decomposes to the letter it folds to plus marks."""
+        for ch in _latin_letters_the_fold_reaches():
+            detail = disarm.inspect_anomalies(f"ab{ch}cd").findings[0].detail
+            target = detail.split(" folds to ", 1)[1]
+            assert not unicodedata.normalize("NFD", ch).startswith(target), _cp(ch)
+
+    def test_the_guide_states_the_count(self) -> None:
+        """The guide says how many Latin letters the fold reaches. Measured here, so a
+        table refresh that changes it fails until the sentence is corrected."""
+        reached = _latin_letters_the_fold_reaches()
+        undecomposed = [ch for ch in reached if unicodedata.normalize("NFD", ch) == ch]
+        page = GUIDE.read_text(encoding="utf-8")
+        match = re.search(r"reaches \*\*(\d+) Latin letters\*\*", page)
+        assert match, "the confusable row no longer states which Latin letters the fold reaches"
+        assert int(match.group(1)) == len(reached)
+        match = re.search(r"(\d+) of them have no decomposition", page)
+        assert match and int(match.group(1)) == len(undecomposed)

@@ -1,0 +1,48 @@
+- **Slug defects found by a Lean model of the output sanitizers
+  (`formal/lean/Sanitizers`; #PR).** The model agreed with the library at `595fbda` on
+  2,539,440 `slugify` and 30,005 `UniqueSlugifier` differential inputs, and each
+  counterexample below was reproduced on the library before anything changed.
+
+  - **`allow_unicode` kept 130 symbols.** The letter test was `char::is_alphanumeric`,
+    whose `Alphabetic` half takes in the circled Latin letters U+24B6-U+24E9 and the
+    squared, negative circled and negative squared Latin capitals U+1F130-U+1F189 through
+    `Other_Alphabetic`, so `slugify("\u24b6dmin", allow_unicode=True)` returned
+    `'\u24d0dmin'`, which reads as `admin`. They are `So`, and now become the separator,
+    as the docs say symbols do.
+  - **A truncated `allow_unicode` slug could end in ZWJ or ZWNJ**, the defect #711 set
+    out to prevent. Grapheme rule GB9 attaches a joiner to the character before it, so the
+    cluster-boundary cut kept `a\u200d` of `a\u200db`. A cut now drops a trailing joiner,
+    with and without `word_boundary`.
+  - **`UniqueSlugifier` suffixes broke the slug's shape.** The base was cut on a code
+    point with nothing cleaned, and the suffix could stand alone: `max_length=5` gave
+    `ab-cd`, then `ab--1`; `max_length=2` gave `ab`, then `-1`; an empty slug gave `''`,
+    then `-1`; `allow_unicode` left a ZWJ before `-1`. The head is now cut the way a slug
+    is (a cluster boundary under `allow_unicode`, then a trailing joiner and a partial
+    separator removed), a suffixed slug keeps at least one character of the base, and
+    `InvalidArgumentError` is raised when the suffix leaves no room for one. The digits
+    are never cut, so distinct counters never alias. An empty slug is returned as it is,
+    every time, without being recorded or passed to `check`. The candidate builder moved
+    from the Python binding into the Rust core.
+  - **`allow_unicode` slugs were not NFC when lowercasing made a composable pair.**
+    Composition ran before lowercasing, so `T\u0308` gave `t\u0308`, while `\u1e97` gave
+    `\u1e97`, and slugifying the first result again changed it. Composition now runs
+    after lowercasing.
+  - **Plain truncation left half of a multi-character separator:**
+    `slugify("a b", separator="-_", max_length=2)` gave `'a-'`. It is stripped, as the
+    `word_boundary` branch already did.
+  - **`word_boundary` dropped a word it had room for:**
+    `slugify("very long title here", max_length=9, word_boundary=True)` gave `'very'`.
+    A cut that lands exactly at the end of a word now keeps it (`'very-long'`), as
+    python-slugify does.
+  - **Stopwords were not case-insensitive**, as `SlugConfig::stopwords` says they are:
+    `slugify("The Fox", stopwords=["The"])` gave `'the-fox'`. The stopwords are
+    lowercased, and so is each word when `lowercase=False`, on every entry point.
+  - **With an empty separator, stopwords were removed character by character:**
+    `slugify("abc", separator="", stopwords=["b"])` gave `'ac'`. With no separator the
+    slug has no words, and nothing is removed.
+
+  `slugify` output moves for the inputs above; slugs without these symbols, joiners,
+  composable pairs, stopwords or truncation are unchanged. `UniqueSlugifier` returns
+  `''` rather than `-1`, `-2`, ... for unsluggable input, and raises where it returned a
+  bare suffix. `UniqueSlugMaxLengthTooSmall` reports the length a candidate needs, one
+  character of the base included.

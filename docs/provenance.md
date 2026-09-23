@@ -21,6 +21,7 @@ against for byte-stable behavior.
 | East Asian width — `char_width.tsv` | UCD `EastAsianWidth.txt` | **15.1.0** |
 | Emoji presentation — `emoji_presentation.tsv` | UCD `emoji-data.txt` | **15.1.0** |
 | Assigned code points — `assigned_ranges.tsv` | UCD `General_Category` (assigned = not `Cn`) | **17.0.0** |
+| Script carve-outs: `script_common_carveouts.tsv` | UCD `Scripts.txt` (the vendored `data/Scripts.txt`): the code points inside a script's block range that are `Script=Common`, which `detect_scripts` reports as no script | **17.0.0** |
 | UCD script spans — `tests/fixtures/ucd_script_ranges.tsv` | UCD `Scripts.txt`, restricted to the scripts `src/scripts.rs` curates (#819) | **17.0.0** |
 | Decimal numbering systems — `decimal_digit_zeros.tsv` | UCD `Numeric_Type=Decimal`, one row per system zero (#777) | **17.0.0** |
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |

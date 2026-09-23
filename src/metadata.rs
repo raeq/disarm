@@ -829,6 +829,15 @@ pub(crate) static SCRIPTS_META: &[(&str, ScriptRow)] = &[
         },
     ),
     (
+        "Bopomofo",
+        ScriptRow {
+            name: "Bopomofo",
+            default_lang: None,
+            example: "ㄅㄆㄇ",
+            context_aware: false,
+        },
+    ),
+    (
         "Buginese",
         ScriptRow {
             name: "Buginese (Lontara)",
@@ -1316,6 +1325,7 @@ pub(crate) static SCRIPTS: &[&str] = &[
     "Bamum",
     "Batak",
     "Bengali",
+    "Bopomofo",
     "Buginese",
     "Buhid",
     "CanadianAboriginal",

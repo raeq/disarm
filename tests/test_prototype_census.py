@@ -106,7 +106,7 @@ def test_no_census_key_carries_an_underscore() -> None:
 def test_scripts_the_enum_does_not_name_are_still_addressable() -> None:
     """The grouping is the UCD's, so it names scripts disarm's own enum does not.
 
-    Dropping them would lose 72 sources from the census silently, and the totals above
+    Dropping them would lose 69 sources from the census silently, and the totals above
     would still balance if the loss were also dropped from the population.
     """
     yi = disarm.confusable_coverage("Yi")
@@ -186,16 +186,17 @@ def test_the_shipped_census_is_what_its_inputs_produce() -> None:
 
 
 def test_the_census_only_scripts_are_the_number_the_docs_state() -> None:
-    """`confusable_coverage`'s docstring says 19 scripts, 72 sources between them.
+    """`confusable_coverage`'s docstring says 18 scripts, 69 sources between them.
 
     Both numbers are quoted to a reader deciding whether the census covers their script,
     and both move on a UCD refresh. Pinning them here means the refresh updates the prose
-    rather than silently outdating it.
+    rather than silently outdating it. They also move when disarm learns a script: 19 and
+    72 until Bopomofo (3 sources) joined `list_scripts`.
     """
     known = set(disarm.list_scripts())
     census_only = [n for n in _census_scripts() if n not in known]
-    assert len(census_only) == 19
-    assert sum(disarm.confusable_coverage(n)["sources"] for n in census_only) == 72
+    assert len(census_only) == 18
+    assert sum(disarm.confusable_coverage(n)["sources"] for n in census_only) == 69
 
 
 def test_the_script_namespaces_agree() -> None:

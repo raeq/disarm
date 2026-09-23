@@ -33,6 +33,7 @@ BUNDLED_DATA = {
     "data/confusables_vision.tsv": "scripts/gen_confusables.py",
     "src/tables/data/confusables_to_latin.tsv": "build.rs",
     "src/tables/data/assigned_ranges.tsv": "build.rs",
+    "src/tables/data/script_common_carveouts.tsv": "build.rs",
     "src/tables/data/bidi_strong_ranges.tsv": "build.rs",
 }
 

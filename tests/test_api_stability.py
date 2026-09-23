@@ -702,6 +702,8 @@ EXPECTED_SCRIPT_MEMBERS = {
     "HIRAGANA",
     "KATAKANA",
     "HANGUL",
+    # Resolved by the core since Finding 5 of the Lean detection model (`formal/lean`).
+    "BOPOMOFO",
     "LISU",
     "THAI",
     "LAO",

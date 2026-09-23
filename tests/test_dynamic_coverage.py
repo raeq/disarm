@@ -68,6 +68,7 @@ SCRIPT_EXEMPLARS: dict[str, str] = {
     "Hanunoo": "\u1720\u1721\u1722",  # Hanunoo: a i u
     "Tagbanwa": "\u1760\u1761\u1762",  # Tagbanwa: a i u
     "Batak": "\u1bc0\u1bc1\u1bc2",  # Batak: a, simalungun a, ha
+    "Bopomofo": "\u3105\u3106\u3107",  # Bopomofo: b, p, m
     "TaiTham": "\u1a20\u1a21\u1a22",
     "Tifinagh": "\u2d30\u2d31\u2d33",
 }

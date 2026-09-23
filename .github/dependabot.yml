@@ -57,12 +57,12 @@ updates:
       semver-minor-days: 7
       semver-patch-days: 2
     # phf 0.14 (and its phf_codegen/phf_shared/phf_generator family) moved to
-    # edition 2024 / rust-version 1.85, but this crate's shipped MSRV is 1.81
-    # (see `rust-version` in Cargo.toml). phf is a real runtime/build dependency
-    # — built by downstream consumers, unlike the dev-only criterion exception —
-    # so 0.14 would silently raise the consumer-facing MSRV. Hold at 0.13.x until
-    # we deliberately bump the MSRV; revisit by dropping this ignore. (See the
-    # closed migration attempt #509.)
+    # edition 2024 / rust-version 1.85. The hold was set while this crate's shipped
+    # MSRV was 1.81, when 0.14 would have silently raised the consumer-facing MSRV
+    # (phf is a real runtime/build dependency, built by downstream consumers). The
+    # MSRV is now 1.88 (#718; see `rust-version` in Cargo.toml), so that reason no
+    # longer holds; the ignore stays until the migration is redone deliberately
+    # rather than as a Dependabot bump. (See the closed migration attempt #509.)
     ignore:
       - dependency-name: "phf"
         versions: [">=0.14"]

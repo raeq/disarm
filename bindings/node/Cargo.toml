@@ -9,7 +9,7 @@
 name = "disarm"
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 publish = false
 description = "Node.js bindings for disarm — Unicode confusable/text-security building blocks"
 license = "MIT"

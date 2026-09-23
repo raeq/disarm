@@ -237,6 +237,14 @@ pub fn unicode_version() -> &'static str {
 /// the same reason as the four before it: of the moved class its corpus held exactly one
 /// code point, `U+2764`, which CLDR names and which therefore never reached the branch.
 /// Rows covering the class were added with this.
+///
+/// Also under 10, still unreleased: the deletion resolver ends a line at every break
+/// the detector knows, not only `LF`. A backspace after VT, FF or NEL erased the break
+/// and joined the lines, so `canonicalize("pay\u{85}\u{8}pal")` was `"paypal"` and is
+/// now `"pay pal"`, as the `LF` form always was; rows for all three were added to the
+/// fixture, which had none. A zero-width character at the start of a line no longer
+/// takes a cell (found by the Lean model in `formal/lean/Deletions`); no key moves for
+/// that, since every key builder then strips it.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -272,7 +280,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "9cbf80ada9434ab2210a602f127f3327e178695acb147f766f5afd9410cc4841";
+    "3e6f75fed89cf5da51e8a1e6d3c617f44433f4eaa19fbdc2b6919a05ed4a1055";
 
 /// The key-schema counter, as a function (#645).
 ///

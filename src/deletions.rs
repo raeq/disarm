@@ -64,6 +64,8 @@ const LF: char = '\n';
 /// returns the cursor to column 0 and later text overwrites earlier text, which is a
 /// rendering-overwrite in a terminal and a **classic Mac OS line ending** in a file from
 /// before 2001. The two are byte-identical, so resolving them is the caller's call.
+use crate::anomalies::is_line_break;
+
 pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> bool {
     if !text.chars().any(|c| c == BS || c == DEL || (cr && c == CR)) {
         return false;
@@ -75,14 +77,9 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
     // `CR` has moved it back.
     let mut line: Vec<String> = Vec::new();
     let mut col = 0usize;
-    // Characters that occupy no cell, met at column 0 with visible text to the right. They
-    // have no cell to their left to join, and must not take one: see the branch that fills
-    // this. `occupied` counts the non-blank cells, so that test costs nothing: without a
-    // `CR`, every cell at or right of the cursor is blank — erasing blanks as it goes, and
-    // only writing moves the cursor right — so visible text to the right of column 0 means
-    // a `CR` returned the cursor.
+    // Characters that occupy no cell, met at column 0: they have no cell to their left to
+    // join, and must not take one. See the branch that fills this.
     let mut lead = String::new();
-    let mut occupied = 0usize;
     let mut chars = text.chars().peekable();
     while let Some(ch) = chars.next() {
         if ch == BS || ch == DEL {
@@ -106,12 +103,16 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
                 // `"a"*n + "\r" + "X\u{8}"*n` quadratic, 4x per doubling, measured.
                 // Keeping the column is what lets a later overwrite land where the
                 // terminal would put it.
-                if !line[col].is_empty() {
-                    occupied -= 1;
-                }
                 line[col].clear();
             }
-        } else if ch == LF || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF))) {
+        } else if (ch != CR && is_line_break(ch))
+            || (ch == CR && (!cr || chars.peek().is_none_or(|&n| n == LF)))
+        {
+            // Every line break the detector knows, not only `LF`: VT, FF, NEL, LS and PS
+            // start a line for `anomalies::overwriting_cr`, and treated as cells here a `CR`
+            // after one overwrote the line above it while the detector saw nothing, and a
+            // backspace erased the break and joined two lines (Lean model,
+            // `formal/lean/Deletions`).
             out.push_str(&lead);
             lead.clear();
             for cell in line.drain(..) {
@@ -119,16 +120,12 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             }
             out.push(ch);
             col = 0;
-            occupied = 0;
         } else if ch == CR {
             // Only reachable with `cr` set: the cursor returns, the line does not clear.
             col = 0;
         } else if !occupies_cell(ch) && col > 0 {
-            if line[col - 1].is_empty() {
-                occupied += 1;
-            }
             line[col - 1].push(ch);
-        } else if !occupies_cell(ch) && occupied > 0 {
+        } else if !occupies_cell(ch) {
             // Column 0 after a `CR`, with the line still to the right. Falling through to
             // the overwrite below took cell 0 *and advanced the cursor*, so the next
             // character overwrote cell 1: `"abc\r\u{200B}Y"` gave `"\u{200B}Yc"`, losing
@@ -136,20 +133,18 @@ pub(crate) fn resolve_deletions_into(text: &str, cr: bool, out: &mut String) -> 
             // no cell does not move the cursor either. It is kept, ahead of the line — it
             // is text the caller passed, and removing it is `strip_zero_width`'s job.
             //
-            // Visible text, not any cell: an erase blanks, so a backspace can bring the
-            // cursor to column 0 over blank cells with no `CR` at all, and treating those as
-            // a line to keep changed `"ab\u{8}\u{8}\u{200B}\u{8}"` from `""` to
-            // `"\u{200B}"` (Copilot on #1005).
+            //
+            // On an empty line too. #1005 kept it here only with visible text to the right,
+            // and on an empty line it took cell 0, so every overwrite after a later `CR`
+            // landed a column off: `"\u{200B}ZZZZZZ\rpaypal"` gave `"paypalZ"` (Lean model,
+            // `formal/lean/Deletions`). A consequence, the terminal's: a backspace at column
+            // 0 has no cell to erase, so `"\u{200B}\u{8}a"` keeps the U+200B.
             lead.push(ch);
         } else if col < line.len() {
-            if line[col].is_empty() {
-                occupied += 1;
-            }
             line[col] = ch.to_string();
             col += 1;
         } else {
             line.push(ch.to_string());
-            occupied += 1;
             col += 1;
         }
     }
@@ -181,15 +176,53 @@ mod tests {
     /// A character that takes no cell does not move the cursor, at column 0 included.
     /// After a `CR` it fell through to the overwrite branch and advanced, so the next
     /// letter overwrote a cell the reader can still see (#995 review).
+    /// A character that takes no cell never takes one, on an empty line either
+    /// (Lean model, `formal/lean/Deletions`). The #1005 guard sent it ahead of the line
+    /// only when visible text lay to the right; on an empty line it took cell 0, so every
+    /// later overwrite after a `CR` landed a column off and one leading U+200B defeated
+    /// resolution: `"\u{200B}ZZZZZZ\rpaypal"` gave `"paypalZ"`.
+    #[test]
+    fn a_no_cell_character_never_takes_a_cell() {
+        assert_eq!(resolve("\u{200B}ZZZZZZ\rpaypal", true), "\u{200B}paypal");
+        assert_eq!(resolve("\u{301}ZZZZZZ\rpaypal", true), "\u{301}paypal");
+        assert_eq!(resolve("\u{200B}a\ra", true), "\u{200B}a");
+        assert_eq!(resolve("\u{200B}\ra", true), "\u{200B}a");
+    }
+
+    /// VT, FF, NEL, LS and PS end a line for the detector (`anomalies::is_line_break`),
+    /// and the resolver treated them as ordinary cells: a `CR` after one overwrote the
+    /// line above it while `has_anomalies` reported nothing, and a backspace erased the
+    /// break itself and joined two lines, which it can never do to an `LF` (Lean model).
+    #[test]
+    fn every_line_break_the_detector_knows_ends_a_line_here_too() {
+        for b in ['\u{B}', '\u{C}', '\u{85}', '\u{2028}', '\u{2029}'] {
+            assert_eq!(
+                resolve(&format!("abc{b}\rX"), true),
+                format!("abc{b}X"),
+                "{b:?}"
+            );
+            assert_eq!(
+                resolve(&format!("pay{b}\u{8}pal"), false),
+                format!("pay{b}pal"),
+                "{b:?}"
+            );
+        }
+        // The LF behaviour both now match.
+        assert_eq!(resolve("abc\n\rX", true), "abc\nX");
+        assert_eq!(resolve("pay\n\u{8}pal", false), "pay\npal");
+    }
+
     #[test]
     fn a_zero_width_at_column_zero_does_not_move_the_cursor() {
         assert_eq!(resolve("abc\r\u{200B}Y", true), "\u{200B}Ybc");
         assert_eq!(resolve("abc\r\u{0301}Y", true), "\u{0301}Ybc");
         assert_eq!(resolve("abc\rX\u{8}\u{200B}Y", true), "\u{200B}Ybc");
-        // Without a `CR` nothing changes: a backspace can bring the cursor to column 0
-        // with cells to its right, but they are blank, and blank is not a line to keep.
-        assert_eq!(resolve("\u{200B}\u{8}a", false), "a");
-        assert_eq!(resolve("ab\u{8}\u{8}\u{200B}\u{8}", false), "");
+        // A no-cell character at column 0 has no cell for a backspace to erase, with or
+        // without a `CR`, and whatever lies to the right: the two inputs below agree, which
+        // is what Copilot asked of #1005, and both keep the U+200B, as a terminal does.
+        assert_eq!(resolve("\u{200B}\u{8}a", false), "\u{200B}a");
+        assert_eq!(resolve("ab\u{8}\u{8}\u{200B}\u{8}", false), "\u{200B}");
+        assert_eq!(resolve("\u{200B}\u{8}", false), "\u{200B}");
         assert_eq!(resolve("ab\u{8}\u{8}\u{200B}Y", false), "\u{200B}Y");
     }
 

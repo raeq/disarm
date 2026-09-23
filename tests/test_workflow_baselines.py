@@ -32,7 +32,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOWS = ROOT / ".github" / "workflows"
 
 #: `github.base_ref`, in either expression syntax.
 BASE_REF = re.compile(r"github\.base_ref")
@@ -335,3 +336,204 @@ def test_every_binding_publisher_waits_for_the_core() -> None:
             f"{name} has no job keyed exactly `wait-for-core`, so it does not inherit "
             f"the core's Tier 3 gate; its jobs are {sorted(jobs)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Every action is pinned to a SHA, and every pin names the one ref it is
+# ---------------------------------------------------------------------------
+#
+# #1027 pinned every `uses:` to a 40-hex commit. The comments that say which release a
+# SHA is were written by hand and drifted at once: the same SHA read `# v7` in one file
+# and `# v7.0.0` in another, the space before `#` was one or two by accident, and
+# `# v1`, `# v2` and `# release/v1` named refs that move, so the comment stopped being
+# true the day upstream tagged again. `Swatinem/rust-cache`'s `# v2` was already false:
+# `v2` is `v2.9.2`, and the pinned commit is an untagged one on `master`.
+#
+# A pin whose comment is wrong is worse than no comment. The comment is what a reviewer
+# reads, and what Dependabot rewrites on a bump, so a wrong one hides which code runs.
+# The policy, uniform everywhere including the snippets in the docs:
+#
+# * `uses: owner/repo[/path]@<40-hex>  # <exact ref>`, exactly two spaces, then `# `;
+# * the ref is the most specific tag pointing at that SHA (`vX.Y.Z`), resolved with
+#   `git ls-remote --tags` and dereferenced through `^{}`;
+# * a SHA no tag points at keeps the branch it was taken from, and is listed below;
+# * one SHA, one comment, across the whole tree.
+
+GITHUB_DIR = WORKFLOWS.parent
+
+#: A `uses:` line, as a step (`- uses:`) or as a reusable-workflow job (`uses:`).
+USES_LINE = re.compile(r"^\s*(?:-\s+)?uses:\s*(?P<ref>\S+)(?P<rest>.*)$")
+#: `owner/repo[/path]@<40 hex>`.
+SHA_PIN = re.compile(
+    r"^(?P<action>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[^@\s]+)?)@(?P<sha>[0-9a-f]{40})$"
+)
+#: Exactly two spaces, `#`, one space, the ref, nothing after it.
+PIN_COMMENT = re.compile(r"^  # (?P<ref>\S+)$")
+#: The most specific form a release tag takes here.
+EXACT_TAG = re.compile(r"^v\d+\.\d+\.\d+$")
+
+#: Pins that no tag points at, so the comment names the branch they were taken from.
+#: Checked 2026-09-23 with `git ls-remote --tags --heads`:
+#:
+#: * `dtolnay/rust-toolchain` publishes no tags at all; each toolchain is a branch that is
+#:   regenerated when `master` moves. The pinned commit was the tip of `stable` and is no
+#:   longer reachable from any branch, so it runs the toolchain it was pinned with.
+#: * `Swatinem/rust-cache`'s pinned commit is the tip of `master`, newer than `v2.9.2`.
+BRANCH_PINS = {
+    "dtolnay/rust-toolchain": "stable",
+    "Swatinem/rust-cache": "master",
+}
+
+
+def _pin_sources() -> list[Path]:
+    """Workflows, composite actions, and the docs that show a workflow snippet."""
+    sources = sorted(WORKFLOWS.glob("*.y*ml"))
+    sources += sorted((GITHUB_DIR / "actions").rglob("*.y*ml"))
+    docs = [p for p in ROOT.glob("*.md") if p.name != "CHANGELOG.md"]
+    docs += list((ROOT / "docs").rglob("*.md"))
+    docs += [p for p in (ROOT / "bindings").rglob("*.md") if "node_modules" not in p.parts]
+    sources += sorted(p for p in set(docs) if not p.is_symlink())
+    return sources
+
+
+def _uses_lines(text: str) -> list[tuple[int, str, str]]:
+    """`(line, ref, rest)` for every `uses:` that is code rather than a comment."""
+    found = []
+    for number, line in enumerate(text.split("\n"), 1):
+        if line.lstrip().startswith("#"):
+            continue
+        if match := USES_LINE.match(line):
+            found.append((number, match.group("ref"), match.group("rest")))
+    return found
+
+
+def _pin_problems(name: str, text: str) -> tuple[list[str], dict[str, set[str]]]:
+    """Every rule a file breaks, and the comment each SHA carries in it."""
+    problems: list[str] = []
+    comments: dict[str, set[str]] = {}
+    for number, ref, rest in _uses_lines(text):
+        where = f"{name}:{number}"
+        if ref.startswith(("./", "docker://")):
+            continue
+        pin = SHA_PIN.match(ref)
+        if not pin:
+            problems.append(f"{where}: `{ref}` is not pinned to a 40-hex commit SHA")
+            continue
+        comment = PIN_COMMENT.match(rest)
+        if not comment:
+            problems.append(f"{where}: `{rest.strip()}` is not exactly two spaces then `# <ref>`")
+            continue
+        repo = "/".join(pin.group("action").split("/")[:2])
+        tag = comment.group("ref")
+        if not EXACT_TAG.match(tag) and BRANCH_PINS.get(repo) != tag:
+            problems.append(
+                f"{where}: `# {tag}` names a moving ref; write the exact tag (vX.Y.Z) that "
+                "points at this SHA, or list a tagless branch pin in BRANCH_PINS"
+            )
+        comments.setdefault(pin.group("sha"), set()).add(tag)
+    return problems, comments
+
+
+def test_there_are_pins_to_check() -> None:
+    """Anchored to the tree as it is, so a broken glob cannot pass over nothing."""
+    sources = [p.relative_to(ROOT).as_posix() for p in _pin_sources()]
+    assert ".github/workflows/ci.yml" in sources
+    assert "docs/cli.md" in sources, "the SARIF upload snippet is a pin a user copies"
+    total = sum(len(_uses_lines(p.read_text(encoding="utf-8"))) for p in _pin_sources())
+    assert total > 100, f"only {total} `uses:` lines found; the scan has lost its files"
+
+
+def _check_tree(files: list[tuple[str, str]]) -> list[str]:
+    """Every rule broken across `(name, text)` files, including one SHA, two comments."""
+    problems: list[str] = []
+    seen: dict[str, dict[str, list[str]]] = {}
+    for name, text in files:
+        found, comments = _pin_problems(name, text)
+        problems += found
+        for sha, tags in comments.items():
+            for tag in tags:
+                seen.setdefault(sha, {}).setdefault(tag, []).append(name)
+    for sha, tags in sorted(seen.items()):
+        if len(tags) > 1:
+            problems.append(f"{sha[:12]} is commented differently in different places: {tags}")
+    return problems
+
+
+def test_every_uses_line_is_a_sha_pin_with_its_exact_ref() -> None:
+    files = [
+        (p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in _pin_sources()
+    ]
+    problems = _check_tree(files)
+    assert not problems, "action pins break the pinning policy:\n  " + "\n  ".join(problems)
+
+
+@pytest.mark.parametrize("path", _workflows(), ids=lambda p: p.name)
+def test_the_line_scan_sees_every_uses_yaml_sees(path: Path) -> None:
+    """A quoted or otherwise unusual `uses:` the line scan missed would be unchecked."""
+    text = path.read_text(encoding="utf-8")
+    document = yaml.safe_load(text) or {}
+    parsed = []
+    for job in (document.get("jobs") or {}).values():
+        if not isinstance(job, dict):
+            continue
+        if "uses" in job:
+            parsed.append(str(job["uses"]))
+        parsed += [
+            str(step["uses"])
+            for step in job.get("steps") or []
+            if isinstance(step, dict) and "uses" in step
+        ]
+    assert sorted(parsed) == sorted(ref for _, ref, _ in _uses_lines(text))
+
+
+@pytest.mark.parametrize(
+    ("line", "complaint"),
+    [
+        ("      - uses: actions/checkout@v4", "not pinned"),
+        ("      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "two spaces"),
+        (
+            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+            "two spaces",
+        ),  # noqa: E501
+        (
+            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7",
+            "moving ref",
+        ),  # noqa: E501
+        (
+            "      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1",
+            "moving ref",
+        ),  # noqa: E501
+        (
+            "      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # v2",
+            "moving ref",
+        ),  # noqa: E501
+    ],
+)
+def test_the_pin_gate_can_fail(line: str, complaint: str) -> None:
+    problems, _ = _pin_problems("x.yml", line)
+    assert len(problems) == 1 and complaint in problems[0], problems
+
+
+def test_the_pin_gate_passes_the_right_shapes() -> None:
+    good = "\n".join(
+        [
+            "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1",
+            "      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable",
+            "    uses: ./.github/workflows/tier3.yml",
+            "      - uses: docker://alpine:3",
+            "  # `uses:` instantiates a fresh job per caller",
+        ]
+    )
+    problems, comments = _pin_problems("x.yml", good)
+    assert problems == [] and len(comments) == 2, problems
+
+
+def test_one_sha_carrying_two_comments_is_reported() -> None:
+    sha = "5fda3b95a4ea91299a34e894583c3862153e4b97"
+    problems = _check_tree(
+        [
+            ("a.yml", f"  - uses: actions/setup-python@{sha}  # v7.0.0"),
+            ("b.yml", f"  - uses: actions/setup-python@{sha}  # v7.0.1"),
+        ]
+    )
+    assert len(problems) == 1 and "commented differently" in problems[0], problems

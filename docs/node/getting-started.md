@@ -10,7 +10,7 @@ toolchain, and the package ships TypeScript types — no `@types/disarm` needed.
 npm install disarm
 ```
 
-Requires Node 14+. `npm install disarm` pulls a prebuilt platform binary
+Requires Node 22+. `npm install disarm` pulls a prebuilt platform binary
 (Linux x64/arm64, macOS x64/arm64, Windows x64) when one is available.
 
 ## Quick start

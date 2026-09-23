@@ -10,7 +10,7 @@ dependency, and the whole crate is `unsafe_code = "forbid"`.
 cargo add disarm
 ```
 
-The minimum supported Rust version (MSRV) is 1.81. The `extension-module`
+The minimum supported Rust version (MSRV) is 1.88. The `extension-module`
 feature (which pulls in `pyo3`) exists **only** to build the Python wheel — Rust
 consumers never enable it.
 

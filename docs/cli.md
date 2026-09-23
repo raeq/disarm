@@ -304,7 +304,7 @@ test asserts it covers every kind the library can produce.
   continue-on-error: true            # the upload below must run even when the scan fails
 
 - name: Upload to the Security tab
-  uses: github/codeql-action/upload-sarif@v3
+  uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
   if: always()                       # ...and this is what makes sure it does
   with:
     sarif_file: disarm.sarif

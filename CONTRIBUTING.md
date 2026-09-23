@@ -144,7 +144,7 @@ accountability** — every AI-assisted commit needs both, and they are never the
 
 ## Prerequisites
 
-- Rust stable toolchain (>= 1.70): `rustup update stable`
+- Rust stable toolchain (>= 1.88, the MSRV in `Cargo.toml`): `rustup update stable`
 - Python 3.10+
 - `maturin` for building the Python extension: `pip install maturin[patchelf]`
 

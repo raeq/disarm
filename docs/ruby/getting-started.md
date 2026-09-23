@@ -16,10 +16,10 @@ gem "disarm"
 gem install disarm
 ```
 
-Requires Ruby >= 3.1. Precompiled platform gems ship for Ruby 3.1 through 4.0
+Requires Ruby >= 3.3. Precompiled platform gems ship for Ruby 3.3 through 4.0
 (Linux x86_64/aarch64, macOS x86_64/arm64, Windows). On a supported Ruby with no
 matching platform gem, the source gem installs and compiles locally, which needs a
-Rust toolchain. Below 3.1 the gem does not install at all.
+Rust toolchain. Below 3.3 the gem does not install at all.
 
 ## Quick start
 

@@ -716,7 +716,6 @@ RSpec.describe Disarm do
     end
 
     it "accepts a Set lexicon" do
-      require "set"
       expect(Disarm.has_anomalies?("get fr33", Set.new(["free"]))).to be(true)
     end
 
@@ -796,7 +795,6 @@ RSpec.describe Disarm do
     end
 
     it "accepts a Set when constructing the lexicon" do
-      require "set"
       # The native constructor takes an Array; a Set is converted with #to_a, the
       # same way coerce_lexicon tolerates any Enumerable on the call path.
       set_lex = Disarm::Lexicon.new(Set.new(["free"]).to_a)

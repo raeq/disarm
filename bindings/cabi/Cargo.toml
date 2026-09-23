@@ -15,7 +15,7 @@
 name = "disarm-cabi"
 version = "0.0.0"
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.88"
 publish = false
 license = "MIT"
 description = "C ABI for disarm — Unicode confusable/text-security building blocks"

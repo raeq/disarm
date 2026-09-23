@@ -260,13 +260,20 @@ public final class Disarm {
      * filename, so one the caller typed is kept — {@code sanitizeFilename("..%2Fetc")}
      * returns {@code "%2Fetc"} — and a consumer that percent-decodes the result must
      * validate <em>after</em> decoding. What this will not do is manufacture one:
-     * {@code %} never appears in the output unless it appeared in the input (#721).
+     * every {@code %} in the output is one the input contained, or part of the
+     * separator (#721).
      */
     public static String sanitizeFilename(String text) {
         return sanitizeFilename(text, SanitizeFilenameOptions.builder().build());
     }
 
-    /** Turn arbitrary text into a filesystem-safe filename with explicit options. */
+    /**
+     * Turn arbitrary text into a filesystem-safe filename with explicit options.
+     *
+     * <p>The separator must be printable, non-space ASCII with no character illegal on the
+     * platform and no path separator ({@code /}, {@code \}); anything else throws
+     * {@link DisarmInvalidArgumentException}. An empty separator is allowed.
+     */
     public static String sanitizeFilename(String text, SanitizeFilenameOptions options) {
         req(text);
         Objects.requireNonNull(options, "options");

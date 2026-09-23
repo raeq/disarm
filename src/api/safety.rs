@@ -990,10 +990,17 @@ impl std::str::FromStr for Platform {
 /// traversal and reserved names, and truncate to `max_length` **bytes**
 /// (extension-aware when `preserve_extension`).
 ///
-/// `lang` selects the transliteration language (`None` = auto-detect). This is
-/// the one fallible argument: an unknown language code is a runtime error
-/// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)); `Platform` and the
-/// `usize` length make every other input infallible by construction.
+/// `lang` selects the transliteration language (`None` = auto-detect). Two arguments
+/// are fallible, both with [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument):
+/// an unknown language code, and a `separator` containing a character a filename must
+/// not carry — anything but printable, non-space ASCII, a character illegal on
+/// `platform`, or a path separator (`/`, `\`) — since the separator is inserted after
+/// the illegal characters are removed. The empty separator is allowed. `Platform` and
+/// the `usize` length make every other input infallible by construction.
+///
+/// The result is a fixed point: sanitizing it again returns it unchanged, and on the
+/// universal and Windows platforms it is never a device name (`CON`, `NUL`, …) as
+/// Windows reads one — the part before the first dot, trailing spaces ignored.
 ///
 ///
 /// # A safe filename is not a safe URL path segment
@@ -1006,8 +1013,9 @@ impl std::str::FromStr for Platform {
 ///
 /// What this will not do is *manufacture* one. Compatibility folding maps five code
 /// points to `%` — `\u{609}`, `\u{60A}`, `\u{66A}`, `\u{FE6A}`, `\u{FF05}` — which used to
-/// assemble `%2E%2E%2F` out of input containing no `%` at all (#721). The rule is now
-/// exact: **`%` never appears in the output unless it appeared in the input.**
+/// assemble `%2E%2E%2F` out of input containing no `%` at all (#721). The rule is exact
+/// and per character: **every `%` in the output is one the input contained** (or part of
+/// a separator the caller chose). Typing one `%` does not let a folded one through.
 ///
 /// [`ErrorKind::InvalidArgument`]: crate::ErrorKind::InvalidArgument
 pub fn sanitize_filename(
@@ -1054,8 +1062,8 @@ pub struct EncodingDetection {
 ///
 /// - **A BOM.** `FF FE`, `FE FF` and `EF BB BF` yield `UTF-16LE`, `UTF-16BE` and `UTF-8`
 ///   directly. A BOM is not a probabilistic signal. This is the same WHATWG sniff
-///   [`decode_to_utf8`] performs internally, so the two agree by construction — before
-///   #710 they disagreed silently, with `detect_encoding` reporting `KOI8-U` at
+///   [`decode_to_utf8`] performs when it auto-detects, so the two agree by construction —
+///   before #710 they disagreed silently, with `detect_encoding` reporting `KOI8-U` at
 ///   confidence 0.95 for the bytes `decode_to_utf8` read correctly as UTF-16LE.
 /// - **BOM-less UTF-16 over ASCII-range text**, where every second byte is `00` and the
 ///   position of the NUL is the endianness. Deterministic, not a frequency guess.
@@ -1087,6 +1095,16 @@ pub struct DecodedText {
 /// Decode `bytes` to UTF-8. `encoding = None` auto-detects (rejecting a guess
 /// below `min_confidence`, in `0.0..=1.0`). In `strict` mode a lossy decode is an
 /// error instead of setting [`DecodedText::had_errors`].
+///
+/// # Byte-order marks
+///
+/// Auto-detection reads a BOM first: it is evidence, not a guess (see
+/// [`detect_encoding`]). An **explicit** `encoding` is never overridden by one — only
+/// that encoding's own BOM is removed, and any other is decoded as data, so
+/// `FE FF 00 41` given as `"utf-8"` is malformed UTF-8 (an error under `strict`), not
+/// UTF-16BE `"A"`. A UTF-16 label that names no byte order (`"utf-16"`, `"unicode"`,
+/// `"ucs-2"`) still takes its byte order from a UTF-16 BOM; `"utf-16le"` and
+/// `"utf-16be"` do not.
 ///
 /// Fails ([`ErrorKind`](crate::ErrorKind)) on an unknown, unsupported, or
 /// low-confidence encoding, an out-of-range `min_confidence`, or (strict) a

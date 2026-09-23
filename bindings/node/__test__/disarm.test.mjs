@@ -279,6 +279,21 @@ describe('filenames', () => {
   test('throws on unknown platform', () => {
     expect(() => disarm.sanitizeFilename('x', { platform: 'amiga' })).toThrow(DisarmInvalidArgument)
   })
+  test('throws on a separator a filename cannot carry', () => {
+    for (const separator of ['/', '\\', ' ', '\x00', '\u202e', ':']) {
+      expect(() => disarm.sanitizeFilename('../etc/passwd', { separator })).toThrow(DisarmInvalidArgument)
+    }
+    expect(disarm.sanitizeFilename('a:b', { separator: '' })).toBe('ab')
+  })
+  test('a stem that sanitizes away does not leave a device name', () => {
+    expect(disarm.sanitizeFilename('*.con')).toBe('_con')
+    expect(disarm.sanitizeFilename('*.NUL', { platform: 'windows' })).toBe('_NUL')
+  })
+  test('the output is a fixed point', () => {
+    const once = disarm.sanitizeFilename('ab_cd', { maxLength: 3, preserveExtension: false })
+    expect(once).toBe('ab')
+    expect(disarm.sanitizeFilename(once, { maxLength: 3, preserveExtension: false })).toBe(once)
+  })
 })
 
 describe('key-derivation presets', () => {

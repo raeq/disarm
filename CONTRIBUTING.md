@@ -5,142 +5,30 @@ team, and thoughtful contributions are genuinely welcome. This guide explains wh
 we're looking for, how the project is built and tested, and how to get a change
 merged.
 
-## What we're looking for
+disarm is a Unicode canonicalization and UTS-39 confusable-analysis library: one
+pure-Rust core (`src/`) with a thin binding per language over it. Behaviour lives
+in the core, so a change to it updates every binding in the same pull request.
 
-We'd love your help, especially with:
+## Contents
 
-- **Domain-specific extensions and new use cases.** disarm is a kit of canonicalization
-  and transliteration building blocks. If you work in a domain we haven't designed
-  for — a library catalog, a moderation pipeline, an IDN registrar check, a search
-  index, a data-cleaning ETL step, a linguistics workflow — and disarm *almost* does
-  what you need, tell us. The most valuable feature requests come from real workflows
-  we hadn't pictured. Use the **💡 Extension idea / new use case** issue form.
-- **Language profiles.** Profiles apply sparse overrides on top of the default table
-  (e.g. German `ü` → `ue`). Adding or refining a profile for a language you know well
-  is a high-value, self-contained contribution. See
-  [Language support](https://docs.disarm.dev/user-guide/language-support.html).
-- **A new language binding** (distinct from a profile above). disarm's pure-Rust core
-  is wrapped per programming-language ecosystem — Ruby is live; Node, Go, Java, PHP, and
-  R are planned (#43–#48). A binding for an ecosystem you know well is high-value, but it
-  must *feel native* to that language, not be a re-export of the Rust/Python API. Read
-  [BINDINGS.md](BINDINGS.md) — the per-binding definition of done — and use
-  `bindings/ruby/` as the template before you start.
-- **Coverage requests.** A confusable pair, a script, or a code point we don't yet map
-  is a *known limitation* (see the [Threat Model](THREAT_MODEL.md)), not a vulnerability —
-  but it is exactly how this layer improves. Use the **🗺️ Coverage / confusable-gap**
-  issue form; a single missing pair is a perfectly good issue.
-- **Genuine feature requests and fixes.** Bug reports with a minimal reproduction, and
-  PRs that come with a test, are always welcome.
+Everything longer than this page lives under `docs/contributing/`, also the
+*Contributing* section of the [docs site](https://docs.disarm.dev/):
 
-If you're not sure whether an idea fits, open an issue and ask. We would rather
-discuss a half-formed idea than have you not raise it.
+| page | read it when |
+|---|---|
+| [What we're looking for][what-we-want] | choosing what to work on, or filing a bug |
+| [Test architecture][testing] | tiers beyond Tier 1, drift gates, parallel runs |
+| [Linting and formatting][linting] | green locally, red in CI; binding gates |
+| [Documentation][documentation] | you touched `docs/`, a docstring or `README.md` |
+| [Keys, artifacts and releases][gates] | `test_key_stability` failed, or an install could break |
+| [Conventions][conventions] | naming a public function, logging, cleaning up nearby |
+| [AI-assisted contributions][ai-assistance] | an AI agent helped with the change |
+| [Pull requests][pull-requests] | why fragments exist; `scripts/watch_pr.py` |
 
-## Leave it better than you found it
-
-This project follows the **Boy Scout rule** and the **broken-windows** principle:
-if you touch an area and notice something broken, stale, or sub-standard — a lint
-that only fires under `--all-targets`, a stale doc claim, a flaky test, a
-misleading comment — **fix it as part of your change**, even if you didn't cause
-it. Broken windows accumulate fast: one tolerated defect signals that defects are
-acceptable, and quality erodes. A small, in-scope cleanup alongside your work is
-always welcome (call it out in the PR description so reviewers can see what's
-incidental). When a fix is too large to fold in, open an issue so it isn't lost.
-
-## Naming public entry points (#654)
-
-**A public name may describe the operation, never the outcome.** `canonicalize`,
-not `clean`. `strip_bidi`, not `make_safe`. No public name may imply a safety
-guarantee.
-
-The reason is in `canonicalize`'s own docstring, which denies the guarantee a name
-like `clean` would imply. NFKC unmasking makes the output *more* dangerous to emit
-than the input — fullwidth `＜` folds to a live `<` — so a name promising safety
-would be actively wrong rather than merely vague. `mysql_real_escape_string` is the
-worked example of what happens when a name outlives its caveats.
-
-Write the rule down here so the next `clean()` proposal meets a written rule rather
-than an argument.
-
-**One shipped name sits outside it.** `ml_normalize` is named for a use case, and
-readers pick it by that use case. It is also the transform that passes bidi
-controls, private-use characters and homoglyphs straight through, so it is exactly
-the name the rule exists to prevent. It stays, and its docstring carries the
-warning instead. Recording that the exception is known matters more than resolving
-it.
-
-## Logging rules (#208)
-
-Diagnostic logging lives behind the opt-in `log` feature via the `tl_*!` macros
-in `src/obs.rs`. Two hard rules, enforced by tests:
-
-- **Never log content.** Default-level records (ERROR/WARN/INFO/DEBUG) carry only
-  metadata — lengths, language, mode, flags, counts, durations, `Error::code` —
-  never input or output text. A sentinel test (`tests/logging.rs`) fails the
-  build if any default-level record contains the input. Truncated content
-  samples are reachable only via `tl_trace_content!` (the `log-content` feature,
-  TRACE).
-- **Never log in an inner loop.** Instrument core *boundaries* only. The
-  per-codepoint loop in `transliterate_impl_inner` and the per-token loop in
-  `context::resolve` must contain no `tl_*!`/`log::` call — guarded by
-  `tests/hot_path_guard.rs`. Variables that exist only to feed a record are
-  `#[cfg(feature = "log")]`-gated so they cost nothing when the feature is off.
-
-## Reporting bugs and requesting features
-
-Please use the [issue forms](https://github.com/raeq/disarm/issues/new/choose) — they
-ask for the few things we need to act on a report (a version, a minimal reproduction,
-expected vs. actual output). A report we can reproduce in under a minute gets fixed far
-faster than one we have to interrogate.
-
-**Security issues are different:** do **not** open a public issue. Follow
-[SECURITY.md](SECURITY.md) for private disclosure, and read the
-[Threat Model](THREAT_MODEL.md) first — it defines precisely what counts as a
-vulnerability versus an out-of-scope limitation.
-
-## A note on AI-assisted contributions
-
-AI tools are fine to use — many of us use them. The bar is simple and it's the same
-bar that has always applied: **you must be able to reproduce and stand behind what you
-submit.**
-
-- For a **bug or security report**, that means a minimal reproduction that actually
-  runs against the current release, and identifying the specific documented behavior or
-  invariant you believe is wrong.
-- For a **pull request**, that means a test that *fails before* your change and *passes
-  after*, and that the full CI suite is green.
-
-Reports or PRs that are clearly machine-generated, can't be reproduced, and whose author
-can't answer follow-up questions will be closed without extended back-and-forth. This
-isn't hostility toward AI — it's the cost of a maintainer's time. Speculative
-"there might be a buffer overflow here" reports with no reproduction are the one thing
-that genuinely drains a small project.
-
-### Attribute the assistant
-
-If an AI coding **agent** helped produce a commit, that commit **must** carry an
-`Assisted-by:` trailer naming the agent and model, following the Linux kernel's
-[coding-assistants guidance](https://docs.kernel.org/process/coding-assistants.html).
-Using an assistant is welcome and encouraged; **not disclosing it is not** — the
-attribution is required, not optional.
-
-The format is `Assisted-by: AGENT_NAME:MODEL_VERSION [analysis-tools]`, alongside your
-own DCO sign-off:
-
-```
-Signed-off-by: Jane Developer <jane@example.com>
-Assisted-by: Claude:claude-3-opus coccinelle sparse
-```
-
-Use the **actual** agent and the model version you used (model ids change — record the
-one in effect for that commit), and append specialised analysis tools if relevant
-(e.g. `coccinelle`, `sparse`). Do **not** list ordinary tools like git, the compiler,
-or your editor.
-
-An assistant **must never** add a `Signed-off-by:` or `Co-developed-by:` trailer — only a
-human can certify the [DCO](#sign-your-work-developer-certificate-of-origin). You, the
-human submitter, review the change, add your own `Signed-off-by:`, and take full
-responsibility for it. In short: **`Assisted-by:` is attribution; `Signed-off-by:` is
-accountability** — every AI-assisted commit needs both, and they are never the same line.
+Also at the top level: [BINDINGS.md](BINDINGS.md) before starting a new language
+binding, [RELEASING.md](RELEASING.md) for cutting a release, and
+[SECURITY.md](SECURITY.md) for reporting a vulnerability, which never goes in a public
+issue.
 
 ## Prerequisites
 
@@ -159,260 +47,21 @@ pip install -e ".[dev]"  # installs test + dev dependencies
 pre-commit install       # set up pre-commit hooks
 ```
 
-## Test architecture
+## Everyday build and test
 
-Tests are organized into three tiers. **CI runs Tier 1 only** — it is fast and
-deterministic. Tiers 2 and 3 are heavier and run in a developer worktree or before a
-release. Please run at least Tier 1 locally before opening a PR.
-
-### Tier 1 — CI (fast, deterministic)
-
-What every PR must pass. Mirrors `.github/workflows/ci.yml`.
+Tier 1, what every pull request must pass. The default build is the pure Rust core;
+the Python extension is built by `maturin`, never by `cargo build`.
 
 ```bash
-# Rust unit + integration (~1,025 tests across 23 binaries plus 12 doctests).
-# --no-default-features disables the Python-linking extension-module feature.
-PYO3_PYTHON=$(which python3) cargo test --no-default-features
-
-# Python deterministic tests (~4,490). Since #658 this is what bare `pytest` runs.
-pytest
-
-# The serial tier: wall-clock parallelism tests that cannot share the box (#997 review).
-pytest -m serial -n 0
+PYO3_PYTHON=$(which python3) cargo test --no-default-features   # Rust core
+maturin develop && pytest                                       # Python, in parallel
+pytest -m serial -n 0                                           # the serial tier
 ```
 
-CI's own command is `pytest tests/ --ignore=tests/test_typing.py -m "not formal and
-not hypothesis and not serial"`, followed by the serial tier in a step of its own, so
-the two marker expressions are **not** identical — the local default also carries
-`not slow`. Nothing in that tier executes under CI conditions
-regardless: measured with `CI=1` and no `bench` extra, all five slow tests skip. The
-executed set matches; the expression does not, and a green local run means what a
-green CI run means for that reason rather than by definition.
+The Hypothesis, `slow` and formal tiers are opt-in; they and the drift gates are in
+[Test architecture][testing].
 
-Counts were stale in both directions before #658 and are worth stating measured
-rather than approximated, because they are how a reader notices a tier stopped
-running. The three opt-in tiers below are excluded from the default by `addopts`
-and each is one command away.
-
-`build.rs` compile-time assertions are always on at zero runtime cost: they assert that
-every transliteration table value is ASCII, that the `tr39` digit-policy override values
-are ASCII (#587), and that entry counts match expectations. If one fails, `cargo build`
-fails.
-
-#### Drift gates
-
-Four checks in Tier 1 guard something a normal test cannot: they compare a *generated or
-published artifact* against the source of truth, so they fail when the two drift apart
-rather than when behaviour is wrong. Each exists because the drift they catch happened.
-
-| Gate | Guards | Fails when |
-|---|---|---|
-| `bindings/cabi/disarm.h` diff (`C ABI (safer-ffi)` job) | The committed C header | An exported signature changes without the header being regenerated (#580) |
-| `tests/test_doc_table_counts.py` | 32 documented row counts across 16 files | A table is regenerated and prose still quotes the old figure (#591) |
-| `build.rs` ASCII assertions | Generated table values | A generated value is non-ASCII, against #341's contract (#587) |
-| `JvmSignatureTest` (`Java binding (JDK …)` job) | Published JVM signatures | A Kotlin default argument deletes an arity that shipped (#588) |
-
-Two of them read a build product rather than source text, which is the point:
-`JvmSignatureTest` reflects over the compiled facade, and the header gate diffs the
-regenerated header. Source-level assertions would not have caught either defect.
-
-**When you regenerate a table, read the data diff, not just the test output.** A change to
-`gen_confusables.py` can silently *remove* rows, and a passing suite does not prove it
-did not — that is how an over-broad filter deleted `Ç → C` during #593.
-
-### Tier 2 — Hypothesis / property-based (opt-in)
-
-Property-based / fuzz tests across the Unicode input space. **587 tests, ~67s on a
-release build** — the figures here read "~440 / ~40s" until #658 measured them.
-
-```bash
-pytest -m hypothesis
-```
-
-Bare `pytest` used to include these, which meant a contributor paid the tier on
-every local run while no CI job ran it. `nightly-hypothesis.yml` runs it at 03:17
-UTC with a freshly generated seed and a 10× oracle budget, which explores more
-input space than one more fixed-seed pass ever did. Run it locally when you touch
-the input-handling boundary; the nightly is the safety net.
-
-Until the #997 review the nightly was a fixed-seed pass, twice over.
-`--hypothesis-seed=random` is not a request for a random seed: Hypothesis tries
-`int()` on it and, failing, seeds with the string `"random"` — the same every night.
-And on GitHub Actions no seed would have helped: Hypothesis loads its own `ci` profile
-whenever `CI` is set, and that profile's `derandomize=True` makes every test ignore
-`--hypothesis-seed`. The workflow now generates a seed, logs it (and quotes it in the
-failure issue), and runs under a `nightly` profile registered in `tests/conftest.py` —
-the `ci` settings minus `derandomize`. To reproduce a nightly failure:
-
-```bash
-pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=<seed from the log>
-```
-
-### Tier 2b — Expensive, opt-in (`slow`)
-
-```bash
-pytest -m slow
-```
-
-The `slow` marker existed, described itself as deselectable, and nothing deselected
-it (#658) — so it had no effect and everyone paid it. Both things it covers are
-gated elsewhere:
-
-- `test_cabi_header_drift` mirrors the `cabi` CI job and skips under `CI`. It costs
-  a cold `cargo` build — about 25s — on the first run after a Rust change, and it
-  appends a `[patch.crates-io]` block to `bindings/cabi/Cargo.toml` that an
-  interrupted run leaves behind.
-- `test_performance_claims`' ratio floors need the pinned comparators from the
-  `bench` extra and skip without them. They also fail against a debug
-  `maturin develop` build, which is a false alarm rather than a regression.
-
-### The suite runs in parallel by default
-
-`-n auto --dist loadfile` is in `addopts`, so bare `pytest` already uses every core.
-Pass `-n 0` to turn it off when you want a debugger, or a stable test order — or when
-you are running one small file. Worker startup is about 0.6s on four cores, which a
-whole suite repays many times over and a single file does not: `tests/test_slugify.py`
-is 1.1s under `-n auto` and 0.5s under `-n 0`. (An earlier version of this section
-said a single file was, if anything, faster in parallel; it was measured on a file
-heavy enough to hide the startup.)
-
-**`--dist loadfile` is not optional.** `register_lang` mutates process-global state
-that cannot be undone, so tests must stay grouped by file; per-file distribution
-preserves that.
-
-Measured on four cores, without coverage:
-
-| | serial | `-n 2` | `-n auto` |
-|---|---:|---:|---:|
-| whole suite | 93.4s | 65.2s | **35.1s** |
-
-An earlier version of this section reported serial 6.1s and concluded `auto`
-over-provisions and CI should stay serial. That was true of a six-second suite and
-stopped being true as it grew — the advice outlived its measurement by enough to cost
-about a minute a run. If you change the suite's shape, re-measure this table rather
-than trusting it.
-
-`--dist loadgroup`, pinning only the modules that touch process-global state so the rest
-distribute per test, looks like it should beat `loadfile` and does not: 45.0s, and it
-fails `test_docs_index_drift`, whose tests depend on sharing a worker.
-
-**Coverage, not the test count, is most of CI's wall clock.** `COVERAGE_CORE=sysmon`
-puts coverage.py on CPython 3.12's `sys.monitoring` rather than its `settrace` hook —
-120.4s against 34.6s here, with the measurement identical to the statement. CI sets it
-on the test job; it needs 3.12, so it is not set in `pyproject.toml`, where a
-contributor on 3.10 would meet a fallback warning.
-
-**Anything that spawns pytest per file must pass `-n 0`.** `scripts/run_doc_tests.py`
-runs one pytest process per doc page, several at once; each inherited `-n auto` and
-started a full set of workers to run a handful of examples — 34.8s for the whole run,
-against 5.8s with `-n 0`. Use `-n 0`, not `-p no:xdist`: unloading the plugin leaves
-the `-n auto` in `addopts` as an unrecognised option.
-
-#### The `serial` tier
-
-A test that measures wall-clock parallelism cannot run beside xdist workers. #70's
-GIL-release guard asserts that two threads finish two batches faster than one thread
-can, which needs an idle core, and under `-n auto` every core has a worker on it. It
-used to skip itself in that case — correct, and it meant CI, which runs `-n auto`, never
-ran it at all.
-
-Those tests are marked `@pytest.mark.serial`. `addopts` deselects them, CI's parallel
-step deselects them in its own `-m`, and a separate CI step runs `pytest -m serial -n 0`
-with the runner to itself. `tests/test_serial_tier.py` fails if any of the three goes
-missing. Locally, run `pytest -m serial -n 0`. The guard counts the cores in the
-process's affinity mask (`taskset`, a container's cpuset), not the host's, and still
-skips below two.
-
-### Don't let a stray virtualenv into the corpus
-
-Two modules walk the whole tree — `test_code_context_profile` and
-`test_tree_invisible_characters` — and both filter it through `conftest.in_skipped_dir`,
-which finds virtual environments by `pyvenv.cfg` rather than by the name `.venv`.
-(`test_scan` also mentions `.venv`, but it exercises the shipped scanner's own skip list
-inside a `tmp_path` and never touches the repository.) An environment called `venv/`,
-`env/`, `.tox/` or `.venv312/` would otherwise put site-packages in the corpus: slower,
-and a false positive waiting for the first dependency that ships a literal bidi control
-in a fixture.
-
-Three details, each of which was once wrong:
-
-- An environment is a **path**, not a name. A file is skipped when one of the detected
-  directories contains it, so tox's `.tox/docs` does not take this repository's `docs/`
-  with it.
-- Skip names are matched against the path **inside the repository**, never the absolute
-  one. Matching the absolute path emptied the corpus of any checkout under a directory
-  called `build`, `tmp` or `pkg`.
-- `.venv` is still skipped **by name** at any depth, alongside the marker: a conda
-  environment has no `pyvenv.cfg`, and the marker search only goes two levels down.
-
-`tests/test_corpus_excludes_virtualenvs.py` runs each module's own collector over
-synthetic trees for all of this, so it checks the property on every run — including CI,
-where there is no virtual environment in the checkout to catch.
-
-### Tier 3 — Formal / pre-release (gated, opt-in)
-
-Exhaustive enumeration — every Hangul syllable (11,172), the full BMP (63,488 code
-points) both bare and crossed with composing marks, all CJK ideographs, 15 Indic blocks
-— plus the seven formalized invariants (I1–I7). `.github/workflows/tier3.yml` runs the
-same set.
-
-Three of these now run in **PR CI** rather than only here (#658): the
-transliterate, grapheme and width targets cost 0.62s against a profile the `test`
-job has already built, so a regression in them surfaces on the pull request that
-caused it. `width_conformance` was in no workflow and no documented gate before
-that, so nothing had ever run it.
-
-The three of them in one invocation, which is how CI runs them — each
-`cargo test` repeats metadata resolution, so three invocations cost more than
-three times the test time suggests:
-
-```bash
-# exhaustive_transliterate (16 tests), exhaustive_grapheme (#174, 4),
-# width_conformance (#224, 1). All #[ignore]d; all also run in PR CI.
-cargo test --no-default-features \
-  --test exhaustive_transliterate \
-  --test exhaustive_grapheme \
-  --test width_conformance \
-  -- --ignored
-
-# Confusables on the Layer-2 API: the BMP crossed with composing marks, checked for
-# idempotence and for output that is still confusable (#586). Deliberately separate
-# from the lib-level sweep below, which tests Layer 1 — testing the layer beneath the
-# one the bindings call is how #586 survived a year. The same file sweeps
-# `skeleton_key` for idempotence over every scalar, and over the BMP crossed with
-# every composing mark with and without a control between (F1 of the Lean model in
-# formal/lean/Confusables). Under --release that is about a minute; the fold sweeps
-# alone take about a second.
-cargo test --no-default-features --release \
-  --test exhaustive_confusables -- --ignored
-
-# The anomaly detector gives NFC and NFD spellings one verdict, over every Unicode scalar
-# alone and in seven contexts (Finding 3 of the Lean model in formal/lean/Detection).
-# PR CI runs the normalization-active subset from the same file. --release keeps it
-# near 20s.
-cargo test --no-default-features --release \
-  --test exhaustive_anomalies -- --ignored
-
-# Lib-level ignored tests: the Layer-1 fold∘compose gate (#522) and the presets
-# non-ASCII fast-path sweep, both unreachable from an integration test.
-cargo test --no-default-features --release --lib -- --ignored
-
-# Python formal invariant tests (12 tests)
-pytest -m formal
-
-# Docs site — --strict fails on broken internal links and missing-nav pages.
-# CI's docs.yml runs this too, but is path-filtered (docs/**, mkdocs.yml,
-# python/disarm/**), so a version-bump-only release PR never triggers it.
-pip install --require-hashes -r requirements/docs.txt
-mkdocs build --strict
-```
-
-> **Please don't remove** `#[ignore]`, `@pytest.mark.formal`, or
-> `@pytest.mark.hypothesis` from these tests — they are excluded from CI intentionally.
-> If you add new property-based tests, mark them with
-> `pytestmark = pytest.mark.hypothesis`.
-
-## Linting and formatting
+## Before you push
 
 CI runs these as a gate; run them locally first.
 
@@ -427,322 +76,10 @@ ruff format --check .
 mypy python/disarm --ignore-missing-imports
 ```
 
-**Run CI's ruff, not whichever one is on your PATH.** The pre-commit hooks are
-`language: system`, so they use the `ruff` your shell finds, and it is easy for that to
-be older than the pin. It matters more than a version number usually does: **0.16
-formats Python inside Markdown fenced blocks and 0.15 does not**, and this repository's
-docs are full of executable Python in fences. A stale ruff passes `ruff format --check .`
-locally and fails the *Lint & format* job with no hint that a version is involved.
-
-```bash
-uv pip install "ruff==$(python3 -c "
-import re,pathlib
-print(re.search(r'ruff==([0-9.]+)', pathlib.Path('pyproject.toml').read_text()).group(1))")"
-```
-
-The pin is written once, in the `dev` extra; CI's *Lint & format* job reads it from
-there. `tests/test_toolchain_pins.py` asserts that CI keeps no copy of its own and that
-the ruff you are running matches the pin, so this is caught by `pytest` rather than by a
-pull request.
-
-### Three gates CI runs that the block above does not
-
-Each of these has sent an avoidable red build. They are listed here because running the
-core-and-Python commands to the letter is *not* sufficient to predict CI.
-
-**1. `cargo doc` is run by nobody.** No CI job invokes it, so a broken rustdoc link ships
-to docs.rs unnoticed — six were live at once in August 2026. It is fast, and it is the
-published API page:
-
-```bash
-cargo doc --no-deps      # must be warning-free
-```
-
-Note `crate::` paths in public docs must point at the **`crate::api::` re-export**, not at
-the `pub(crate)` module the item really lives in; rustdoc rejects the latter as a private
-link.
-
-**2. Your clippy is not CI's clippy.** CI follows `dtolnay/rust-toolchain@… # stable` and
-there is no `rust-toolchain.toml` pinning the repo, so a local toolchain drifts behind and
-lints added in the gap cannot fire for you at all. `rustup update stable` before trusting
-a `-D warnings` run.
-
-**3. The binding gates are not in the block above.** RuboCop, Biome, the Ruby and Node
-suites, the JVM tests and the C smoke test all run in CI and none is listed anywhere in
-this file. Every binding builds against the **published** core, so an unreleased API needs
-the `[patch.crates-io]` redirect CI injects — and its location differs per binding.
-`bindings/ruby` is a cargo workspace, so a patch appended to `bindings/ruby/ext/disarm/`
-is **ignored with only a warning** and the build then fails against the published core.
-
-| binding | append the redirect to | path |
-|---|---|---|
-| cabi | `bindings/cabi/Cargo.toml` | `../..` |
-| node | `bindings/node/Cargo.toml` | `../..` |
-| ruby | `bindings/ruby/Cargo.toml` (**workspace root**) | `../..` |
-| java | `bindings/java/rust/Cargo.toml` | `../../..` |
-
-Run every line from the repo root. Each is a **subshell** so the `cd` does not leak into
-the next one — chaining bare `cd`s here silently runs the second binding's commands inside
-the first binding's directory.
-
-```bash
-# Allocation gate on the glue. BINDING is a PATH the script cd's into, not a short name.
-BINDING=bindings/node       bash scripts/perf_lint.sh
-BINDING=bindings/ruby/ext/disarm bash scripts/perf_lint.sh
-BINDING=bindings/cabi       bash scripts/perf_lint.sh
-BINDING=bindings/java/rust  bash scripts/perf_lint.sh
-
-( cd bindings/ruby && bundle exec rubocop && bundle exec rake compile && bundle exec rspec )
-( cd bindings/node && npx biome check . && npm run build:debug && npm test )
-( cd bindings/java && ./gradlew test --offline )
-
-# The C ABI: smoke.c is the ONLY behavioural coverage that crate has — CI never runs
-# `cargo test` there, so a Rust #[test] in it would be compiled and never executed.
-( cd bindings/cabi \
-  && cargo build --release \
-  && cc examples/smoke.c -I. -L target/release -ldisarm_ffi -o /tmp/disarm_smoke \
-  && LD_LIBRARY_PATH="$PWD/target/release" /tmp/disarm_smoke )
-```
-
-**Restore every manifest afterwards** (`git checkout -- <manifest>`). A committed
-relative-path redirect breaks release packaging.
-
-Skip the binding block only when `git status` shows no `bindings/` file changed and no
-public `src/api` signature moved.
-
-## Building documentation
-
-```bash
-pip install --require-hashes -r requirements/docs.txt
-mkdocs serve              # local preview at http://127.0.0.1:8000
-mkdocs build              # build static site to site/
-```
-
-`requirements/docs.txt` is **generated** — the `[docs]` extra in `pyproject.toml` is the
-single source of truth, and the lockfile is compiled from it (same pattern as
-`requirements/bench.txt`). After changing the extra, regenerate:
-
-```bash
-uv pip compile pyproject.toml --extra docs --generate-hashes -o requirements/docs.txt
-```
-
-## Doc-test recipes
-
-Cookbook examples are **executed in CI** against the shipped wheel — a wrong or
-broken snippet turns the suite red (#154). This kills "recipe rot": output
-claims that are wrong at authoring time, or that silently break when the API
-moves. The harness is [Sybil](https://sybil.readthedocs.io/); it runs every
-fenced `python` block in an allowlisted page and checks any `assert` it
-contains.
-
-Run the doc-tests locally (they need the `[test]` extra, which pulls in Sybil):
-
-```bash
-pip install -e ".[test]"
-python scripts/run_doc_tests.py       # all pages, each in its own process
-pytest docs/user-guide/filenames.md   # a single page
-```
-
-The runner executes each page in a **separate process**. Some documented APIs
-mutate process-global state (`register_lang` is not reversible), so running every
-page in one process would let one page's registration leak into another and break
-exact-output examples. `pytest docs/` (one process) is therefore not the gate.
-
-**Recipe template.** Assert outputs; never decorate them with `# =>`:
-
-````markdown
-```python
-from disarm import sanitize_filename
-
-assert sanitize_filename("café.txt") == "cafe.txt"
-```
-````
-
-Rules:
-
-- **Assert, don't comment.** `assert f(x) == "y"` is checked; `f(x)  # => "y"`
-  is not. The `# =>` pattern is what we are removing (#156).
-- **Public API only.** Reaching into internals (`disarm._...`) in a published
-  example is itself a doc bug — the example must exercise what users can call.
-- **One namespace per page.** Blocks share state top-to-bottom, so import once
-  and reuse the binding in later blocks.
-- **Hide setup** that would clutter the prose in an invisible block — it runs
-  but does not render:
-
-  ```markdown
-  <!--- invisible-code-block: python
-  tmp = make_fixture()
-  -->
-  ```
-
-- **Skip** a block that is intentionally not runnable (e.g. pseudo-code or a
-  shell transcript mislabelled `python`) with `<!--- skip: next -->`.
-
-**Enabling a page.** Two lists in `docs/conftest.py`, and the difference is what
-the page claims:
-
-| list | blocks run | assertions checked | use it when |
-|---|---|---|---|
-| `EXECUTED_RECIPES` | yes | yes | the examples assert their outputs |
-| `EXECUTE_ONLY_RECIPES` | yes | nothing to check | the examples only need to not raise |
-
-The ratchet is about *assertions* and is unchanged: a page joins
-`EXECUTED_RECIPES` only once its examples assert rather than decorate with `# =>`.
-What the second list removed (#656) is the third state — a page with `python`
-blocks that **nothing ran at all**, so a signature change broke a published
-example in silence. Eight pages were in it.
-
-`tests/test_doc_recipe_coverage.py` keeps that state gone: a page with a `python`
-block and no listing fails there. Add the page to a list rather than widening the
-exclusion.
-
-### `README.md` is the source; `docs/index.md` is generated (#656)
-
-Do not edit `docs/index.md`. It is produced by `scripts/generate_docs_index.sh`
-from `README.md` plus `docs/_index_nav.md`, which rewrites the `(docs/…)` link
-prefixes and appends the site navigation. Edit one of the two sources and
-regenerate:
-
-```bash
-bash scripts/generate_docs_index.sh           # write it
-bash scripts/generate_docs_index.sh --check   # fail if it is out of date
-```
-
-The banner at the top of the file said this already, and it did not hold. Before
-the `--check` gate existed the file had drifted **both ways at once**: two
-*Features* bullets lived only in the generated file, where the next run would have
-deleted them, and a Node.js nav entry, a whole-script-spoof example and a
-coverage-residue note lived only in the sources and had never reached the site.
-The second kind is the dangerous one — the change appears on GitHub, so it looks
-applied.
-
-**This is also what executes the README.** Every `python` block in `README.md`
-lands in `docs/index.md`, which is first on `EXECUTED_RECIPES` and runs under
-Sybil on every CI run. In sync, the README's examples are asserted; out of sync,
-they are not. So a README example is written to the same standard as any other
-recipe: assert outputs, never decorate them with `# =>`.
-
-### Key-builder output is gated (#644)
-
-`search_key`, `catalog_key` and `sort_key` produce values a consumer **stores**
-and compares later, so a change to them is a reindex event on somebody's
-production data. `docs/RUST_API.md` states the contract — *a patch release never
-changes key-builder output; a minor release may* — and
-`tests/test_key_stability.py` holds it.
-
-If it fails, **read the diff before doing anything else.** It prints a
-per-function count and a sample of what moved:
-
-```
-search_key: 267 of 22878 changed (1.17%)
-    'подъезд'
-      was 'podъezd'
-      now 'podezd'
-```
-
-Then decide. If the movement is intended:
-
-```bash
-python scripts/gen_key_fixture.py     # rewrite the expected values
-```
-
-Commit the regenerated fixture **in the same change**, write it up in the
-release's *Upgrade notes*, and cut that release as a **minor**. Regenerating to
-make the test go green without reading the diff is the one use the script does
-not have.
-
-Review does not substitute for this. `0.14.0` moved `search_key` on 4.1% of a
-5,030-input corpus, and the change responsible (#602) was a correctness fix whose
-diff said nothing about keys.
-
-The corpus is not reproducible and its licence is not MIT; both are recorded in
-`tests/fixtures/key_stability/README.md`.
-
-### Does the artifact work? (#667, #669)
-
-Every step above tests your worktree. It contains untracked files, generated
-artefacts, a populated `target/` and whatever `.gitignore` hides — so a file
-present locally and absent from the commit is invisible to all of it. And
-`maturin develop` produces no distributable artifact at all, so nothing before a
-push touches installability.
-
-Two checks close that, sharing one body (`scripts/smoke_installed.py`):
-
-```bash
-# The tracked tree — exactly what someone fetching this commit receives.
-tmp=$(mktemp -d) && git archive HEAD | tar -x -C "$tmp"
-python -m venv "$tmp/venv" && "$tmp/venv/bin/pip" install "$tmp"
-(cd "$tmp" && "$tmp/venv/bin/python" "$OLDPWD/scripts/smoke_installed.py")
-
-# The sdist — the artifact CI does not cover either, until #667's job runs.
-maturin sdist --out "$tmp/dist"
-python -m venv "$tmp/sv" && "$tmp/sv/bin/pip" install --no-binary disarm "$tmp"/dist/*.tar.gz
-(cd "$tmp" && "$tmp/sv/bin/python" "$OLDPWD/scripts/smoke_installed.py")
-```
-
-Run them from **outside** the checkout, as above. A source tree on `sys.path`
-shadows the installed package and the check passes without testing an install —
-the failure it exists to find. The script says so if it happens.
-
-These cost a full compile each, which is too slow per commit and about right per
-push. `.github/workflows/smoke.yml` runs both in CI: the tracked-tree job on
-every push to `main` with **no** paths filter, since the point is that it runs on
-every commit that lands.
-
-### The docs describe `main`; the reader executes a tag (#641)
-
-Every gate above runs against the branch. The site deploys from `main` on each
-push, but `pip install disarm` gives a reader the newest **tag**. At the worst
-point those were 68 commits apart, and `docs/security/cve-validation.md` named
-five entry points that raised `AttributeError` on the release it described.
-
-Two things now cover that gap:
-
-- A `mkdocs` hook stamps every page with the commit it was built from and the
-  published version (`scripts/mkdocs_build_banner.py`). Nothing to do when
-  writing docs; it is mentioned here so nobody deletes it as decoration.
-- A weekly job resolves every `disarm` name the docs use against the newest
-  published wheel. Run it yourself against any build:
-
-  ```bash
-  python scripts/check_docs_against_release.py
-  ```
-
-  A **red run means documented API has outrun the last release** — cut one, or
-  correct the page. It is deliberately not a pull-request gate: documentation
-  ships with the feature it documents, so during that window the gap is correct
-  and a PR gate would block every feature branch.
-
-  Names it cannot fix are listed in `_KNOWN_GAPS`, each against an open issue.
-  An entry may only go in with an issue number, and the script fails if a listed
-  name starts resolving — so the list shrinks rather than accumulating.
-
-### Per-language usage tabs (Rust & Ruby)
-
-User-guide pages show usage in `pymdownx.tabbed` tabs — `=== "Python"` /
-`=== "Rust"` / `=== "Ruby"` — over shared, language-neutral concept prose (#50).
-**Each binding's tab may only use functions that binding actually exposes** (Rust
-≈ the full `disarm::api`; Ruby is a smaller surface — see
-`bindings/ruby/lib/disarm.rb`). Do not invent a call; if a topic isn't in a
-binding, omit that tab. Every tab is gated:
-
-```bash
-python scripts/check_doc_rust_examples.py   # compile + run every ```rust block
-ruby scripts/check_doc_ruby_examples.rb      # eval every Ruby `# =>` line (needs the built gem)
-```
-
-- **Rust tabs** use `assert_eq!`. The gate extracts every ```rust block, wraps
-  each in a `#[test]`, and compiles + runs it against the pure core with
-  `#![deny(unused_must_use)]` — so an example that **discards** its result (a
-  `Result`, `Vec`, or `Cow`) is a hard error. Assert the output; don't leave a
-  bare call with a `// =>` comment. Mark a genuinely illustrative block (a trait
-  sketch, a macro) with `<!--- rust-skip -->` (the Rust gate's own opt-out —
-  distinct from Python's `<!--- skip: next -->`, which Sybil would choke on
-  before a non-Python block).
-- **Ruby tabs** document outputs with `# =>` and start with `require "disarm"`.
-  The gate evals each `Disarm.* # => value` line against the freshly-compiled gem
-  (it tolerates trailing prose after the literal). It runs in the Ruby workflow
-  on `bindings/ruby/**` **and** `docs/**` changes.
+That is not all of CI: `cargo doc`, a current clippy, the ruff version CI pins and
+every binding's suite are in [Linting and formatting][linting]. If you touched
+`docs/`, also run the [doc-tests][doc-tests] and
+`mkdocs build --strict`.
 
 ## Sign your work — Developer Certificate of Origin
 
@@ -775,7 +112,7 @@ git rebase --signoff main
 A **"DCO sign-off"** status check flags any PR whose commits are not signed off;
 it is a required check on `main`.
 
-> If an AI agent assisted the commit, it **also** needs an `Assisted-by:` trailer — see [Attribute the assistant](#attribute-the-assistant). The assistant is attributed there; the human still signs off here.
+> If an AI agent assisted the commit, it **also** needs an `Assisted-by:` trailer — see [Attribute the assistant][attribution]. The assistant is attributed there; the human still signs off here.
 
 ## Submitting changes
 
@@ -804,12 +141,6 @@ review and merge. Thank you for contributing.
 in `changelog.d/`, and there is no `## [Unreleased]` section to add to. The rules below
 are the short version; `changelog.d/README.md` in the repository is the full one.
 
-This is not a style preference. Every entry used to be prepended to the same anchor, so
-two pull requests open at once conflicted on that file *every time*, whatever they said —
-and entries here are essays, averaging 23 lines, so resolving one was never a two-line
-merge. Two fragments are two different files, and git only conflicts on the same region
-of the same file.
-
 ```bash
 # Named for the PULL REQUEST, not the issue: several PRs per issue is normal here,
 # and an issue-numbered fragment would rebuild the conflict on day one.
@@ -831,60 +162,17 @@ towncrier build --draft --version NEXT       # the unreleased section, rendered
 towncrier check --compare-with origin/main   # exactly what CI's gate runs
 ```
 
-CI's *Changelog fragment* job requires one on any pull request that changes code or a
-binding (anything under `bindings/`), fails one that edits `CHANGELOG.md` by hand, and
-renders the draft into its job summary — docs-only pull requests included — so reviewers
-see the assembled section without checking the branch out. Dependabot's pull requests are
-exempt — a lockfile bump has nothing to say in a changelog, and its auto-merge lane has
-to stay hands-off green. For anything else, the escape hatch is a deliberate, visible
-`no changelog` label. Adding a label does not start a CI run: add it, then re-run the
-failed *Changelog fragment* job, which reads the labels as they are when it runs.
+CI fails a pull request that edits `CHANGELOG.md` by hand. The escape hatch for a
+change with nothing to say is the `no changelog` label; why fragments exist, and
+exactly what CI checks, are in [Pull requests][pull-requests].
 
-### Watching a PR to merge
-
-`scripts/watch_pr.py` polls a PR and stops the moment a human has to act:
-
-```bash
-python scripts/watch_pr.py 912              # poll, then squash when mergeable
-python scripts/watch_pr.py 912 --no-merge   # report only
-```
-
-It exits `0` merged, `1` closed without merging (or a merge it could not confirm),
-`2` when you are needed — an unresolved review thread, printed with its file, line and
-body; a failed check; a stale branch; a structural block; a thread listing too long
-to read in one page; or a merge GitHub refused twice, with GitHub's reason — and `3` if
-it gave up. The merge names the head it evaluated (`--match-head-commit`), so a push
-that lands after the last read is refused rather than merged unseen.
-
-On a repo whose branch protection does not require conversation resolution, pass
-`--await-review` (#987). A green PR is mergeable there before its reviewer has said
-anything, and a thread not yet written cannot be unresolved, so the flag holds the merge
-while a review request is pending and until someone other than the author has reviewed,
-and stops (`2`) while a reviewer's latest review requests changes. Unresolved threads,
-failed checks and a needed rebase still come first, and a review that never arrives waits
-out `--max-polls` and exits `3`. This repo requires resolution, so it does not need the
-flag.
-
-What the flag cannot do, and a TLA+ model of the watcher (`formal/tla/WatchPR`) shows no
-client can: a review, thread or change request that arrives between the watcher's last
-read and its merge still gets through, so on a repo where that matters, require
-conversation resolution on the server. A review of an earlier head still counts after a
-push; GitHub's "dismiss stale pull request approvals" setting is the way to require one
-per head. And a check that is not required does not hold the merge, so make the checks
-that matter required.
-
-Two stop conditions need confirming before they are reported, because for a few seconds
-after a push GitHub still describes the previous run. A structural block must hold for
-`STUCK_POLLS` polls (currently 3). A failed check must show the same check names for
-`FAILURE_POLLS` polls (currently 2), since the rollup can still carry conclusions from the
-SHA before the fix. For a few seconds after a push GitHub reports the PR as blocked with the
-previous run's checks complete and the new ones not yet created, which in a single
-snapshot is indistinguishable from a required review that will never arrive. A poll whose
-read failed — the PR view or the review-thread listing — does not count towards the streak.
-
-Two behaviours are worth knowing, because hand-written loops keep getting
-them wrong: review threads rank *above* checks in `decide()`, so a comment never waits
-out a CI run (the reads themselves go the other way, PR view first, which is what lets a
-review that lands between them bring its threads along), and `UNSTABLE` counts as mergeable, so a still-running non-required job does
-not hold the merge. `tests/test_watch_pr.py` pins both. `tests/test_watch_pr_protocol.py`
-replays the model's counterexamples against a fake GitHub, through the real I/O layer.
+[what-we-want]: https://github.com/raeq/disarm/blob/main/docs/contributing/what-we-want.md
+[testing]: https://github.com/raeq/disarm/blob/main/docs/contributing/testing.md
+[linting]: https://github.com/raeq/disarm/blob/main/docs/contributing/linting.md
+[documentation]: https://github.com/raeq/disarm/blob/main/docs/contributing/documentation.md
+[gates]: https://github.com/raeq/disarm/blob/main/docs/contributing/gates.md
+[conventions]: https://github.com/raeq/disarm/blob/main/docs/contributing/conventions.md
+[ai-assistance]: https://github.com/raeq/disarm/blob/main/docs/contributing/ai-assistance.md
+[pull-requests]: https://github.com/raeq/disarm/blob/main/docs/contributing/pull-requests.md
+[doc-tests]: https://github.com/raeq/disarm/blob/main/docs/contributing/documentation.md#doc-test-recipes
+[attribution]: https://github.com/raeq/disarm/blob/main/docs/contributing/ai-assistance.md#attribute-the-assistant

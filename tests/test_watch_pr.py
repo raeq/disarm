@@ -289,17 +289,21 @@ def test_contributing_states_the_current_thresholds() -> None:
     Both constants now, and keyed on the name plus the value rather than a phrase — the
     phrase changed once already when #928's review asked for the paragraph to be split,
     and a gate anchored to prose fails for the wrong reason when the prose improves.
+
+    The section moved out of `CONTRIBUTING.md` into the contributor docs, and the pin
+    moved with it.
     """
     from pathlib import Path
 
-    page = Path(__file__).resolve().parent.parent / "CONTRIBUTING.md"
+    page = Path(__file__).resolve().parent.parent / "docs" / "contributing" / "pull-requests.md"
     text = page.read_text(encoding="utf-8")
+    assert "## Watching a PR to merge" in text, f"{page.name} no longer documents watch_pr"
     for name, value in (
         ("STUCK_POLLS", watch_pr.STUCK_POLLS),
         ("FAILURE_POLLS", watch_pr.FAILURE_POLLS),
     ):
-        assert f"`{name}`" in text, f"CONTRIBUTING does not name {name}"
-        assert f"(currently {value})" in text, f"CONTRIBUTING does not state {name}={value}"
+        assert f"`{name}`" in text, f"{page.name} does not name {name}"
+        assert f"(currently {value})" in text, f"{page.name} does not state {name}={value}"
 
 
 # --- the stale-failure race: a push leaves the previous SHA's conclusions -----

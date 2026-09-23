@@ -76,13 +76,15 @@ jobs:
         # Event data reaches the script through the environment, not by splicing
         # `${{ }}` into its text, so a branch name is only ever a value.
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          HAS_PERF_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'perf') }}
           BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || '' }}
           BEFORE: ${{ github.event.before }}
         run: |
           # On a pull_request, diff against the merge base with the target branch.
           # On a push to main there is no `base_ref` — compare against the commit
           # before the push, falling back to HEAD~1 for the first push of a branch.
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             base="$(git merge-base "origin/${BASE_REF}" HEAD)"
           else
             base="${BEFORE}"
@@ -128,10 +130,10 @@ jobs:
           if [ "$touched" != "true" ]; then
             reason="no perf-relevant files changed — nothing to measure"
             run=false
-          elif [ "${{ github.event_name }}" != "pull_request" ]; then
+          elif [ "$EVENT_NAME" != "pull_request" ]; then
             reason="push to main — always measured"
             run=true
-          elif [ "${{ contains(github.event.pull_request.labels.*.name, 'perf') }}" = "true" ]; then
+          elif [ "$HAS_PERF_LABEL" = "true" ]; then
             reason="'perf' label present"
             run=true
           elif git diff --name-only "$base" HEAD \

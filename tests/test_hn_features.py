@@ -496,11 +496,28 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
             0xFDEF,  # noncharacters
             0xE000,
             0xF8FF,  # private use (BMP; the plane ranges are named in prose)
+            # The rest of Default_Ignorable_Code_Point: every singleton and range endpoint
+            # the prose names (#1019 review).
             0x00AD,
+            0x034F,
+            0x115F,
+            0x1160,
+            0x17B4,
+            0x17B5,
+            0x180B,
+            0x180F,
             0x206A,
             0x206F,
+            0x3164,
+            0xFFA0,
+            0xFFF0,
+            0xFFF8,
+            0x1BCA0,
+            0x1BCA3,
             0x1D173,
-            0x1D17A,  # the rest of Default_Ignorable_Code_Point
+            0x1D17A,
+            0xE0080,
+            0xE0FFF,
         }
         missing = sorted(f"U+{c:04X}" for c in required - named)
         assert not missing, f"{path.name} omits {missing}"

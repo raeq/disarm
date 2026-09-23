@@ -1639,8 +1639,8 @@ def is_suspicious_hostname(
       ``Default_Ignorable_Code_Point``, which UTS #46 deletes as it maps
       (``U+00AD``, ``U+034F``, ``U+115F``-``U+1160``, ``U+17B4``-``U+17B5``,
       ``U+180B``-``U+180F``, ``U+206A``-``U+206F``, ``U+3164``, ``U+FFA0``,
-      ``U+1BCA0``-``U+1BCA3``, ``U+1D173``-``U+1D17A``, ``U+E0080``-``U+E0FFF``,
-      bidi controls excepted). Disjoint from
+      ``U+1BCA0``-``U+1BCA3``, ``U+1D173``-``U+1D17A``, and the unassigned
+      ``U+FFF0``-``U+FFF8`` and ``U+E0080``-``U+E0FFF``; bidi controls excepted). Disjoint from
       ``bidi_control`` — these carry no direction at all, so neither bidi field can
       see them. RFC 5892 puts the tag, variation-selector, noncharacter and
       private-use classes in DISALLOWED outright, which is what justifies including

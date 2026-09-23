@@ -9,7 +9,7 @@ any proof or counterexample counts. Properties the code and docs claim are then 
 refuted with a minimal counterexample that is reproduced on the library.
 
 > **Status.** All seven findings are fixed: Finding 1 (`skeleton_key`) in #1024, with the
-> confusable fold's own findings, and Findings 2 to 7 in #PR. What follows describes the
+> confusable fold's own findings, and Findings 2 to 7 in #1029. What follows describes the
 > code at `595fbda`, before the fixes, and `scripts/difftest.py` still models that code,
 > so against a fixed build it is expected to disagree on the words the fixes move (it was
 > not re-run for the fix: no Lean toolchain was at hand). The library searches were: over

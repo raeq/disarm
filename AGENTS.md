@@ -98,6 +98,14 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
 - **Python formal invariant tests**: 12 tests marked `@pytest.mark.formal`
   (invariants I1–I7) — `pytest -m formal`
 
+### Report-only: fuzzing, coverage, mutation (detail in CONTRIBUTING.md)
+- **cargo-fuzz**: `bash fuzz/run.sh` (pinned nightly + cargo-fuzz); 10 targets assert
+  documented properties. `fuzz.yml`: 60 s per target on PRs touching the core, 15 min nightly
+- **Coverage**: `cargo llvm-cov --no-default-features --branch` (`coverage.yml`, no threshold)
+- **Mutation**: `cargo mutants -f src/<module>.rs` (`mutants.yml`, weekly, six modules)
+
+None of the three is in *All checks passed*.
+
 **Rule: do NOT remove `#[ignore]`, `@pytest.mark.formal`, or
 `@pytest.mark.hypothesis` from these tests.** They are excluded from CI
 intentionally. New property-based tests must be marked

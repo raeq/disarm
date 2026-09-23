@@ -25,9 +25,20 @@ use crate::ErrorMode;
 static GLOBAL_PROVIDER: LazyLock<RwLock<Option<Py<PyAny>>>> = LazyLock::new(|| RwLock::new(None));
 
 /// Register a global Python emoji provider (or None to reset to default).
+///
+/// The old provider is dropped after the lock is released, never under it. Dropping
+/// a `Py<PyAny>` while attached runs its `__del__` there and then, and that is
+/// arbitrary Python: it can call `set_emoji_provider` or `demojize` (re-entering this
+/// lock on its own thread), or give up the GIL (closing a file does) while another
+/// thread's `demojize` takes the GIL and blocks on the read lock holding it. Both
+/// hung the interpreter; the TLA+ model in `formal/tla/Concurrency` found them and
+/// `tests/test_no_python_under_rust_locks.py` reproduces them.
 pub fn set_provider(provider: Option<Py<PyAny>>) {
-    let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write(), "GLOBAL_PROVIDER");
-    *guard = provider;
+    let old = {
+        let mut guard = crate::recover_lock(GLOBAL_PROVIDER.write(), "GLOBAL_PROVIDER");
+        std::mem::replace(&mut *guard, provider)
+    };
+    drop(old);
 }
 
 /// Try a Python provider's lookup method.

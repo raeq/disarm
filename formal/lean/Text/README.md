@@ -19,7 +19,7 @@ section at that commit. The toolchain is core Lean 4.34.0 only, with no Mathlib.
 data in this directory is written as escapes; no file here contains a literal invisible
 character.
 
-> **Status.** Every finding below is fixed in #PR, with regression tests in
+> **Status.** Every finding below is fixed in #1034, with regression tests in
 > `tests/test_text_formal_findings.py` and in the Rust unit tests of `src/zalgo.rs`,
 > `src/width.rs`, `src/punctuation.rs` and `src/anomalies.rs`. The code findings: Z1 (the
 > count is per base and per class, and a class-0 mark neither counts nor resets it, in

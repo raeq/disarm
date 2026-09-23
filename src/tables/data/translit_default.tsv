@@ -2,6 +2,7 @@
 # Source: Unicode NFKD decomposition + conventional ASCII equivalents
 # ~69% match NFKD; symbols/ligatures use common conventions (AE, Th, ss, GBP, JPY)
 
+0085	 
 00A2	c
 00A3	GBP
 00A5	JPY
@@ -6610,8 +6611,8 @@
 2022	*
 2026	...
 2027	.
-2028	
-2029	
+2028	 
+2029	 
 202A	
 202B	
 202C	

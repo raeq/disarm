@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import warnings as _warnings
 from collections.abc import Iterable
-from functools import lru_cache, wraps
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from disarm._boundary import (
@@ -647,8 +647,8 @@ def slugify(
 
     **The output can be the empty string (#728).**
 
-    Measured at Unicode 15.0.0, **243,399** single
-    characters reduce to ``""`` here (105,931 excluding the Private Use
+    Measured at Unicode 15.0.0, **243,401** single
+    characters reduce to ``""`` here (105,933 excluding the Private Use
     Area), and so does every string built from them. A caller keying a table
     on this has all of them, plus "no value", competing for one slot.
 
@@ -3712,8 +3712,16 @@ def make_cached_transliterator(
         ('cafe', 'cafe')
     """
 
+    # The generation is part of the key. It used to be checked beside the cache, which
+    # left a window a TLA+ model found (formal/tla/Concurrency): a call reads the old
+    # generation and computes with the old table, another call sees the new generation
+    # and clears the cache, and the first then stores its old result into the fresh
+    # cache, to be served from then on. Keyed by the generation the call *started*
+    # under, such a result lands under a key no later call asks for. Every register_*
+    # bumps the generation after changing the table, so once it returns no call can
+    # read a result computed before it.
     @lru_cache(maxsize=maxsize)
-    def _cached(text: str) -> str:
+    def _cached(text: str, _generation: int) -> str:
         return transliterate(
             text,
             lang=lang,
@@ -3728,13 +3736,17 @@ def make_cached_transliterator(
 
     seen_generation = _registration_generation
 
-    @wraps(_cached)
+    # Not @wraps(_cached): inspect.signature follows __wrapped__ and would report the
+    # private generation argument as part of the public one-string signature.
     def cached(text: str) -> str:
         nonlocal seen_generation
-        if _registration_generation != seen_generation:
+        generation = _registration_generation
+        if generation != seen_generation:
+            # Only to free memory now: entries from an older generation are never
+            # looked up again, whatever this clear races with.
             _cached.cache_clear()
-            seen_generation = _registration_generation
-        return _cached(text)
+            seen_generation = generation
+        return _cached(text, generation)
 
     cached.cache_clear = _cached.cache_clear  # type: ignore[attr-defined]
     cached.cache_info = _cached.cache_info  # type: ignore[attr-defined]

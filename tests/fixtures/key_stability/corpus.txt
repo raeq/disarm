@@ -23192,3 +23192,5 @@ abc\x0c\x08def
 abc\x0b\x08def
 ​\x08ab
 ​ZZZZZZ\rpaypal
+pay\u2028pal
+pay\u2029pal

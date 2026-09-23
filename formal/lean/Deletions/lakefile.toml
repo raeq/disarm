@@ -1,0 +1,13 @@
+name = "deletions"
+version = "0.1.0"
+defaultTargets = ["Deletions", "difftest"]
+
+[[lean_lib]]
+name = "Deletions"
+# `native_decide` in Bounded.lean evaluates Model/Spec definitions millions of times;
+# precompiling the modules makes that native code instead of the IR interpreter.
+precompileModules = true
+
+[[lean_exe]]
+name = "difftest"
+root = "Main"

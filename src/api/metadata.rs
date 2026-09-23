@@ -251,6 +251,14 @@ pub fn unicode_version() -> &'static str {
 /// (`❤\u{FE0F}\u{200D}🔥` is `heart on fire`, not `red heart fire`; 306 of 1,021 such
 /// sequences), and an emoji dropped for want of a name no longer glues the next word to
 /// the name before it (`I 😀🇦x ok` is `i grinning face x ok`, not `…facex ok`).
+///
+/// And `search_key` and `catalog_key` move for LINE SEPARATOR and PARAGRAPH SEPARATOR.
+/// `transliterate` mapped both to nothing, so they joined the words either side:
+/// `search_key("pay\u{2028}pal")` was `"paypal"` where the `LF` form gives `"pay pal"`,
+/// and it is now `"pay pal"` too. `sort_key` does not move: its transliteration step
+/// runs only on non-Latin text, so these characters reach its `collapse_whitespace`
+/// step intact and become a space there. The fixture had no row with either; two were
+/// added.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -286,7 +294,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "3e6f75fed89cf5da51e8a1e6d3c617f44433f4eaa19fbdc2b6919a05ed4a1055";
+    "b237aab41eb5e56b115bbcb06423a446c52950c97d1df9a5e4495c527f9bd127";
 
 /// The key-schema counter, as a function (#645).
 ///

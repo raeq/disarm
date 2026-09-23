@@ -1,0 +1,6 @@
+name = "Transliterate"
+version = "0.1.0"
+defaultTargets = ["Transliterate"]
+
+[[lean_lib]]
+name = "Transliterate"

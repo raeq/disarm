@@ -89,14 +89,14 @@ Seven properties are stated as specifications, each with a documented verificati
 | ID | Invariant | Statement | Verification |
 |----|-----------|-----------------|--------------|
 | I1 | ASCII Passthrough | ∀s: s.is_ascii() → f(s) = s | Exhaustive (all 128 ASCII) + Hypothesis 500 |
-| I2 | ASCII Output | ∀s: f(s, errors='ignore').is_ascii() | Exhaustive BMP (Rust) + Hypothesis 1,000 incl. SMP |
-| I3 | Idempotence | ∀s: f(f(s)) = f(s) | Exhaustive BMP (Rust) + Hypothesis 500 |
+| I2 | ASCII Output | ∀s: f(s, errors='ignore').is_ascii() | Structural argument, checked in Lean (`formal/lean/Transliterate`) + exhaustive BMP per code point (Rust) + Hypothesis 1,000 incl. SMP |
+| I3 | Idempotence | ∀s: f(f(s)) = f(s) | Follows from I1 and I2 (Lean) + exhaustive BMP per code point (Rust) + Hypothesis 500 |
 | I4 | No Exceptions | ∀s ∈ UTF-8, \|s\| ≤ 10 MiB: f(s) does not throw | Hypothesis 1,000 + explicit edge cases |
 | I5 | Deterministic | ∀s, n>0: f(s) called n times → same result | 100× repeat on 10 mixed-script inputs |
-| I6 | Input Size Bounded | ∀s: \|s\| > 10 MiB → DisarmError | Boundary test at limit |
-| I7 | Output Length Bounded | ∀s: \|f(s)\| ≤ \|s\|\_bytes × 4 + \|s\|\_chars | Hypothesis 1,000 |
+| I6 | No Input Size Cap | ∀s: f(s) accepts s whatever its length | Boundary test: 12 MiB accepted (#80 removed the cap) |
+| I7 | Output Length Bounded | ∀s: \|f(s)\| ≤ \|s\|\_bytes × 5 + \|s\|\_chars | Exhaustive per code point (worst case U+337F, ratio 5) + Hypothesis 1,000 |
 
-Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
+I1–I3 are stated for `tones=False` and no runtime registrations; the scope and the argument behind I2 are in [Exhaustive Testing](../formal-verification.md#stated-invariants-i1i7-the-lossy-normalizer-specification). Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
 
 See [formal-verification.md](../formal-verification.md) for the full specification document.
 

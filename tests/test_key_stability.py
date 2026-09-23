@@ -303,7 +303,7 @@ class TestTheFixtureCoversWhatItClaims:
                 if char != "\\":
                     continue
                 nxt = row[index + 1 : index + 2]
-                assert nxt in {"\\", "t", "n", "r", "x"}, (
+                assert nxt in {"\\", "t", "n", "r", "x", "u"}, (
                     f"corpus row {row!r} has a backslash that is not an escape; "
                     "read_corpus would reinterpret it"
                 )

@@ -1315,6 +1315,14 @@ pub use crate::anomalies::{
 /// string rather than as a bogus one — reporting a garbage decode would undo the reason a
 /// decode is trustworthy.
 ///
+/// A carrier of the same scheme beside a payload is not read into it. A presentation
+/// selector (`U+FE0E` or `U+FE0F`) attached to the character before it, such as the `VS16`
+/// that ends a fully qualified emoji, is left out of a variation run whenever the rest of
+/// the run decodes as text. A zero-width run whose bit count is not a multiple of 8 has
+/// two candidate frames, stray bits dropped from the end or from the start: `text` is set
+/// only when exactly one frame is printable, and otherwise the head-aligned bytes are
+/// reported with no text.
+///
 /// A well-formed emoji subdivision flag is not a payload: `U+1F3F4` + tag letters +
 /// `U+E007F` spelling one of the three RGI values is the Scotland flag, and the allowlist
 /// is the stripper's own rather than a second copy of it.

@@ -2648,6 +2648,14 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     of arbitrary selectors. Reporting garbage would undo the reason a decode is
     trustworthy.
 
+    A carrier of the same scheme beside a payload is not read into it. A
+    presentation selector (``U+FE0E`` or ``U+FE0F``) attached to the character before
+    it, such as the ``VS16`` that ends a fully qualified emoji, is left out of a
+    variation run whenever the rest of the run decodes as text. A zero-width run whose
+    bit count is not a multiple of 8 has two candidate frames, stray bits dropped from
+    the end or from the start: ``text`` is set only when exactly one frame is
+    printable, and otherwise the head-aligned bytes come back with ``text=None``.
+
     ``units`` counts the characters the run **consumed**, which is not the same as
     the carriers that carried a byte: the zero-width scheme counts its
     ``ZWJ``/``WJ``/``BOM`` separators and the tag scheme counts a trailing

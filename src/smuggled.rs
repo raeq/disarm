@@ -132,8 +132,8 @@ fn decode(text: &str, with_percent: bool) -> Vec<Payload> {
             out.push(p);
             continue;
         }
-        if let Some(p) = scan_variation(&chars, i, offset) {
-            i += p.units;
+        if let Some((p, consumed)) = scan_variation(&chars, i, offset) {
+            i += consumed;
             out.push(p);
             continue;
         }
@@ -254,7 +254,18 @@ fn variation_byte(ch: char) -> Option<u8> {
     }
 }
 
-fn scan_variation(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Payload> {
+/// A presentation selector: `VS15` (text) or `VS16` (emoji).
+///
+/// These two are the selectors ordinary text carries, attached to the character before
+/// them. The other 254 have no business after an emoji or a letter in running text.
+fn is_presentation_selector(ch: char) -> bool {
+    matches!(ch, '\u{FE0E}' | '\u{FE0F}')
+}
+
+/// Returns the payload and how many characters to advance past. The two differ when a
+/// leading presentation selector is left out of the payload: it is still consumed, so it
+/// is not rescanned as a run of its own.
+fn scan_variation(chars: &[(usize, char)], i: usize, offset: usize) -> Option<(Payload, usize)> {
     variation_byte(chars[i].1)?;
     let mut bytes = Vec::new();
     let mut j = i;
@@ -265,18 +276,40 @@ fn scan_variation(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Pa
         }
         j += 1;
     }
-    if j - i < MIN_VARIATION_RUN {
+    let consumed = j - i;
+    if consumed < MIN_VARIATION_RUN {
         return None;
     }
     let end = chars
         .get(j)
         .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
-    Some(finish(
-        PayloadScheme::VariationBytes,
-        offset,
-        end,
-        j - i,
-        bytes,
+    // A fully qualified emoji already ends in `VS16` (`U+2764 U+FE0F`), and emoji
+    // smuggling hangs its payload straight after an emoji. Read as one run, that selector
+    // became a leading byte `0x0F`, and the payload decoded to `b"\x0fhi"` with no text
+    // (Finding 6 of the Lean detection model). A presentation selector attached to a
+    // non-selector belongs to that character, so it is dropped from the payload, but
+    // only when what is left decodes as printable and still clears the floor. `0x0E` and
+    // `0x0F` are control bytes, so a run that begins with one never decodes as printable
+    // with it included: the drop can turn a garbage decode into a real one, never the
+    // reverse, and a run that is garbage either way is reported whole as before.
+    let attached =
+        i > 0 && is_presentation_selector(chars[i].1) && variation_byte(chars[i - 1].1).is_none();
+    if attached && consumed > MIN_VARIATION_RUN {
+        if let Some(text) = printable(&bytes[1..]) {
+            let payload = Payload {
+                scheme: PayloadScheme::VariationBytes,
+                start: chars[i + 1].0,
+                end,
+                units: consumed - 1,
+                bytes: bytes[1..].to_vec(),
+                text: Some(text),
+            };
+            return Some((payload, consumed));
+        }
+    }
+    Some((
+        finish(PayloadScheme::VariationBytes, offset, end, consumed, bytes),
+        consumed,
     ))
 }
 
@@ -350,30 +383,55 @@ fn scan_zero_width(
         j += 1;
     }
     let units = j - i;
-    // Only whole bytes are decoded. A trailing partial byte is dropped rather than
-    // zero-padded: padding invents bits the carrier did not contain.
-    let bytes: Vec<u8> = bits
-        .as_chunks::<8>()
-        .0
-        .iter()
-        .map(|c| c.iter().fold(0u8, |acc, &b| (acc << 1) | b))
-        .collect();
-    if bytes.is_empty() {
+    // Only whole bytes are decoded. A partial byte is dropped rather than zero-padded:
+    // padding invents bits the carrier did not contain.
+    let head = pack_bits(&bits);
+    if head.is_empty() {
         return Some((None, units));
     }
     let end = chars
         .get(j)
         .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
-    Some((
-        Some(finish(
-            PayloadScheme::ZeroWidthBinary,
-            offset,
+    // A bit count that is not a multiple of 8 does not say where the bytes start. One
+    // stray `U+200B` before an encoded `hi` shifts every byte of the head-aligned frame,
+    // and that frame happened to read `44`: text nobody encoded, reported as a decode
+    // (Finding 6 of the Lean detection model). So both frames are tried, the stray bits
+    // dropped from the end and dropped from the start, and `text` is set only when
+    // exactly one of them is printable. When both or neither are, the frame is ambiguous
+    // and the head-aligned bytes are reported with no text, which is the documented
+    // answer for a run that does not decode.
+    let extra = bits.len() % 8;
+    let payload = if extra == 0 {
+        finish(PayloadScheme::ZeroWidthBinary, offset, end, units, head)
+    } else {
+        let tail = pack_bits(&bits[extra..]);
+        let (head_text, tail_text) = (printable(&head), printable(&tail));
+        let (bytes, text) = match (head_text, tail_text) {
+            (Some(t), None) => (head, Some(t)),
+            (None, Some(t)) => (tail, Some(t)),
+            // Both frames spell the same text: nothing is ambiguous about what it says.
+            (Some(h), Some(t)) if h == t => (head, Some(h)),
+            _ => (head, None),
+        };
+        Payload {
+            scheme: PayloadScheme::ZeroWidthBinary,
+            start: offset,
             end,
             units,
             bytes,
-        )),
-        units,
-    ))
+            text,
+        }
+    };
+    Some((Some(payload), units))
+}
+
+/// Whole bytes from MSB-first bits. Trailing bits that do not fill a byte are dropped.
+fn pack_bits(bits: &[u8]) -> Vec<u8> {
+    bits.as_chunks::<8>()
+        .0
+        .iter()
+        .map(|c| c.iter().fold(0u8, |acc, &b| (acc << 1) | b))
+        .collect()
 }
 
 #[cfg(test)]
@@ -470,6 +528,105 @@ mod tests {
     fn a_lone_variation_selector_is_not_a_payload() {
         assert!(decode_smuggled("\u{2602}\u{FE0F}").is_empty());
         assert!(decode_smuggled("text\u{FE0E}").is_empty());
+    }
+
+    /// Encode `s` as variation-selector bytes, the way `variation_bytes` documents it.
+    fn vs(s: &str) -> String {
+        s.bytes()
+            .map(|b| {
+                let cp = if b < 16 {
+                    0xFE00 + u32::from(b)
+                } else {
+                    0xE0100 + u32::from(b) - 16
+                };
+                char::from_u32(cp).unwrap()
+            })
+            .collect()
+    }
+
+    /// Finding 6 of the Lean detection model: a payload hung after a fully qualified
+    /// emoji must decode, and its span must be the payload alone.
+    ///
+    /// `U+2764 U+FE0F` already ends in `VS16`. Read as one run with the payload, that
+    /// selector became a leading byte `0x0F` and the decode came back `b"\x0fhi"`, no text.
+    #[test]
+    fn a_payload_after_a_qualified_emoji_round_trips() {
+        let s = format!("\u{2764}\u{FE0F}{}", vs("hi"));
+        let found = decode_smuggled(&s);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].scheme, PayloadScheme::VariationBytes);
+        assert_eq!(found[0].bytes, b"hi".to_vec());
+        assert_eq!(found[0].text.as_deref(), Some("hi"));
+        assert_eq!(found[0].units, 2, "the emoji's own selector is not payload");
+        assert_eq!(&s[found[0].start..found[0].end], vs("hi"));
+        // The same after a text-presentation selector, and after a letter.
+        let s = format!("\u{2602}\u{FE0E}{}", vs("hi"));
+        assert_eq!(decode_smuggled(&s)[0].text.as_deref(), Some("hi"));
+    }
+
+    /// The selector is dropped only when that turns a garbage decode into a real one.
+    #[test]
+    fn a_presentation_selector_is_kept_when_the_rest_does_not_decode() {
+        // What follows the selector is not printable: the run is reported whole.
+        let found = decode_smuggled("\u{2764}\u{FE0F}\u{FE00}\u{FE01}");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].bytes, vec![0x0F, 0x00, 0x01]);
+        assert_eq!(found[0].text, None);
+        assert_eq!(found[0].start, '\u{2764}'.len_utf8());
+        // Nothing before the selector to attach to: it is not a presentation selector.
+        let found = decode_smuggled(&format!("\u{FE0F}{}", vs("hi")));
+        assert_eq!(found[0].bytes, b"\x0fhi".to_vec());
+        assert_eq!(found[0].text, None);
+        // One printable byte after the selector is under the floor, so nothing is dropped.
+        let found = decode_smuggled(&format!("\u{2764}\u{FE0F}{}", vs("A")));
+        assert_eq!(found[0].bytes, b"\x0fA".to_vec());
+        assert_eq!(found[0].text, None);
+    }
+
+    /// Finding 6, zero-width half: one stray bit before a payload shifts every byte of
+    /// the head-aligned frame. Both frames are tried, and text is reported only when
+    /// exactly one of them is printable.
+    #[test]
+    fn a_stray_leading_bit_never_yields_a_wrong_decode() {
+        // `U+200C` + `hi`: the head frame is `b"\xb44"`, not UTF-8; the tail frame is `hi`.
+        let found = decode_smuggled(&format!("a\u{200C}{}", zw("hi")));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].bytes, b"hi".to_vec());
+        assert_eq!(found[0].text.as_deref(), Some("hi"));
+        assert_eq!(found[0].units, 17, "the stray bit is still consumed");
+        // `U+200B` + `hi`: the head frame reads `44`, the tail frame `hi`. Both are
+        // printable, so the frame is ambiguous and no text is claimed. This used to
+        // report `44`: text nobody encoded.
+        let found = decode_smuggled(&format!("a\u{200B}{}", zw("hi")));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].bytes, b"44".to_vec());
+        assert_eq!(
+            found[0].text, None,
+            "an ambiguous frame must not be decoded"
+        );
+    }
+
+    /// Every encoder still round-trips between ordinary characters.
+    #[test]
+    fn each_encoder_round_trips_between_ordinary_characters() {
+        for payload in ["hi", "tracked-by:acct-99213", "\u{e9}t\u{e9}"] {
+            for (scheme, carriers) in [
+                (PayloadScheme::TagAscii, tags(payload)),
+                (PayloadScheme::VariationBytes, vs(payload)),
+                (PayloadScheme::ZeroWidthBinary, zw(payload)),
+            ] {
+                if scheme == PayloadScheme::TagAscii && !payload.is_ascii() {
+                    continue; // the tag scheme carries printable ASCII only
+                }
+                let s = format!("x{carriers}y");
+                let found = decode_smuggled(&s);
+                assert_eq!(found.len(), 1, "{scheme:?} {payload:?}");
+                assert_eq!(found[0].scheme, scheme);
+                assert_eq!(found[0].bytes, payload.as_bytes());
+                assert_eq!(found[0].text.as_deref(), Some(payload));
+                assert_eq!(&s[found[0].start..found[0].end], carriers);
+            }
+        }
     }
 
     /// A run too short to fill a byte yields no payload, and is not rescanned.

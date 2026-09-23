@@ -172,6 +172,60 @@ class TestTheDetectorIntegration:
         assert disarm.has_anomalies(f"{FLAG_BASE}{tags('gbsct')}{CANCEL_TAG}") is False
 
 
+class TestACarrierOfTheSameSchemeNextDoor:
+    """Finding 6 of the Lean detection model (`formal/lean/Detection`).
+
+    Every encoder round-trips between two ordinary characters. Next to a carrier of its
+    own scheme it did not: a fully qualified emoji already ends in `VS16`, which became a
+    leading byte `0x0F` of the payload after it, and one stray zero-width bit shifted
+    every byte of the frame, once into text nobody encoded.
+    """
+
+    HEART = "\u2764\ufe0f"  # HEAVY BLACK HEART + VS16: a fully qualified emoji
+
+    def test_a_payload_after_a_qualified_emoji_decodes(self) -> None:
+        text = f"{self.HEART}{variation('hi')}"
+        found = disarm.decode_smuggled(text)
+        assert [(p.scheme, p.data, p.text) for p in found] == [("variation_bytes", b"hi", "hi")]
+        # The span is the payload alone: the emoji keeps its own selector.
+        raw = text.encode()
+        assert raw[found[0].start : found[0].end].decode() == variation("hi")
+        assert found[0].units == 2
+        assert disarm.inspect_anomalies(text).kinds[0] == "smuggled"
+
+    def test_the_selector_is_kept_when_the_rest_is_not_text(self) -> None:
+        found = disarm.decode_smuggled(f"{self.HEART}{VS_00_01}")
+        assert [(p.data, p.text) for p in found] == [(b"\x0f\x00\x01", None)]
+
+    def test_a_stray_bit_that_leaves_one_readable_frame_decodes(self) -> None:
+        found = disarm.decode_smuggled(f"a{ZWNJ}{zero_width('hi')}")
+        assert [(p.data, p.text) for p in found] == [(b"hi", "hi")]
+        assert found[0].units == 17, "the stray bit is consumed with the run"
+
+    def test_an_ambiguous_frame_is_never_reported_as_text(self) -> None:
+        """The head frame reads `44` and the tail frame `hi`: both printable.
+
+        `44` used to come back as the decoded text, which is the bogus decode the `text`
+        field exists to never report. With two readable frames there is no telling which
+        was sent, so the bytes come back and `text` is `None`.
+        """
+        text = f"a{ZWSP}{zero_width('hi')}"
+        found = disarm.decode_smuggled(text)
+        assert [(p.data, p.text) for p in found] == [(b"44", None)]
+        kinds = disarm.inspect_anomalies(text).kinds
+        assert "smuggled" not in kinds
+        assert "invisible" in kinds
+
+    @pytest.mark.parametrize(("scheme", "encode"), list(ENCODERS.items())[:3])
+    def test_every_carrier_scheme_still_round_trips(self, scheme: str, encode) -> None:
+        for payload in ["hi", PAYLOAD]:
+            text = f"x{encode(payload)}y"
+            found = disarm.decode_smuggled(text)
+            assert [(p.scheme, p.text) for p in found] == [(scheme, payload)]
+            raw = text.encode()
+            assert raw[found[0].start : found[0].end].decode() == encode(payload)
+
+
 def test_an_invisible_payload_is_not_recovered_text() -> None:
     """Raised in review on #940: "printable" meant "no C0 control", which is not enough.
 

@@ -109,8 +109,14 @@ pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
             "transliterate fallback must be callable",
         ));
     }
-    let mut slot = crate::recover_lock(TRANSLITERATE_FALLBACK.write(), "TRANSLITERATE_FALLBACK");
-    *slot = Some(f.unbind());
+    // Swap under the lock, drop outside it: the old dispatcher's `__del__` is Python
+    // and must not run while the lock is held (see `crate::py::emoji::set_provider`).
+    let old = {
+        let mut slot =
+            crate::recover_lock(TRANSLITERATE_FALLBACK.write(), "TRANSLITERATE_FALLBACK");
+        slot.replace(f.unbind())
+    };
+    drop(old);
     Ok(())
 }
 

@@ -104,19 +104,29 @@ impl std::str::FromStr for TargetScript {
 /// Replace Unicode confusable homoglyphs with their `target`-script prototypes
 /// (TR39). Characters with no mapping pass through unchanged.
 ///
-/// The input is canonically recomposed (NFC) before folding (#475, in the Layer-1
-/// core), so the fold is invariant to the input's normal form — a decomposed
+/// Each base + combining-mark cluster is canonically composed at lookup (#475, in the
+/// Layer-1 core), so the fold is invariant to the input's normal form — a decomposed
 /// homoglyph (`і` + combining diaeresis) folds the same as its composed `ї`, instead
 /// of leaving the mark and letting an attacker evade the fold by decomposing.
+/// It is not a whole-string NFC: a singleton with no mark after it, such as U+2126 OHM
+/// SIGN, is looked up as written. A cluster also takes in the one starter that composes
+/// with the character before it, U+16D67 (Kirat Rai, Unicode 16); until the Lean model
+/// in `formal/lean/Confusables` found it, U+16D68 and its NFD folded differently.
 ///
 /// The fold iterates to a fixed point (#522/#586), so the result is idempotent —
 /// `f(f(x)) == f(x)` — and complete: [`is_confusable`] is always false for the output.
 /// One pass is not enough, because folding and canonical composition expose work for
 /// each other in both directions (`¥`+◌̀ → `Y`+◌̀ → `Ỳ`, and `Ҫ`+◌̧ → `Ç` → `C`).
 /// Completeness is what makes the result usable as a comparison skeleton.
+/// It holds here and under [`DigitPolicy::Tr39`]. Under [`DigitPolicy::Preserve`] it
+/// does not, by design: that policy keeps the digit rows (#648), and `is_confusable`,
+/// which takes no policy, still flags them.
 ///
-/// Returns `Cow::Borrowed` when the input is already NFC and nothing folds (zero
-/// allocation), `Cow::Owned` otherwise. Infallible: a [`TargetScript`] is always a
+/// Returns `Cow::Borrowed` when nothing in the input could compose (no combining mark,
+/// conjoining Hangul leading consonant or U+16D67) and nothing folds, which allocates
+/// nothing, and `Cow::Owned` otherwise, even when the owned string equals the input.
+/// Being NFC is not the test: `"x\u{0301}"` is NFC and comes back owned, and U+2126
+/// is not NFC and comes back borrowed. Infallible: a [`TargetScript`] is always a
 /// supported script.
 #[must_use]
 pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
@@ -125,7 +135,7 @@ pub fn normalize_confusables(text: &str, target: TargetScript) -> Cow<'_, str> {
 
 /// How the fold treats non-Latin **digits** (#561).
 ///
-/// disarm and upstream TR39 disagree on 45 rows, and both readings are defensible. The
+/// disarm and upstream TR39 disagree on 47 rows, and both readings are defensible. The
 /// divergence used to be fixed in the table with no way to select the other side, which
 /// read as a defect to anyone scoring disarm against a TR39-derived benchmark.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

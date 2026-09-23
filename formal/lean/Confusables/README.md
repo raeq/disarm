@@ -9,8 +9,8 @@ property that failed was cut down to a minimal input and reproduced on the libra
 Rust probe (`probe/`) and a Python sweep (`search/`) then ran the same properties
 directly against the library over all of Unicode.
 
-> **Status.** Four code findings (F1-F4) and six documentation findings (F5-F10), all
-> open. `repro/fix.patch` is a proposed fix for F1, F3 and F4. It was applied to a
+> **Status.** All fixed in #1024: F1, F3 and F4 in the code, F2 and F5-F10 in the
+> documentation. What follows describes the code at `595fbda`, before the fix. `repro/fix.patch` is a proposed fix for F1, F3 and F4. It was applied to a
 > scratch copy of the crate, where the probe finds no failure left and
 > `cargo test --no-default-features` passes (1,163 tests). The model of the fix
 > (`Fixes.lean`) agrees with that build on 504,205 inputs.

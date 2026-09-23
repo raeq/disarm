@@ -65,7 +65,7 @@ const MAX_CONFUSABLE_PASSES: usize = 8;
 /// digit, so a number in running prose stays a number. `"tr39"` selects upstream's, which
 /// folds most of them to a Latin letter (Devanagari zero → `o`) — correct for an
 /// identifier skeleton, where the only job is to make two confusable identifiers collide.
-/// Three of the 45 divergent rows do not land on a letter: `٠` and `۰` fold to `.`, and
+/// Three of the 47 divergent rows do not land on a letter: `٠` and `۰` fold to `.`, and
 /// `𑣣` folds to the two characters `rn`. A skeleton feeding a label- or path-shaped key
 /// has to allow for that extra `.`.
 fn validate_digit_policy(digit_policy: &str) -> Result<(), crate::ErrorRepr> {
@@ -183,7 +183,8 @@ fn validate_target_script(target_script: &str) -> Result<(), crate::ErrorRepr> {
 /// See: <https://paultendo.github.io/posts/unicode-confusables-nfkc-conflict/>
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+/// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
+/// [`crate::ErrorRepr`].
 pub(crate) fn normalize_confusables(
     text: &str,
     target_script: &str,
@@ -267,7 +268,10 @@ pub(crate) fn normalize_confusables_cow<'a>(
 ///
 /// Re-running `_cow` (which composes-at-lookup on its input each pass) until the output
 /// stops changing makes the result idempotent by construction, and complete: the loop can
-/// only exit once no char folds, i.e. `is_confusable` is false. That completeness is the
+/// only exit once no char folds, i.e. `is_confusable` is false. That holds under `numeric`
+/// and `tr39`. Under `preserve` the digit rows never fold, by design (#648), and
+/// `is_confusable`, which takes no policy, still flags them (the Lean model in
+/// `formal/lean/Confusables`, F2). That completeness is the
 /// point — #586 was the Layer-2 API calling the single-pass form, so `normalize` returned
 /// strings that `is_confusable` still flagged, and the five non-Python bindings all
 /// inherited it.
@@ -354,7 +358,8 @@ pub(crate) fn normalize_confusables_into(
 /// sorted by codepoint.
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+/// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
+/// [`crate::ErrorRepr`].
 pub(crate) fn unmapped_confusables(target_script: &str) -> Result<Vec<char>, crate::ErrorRepr> {
     validate_target_script(target_script)?;
     Ok(tables::unmapped_confusable_sources(target_script))
@@ -370,7 +375,8 @@ pub(crate) fn unmapped_confusables(target_script: &str) -> Result<Vec<char>, cra
 /// composed intermediate; a multi-mark cluster reports the cluster's start.
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+/// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
+/// [`crate::ErrorRepr`].
 pub(crate) fn find_unmapped_confusables(
     text: &str,
     target_script: &str,
@@ -409,7 +415,8 @@ pub(crate) fn find_unmapped_confusables(
 /// construction.
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+/// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
+/// [`crate::ErrorRepr`].
 pub(crate) fn find_confusables(
     text: &str,
     target_script: &str,
@@ -476,7 +483,8 @@ fn canonical_scripts(names: &[&str]) -> Result<Vec<&'static str>, crate::ErrorRe
 /// True if text contains any characters confusable with target-script characters.
 ///
 /// # Valid `target_script` values
-/// `"latin"` or `"cyrillic"`. Any other value returns [`crate::ErrorRepr`].
+/// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
+/// [`crate::ErrorRepr`].
 pub(crate) fn is_confusable(text: &str, target_script: &str) -> Result<bool, crate::ErrorRepr> {
     validate_target_script(target_script)?;
 
@@ -847,9 +855,12 @@ mod tests {
             #![proptest_config(ProptestConfig::with_cases(1000))]
 
             /// Normalizing confusables is idempotent: applying it twice
-            /// yields the same result as applying it once. This must hold
-            /// because every confusable maps to an ASCII target, and ASCII
-            /// characters are never themselves confusable.
+            /// yields the same result as applying it once. It holds because the
+            /// fold iterates to a fixed point (#522), not because of the table's
+            /// shape: 35 Latin rows map to a non-ASCII value (U+0101 to U+00E3),
+            /// and three ASCII characters are sources themselves (#725). The Lean
+            /// model in `formal/lean/Confusables` proves idempotence from
+            /// convergence alone.
             #[test]
             fn normalize_confusables_idempotent(s in "\\PC*") {
                 let once = normalize_confusables(&s, "latin", "numeric").unwrap();

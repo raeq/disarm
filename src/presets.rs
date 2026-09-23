@@ -776,8 +776,16 @@ fn acts_on_nonascii(
         // #471: the cheap conjoining-jamo range check runs first. NFKC *composes* an
         // L+V(+T) jamo sequence into one syllable — a cross-character operation; each
         // jamo is NFKC-stable in isolation, so the per-scalar `nfkc_changes` cannot
-        // see it. A jamo must therefore always decline the fast path.
-        || (m.nfkc && (is_conjoining_jamo(ch) || nfkc_changes(ch)))
+        // see it. A jamo must therefore always decline the fast path. The same holds
+        // for the one other starter that composes with the character before it,
+        // U+16D67 (Kirat Rai, Unicode 16): U+16D67 U+16D67 is the NFD of U+16D68, and
+        // the default policy returned it unnormalized while `tr39`, which bypasses
+        // this guard, composed it (F3, found by the Lean model in
+        // `formal/lean/Confusables`).
+        || (m.nfkc
+            && (is_conjoining_jamo(ch)
+                || crate::compose::composes_with_preceding_starter(ch)
+                || nfkc_changes(ch)))
         || (m.strip_accents && decomposes_to_mark(ch))
         || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
 }
@@ -2077,13 +2085,26 @@ pub(crate) fn skeleton_key<'a>(
             // written; NFKC would split `\u{FB01}` and change what the preceding
             // cell is, so the erase has to happen before anything else runs.
             Step::ResolveDeletions,
-            // 1. NFKC, so a compatibility spelling reaches the fold as its base form.
-            Step::Nfkc,
-            // 2. The reordering and smuggling channels, before anything reads the text.
+            // 1. The reordering and smuggling channels, before anything reads the text.
             //    A key exists so two spellings of one identity compare equal, and every
             //    class here is a way to vary the key invisibly (#805).
+            //
+            //    Before NFKC, not after it, and never after a fold. A character here that
+            //    sits between a base and its mark blocks their composition, and deleting
+            //    it afterwards leaves the pair decomposed where the same text without it
+            //    arrives composed. `I` + a zero-width space + U+0301 reached step 4 as a
+            //    bare `I`, and keyed as `l` + U+0301 while `I` + U+0301 keyed as U+00ED.
+            //    Controls and zero-width characters ran after the last fold as well,
+            //    which made the key itself not a fixed point: `a` + U+0001 + U+0300 keyed
+            //    as `a` + U+0300, and that keyed as U+00E0. NFKC never emits a character
+            //    these steps remove, so running them first loses nothing. Found by the
+            //    Lean model in `formal/lean/Confusables` (F1).
             Step::StripBidi,
             Step::StripInvisible(COMPARISON_STRIP),
+            Step::StripControl,
+            Step::StripZeroWidth,
+            // 2. NFKC, so a compatibility spelling reaches the fold as its base form.
+            Step::Nfkc,
             // 3. The confusable fold, under the caller's policy. This is what brings the
             //    capital-I family to `I` and every non-Latin homoglyph to its Latin
             //    prototype.
@@ -2105,10 +2126,17 @@ pub(crate) fn skeleton_key<'a>(
             //    or step 4 has nothing to work with, and folding case first is what turns
             //    six collisions into 264. So the fix is another pass, never a reorder
             //    (#467's shape, and the reason `catalog_key` has a `FixedPoint` too).
-            Step::FixedPoint(&[Step::FoldCase, Step::ConfusablesCtx("latin")]),
-            // 6. Controls, zero-width, whitespace (#433).
-            Step::StripControl,
-            Step::StripZeroWidth,
+            //
+            //    And NFKC inside the loop, because both steps in it can leave the text
+            //    decomposed with nothing after them to recompose it. Full case folding
+            //    emits decomposed sequences (U+0390 becomes U+03B9 U+0308 U+0301), and
+            //    the fold here does not compose (#522's interaction): U+00A5 + U+0300
+            //    folds to `y` + U+0300, which is one character, U+1EF3, the next time
+            //    round. Either way the key was not a fixed point, and the #522 pair
+            //    U+04AA + U+0327 keyed as `c` + U+0327 while U+00E7 keyed as `c`. Found
+            //    by the Lean model in `formal/lean/Confusables` (F1).
+            Step::FixedPoint(&[Step::FoldCase, Step::ConfusablesCtx("latin"), Step::Nfkc]),
+            // 6. Whitespace (#433).
             Step::CollapseWs,
         ]
     }
@@ -2423,6 +2451,12 @@ mod tests {
                 "ml_normalize_none",
                 Box::new(|s| ml_normalize(s, None, "none", true).unwrap().into_owned()),
             ),
+            // A key builder with its own guard mask, and it was missing here, so no
+            // fast-path check had ever run on it.
+            (
+                "skeleton_key",
+                Box::new(|s| skeleton_key(s, "numeric").unwrap().into_owned()),
+            ),
         ]
     }
 
@@ -2524,6 +2558,116 @@ mod tests {
                 assert_eq!(guarded, full, "fast path != full on L={l:#06X} V={v:#06X}");
             }
         }
+    }
+
+    /// F3 (the Lean model in `formal/lean/Confusables`): the one starter outside Hangul
+    /// that composes with the character before it. U+16D67 U+16D67 is the NFD of
+    /// U+16D68, each is NFKC-stable alone and neither is a mark, so the guard fast-pathed
+    /// the pair and every NFKC preset returned it unnormalized under the default policy,
+    /// while `tr39`, which bypasses the guard, composed it.
+    #[test]
+    fn fast_path_composes_kirat_rai() {
+        let cases = [
+            ("\u{16D67}\u{16D67}", "\u{16D68}"),
+            ("\u{16D63}\u{16D67}", "\u{16D69}"),
+            ("\u{16D63}\u{16D67}\u{16D67}", "\u{16D6A}"),
+        ];
+        for (input, composed) in cases {
+            for (name, f) in all_presets() {
+                let guarded = f(input);
+                let full = without_fastpath(|| f(input));
+                assert_eq!(guarded, full, "{name}: fast path != full on {input:?}");
+            }
+            for (name, out) in [
+                ("canonicalize", canonicalize(input).unwrap()),
+                ("canonicalize_strict", canonicalize_strict(input).unwrap()),
+                ("strip_obfuscation", strip_obfuscation(input).unwrap()),
+                ("skeleton_key", skeleton_key(input, "numeric").unwrap()),
+            ] {
+                assert_eq!(out, composed, "{name} left {input:?} decomposed");
+            }
+        }
+    }
+
+    fn sk(text: &str, policy: &str) -> String {
+        skeleton_key(text, policy).unwrap().into_owned()
+    }
+
+    /// F1 (the Lean model in `formal/lean/Confusables`): `skeleton_key` was not a fixed
+    /// point, so two spellings of one identity could key apart. Three causes, one row
+    /// each at least: case folding emits a decomposed sequence (U+0390), the fold leaves a
+    /// base beside a mark it composes with (U+00A5 + grave, and the #522 pair
+    /// U+04AA + cedilla), and a control or invisible between a base and its mark was
+    /// removed only after the fold, too late for the two to compose.
+    #[test]
+    fn skeleton_key_is_a_fixed_point_on_the_lean_witnesses() {
+        let cases = [
+            ("\u{0390}", "\u{1E2F}"),
+            ("\u{03B0}", "\u{01D8}"),
+            ("\u{00A5}\u{0300}", "\u{00FD}"),
+            ("\u{04AA}\u{0327}", "c"),
+            ("\u{00E7}", "c"),
+            ("a\u{1}\u{0300}", "\u{00E0}"),
+            ("cafe\u{1}\u{0301}", "caf\u{00E9}"),
+            ("caf\u{00E9}", "caf\u{00E9}"),
+            // The prototype fold must see the composed letter whatever sat in between:
+            // `I` + ZWSP + acute keyed as `l` + acute, while `I` + acute keyed as U+00ED.
+            ("I\u{0301}", "\u{00ED}"),
+            ("I\u{200B}\u{0301}", "\u{00ED}"),
+            ("I\u{1}\u{0301}", "\u{00ED}"),
+            ("I\u{FE00}\u{0301}", "\u{00ED}"),
+            ("I\u{202E}\u{0301}", "\u{00ED}"),
+        ];
+        for policy in ["numeric", "tr39", "preserve"] {
+            for (input, key) in cases {
+                let once = sk(input, policy);
+                assert_eq!(once, key, "{policy}: skeleton_key({input:?})");
+                assert_eq!(
+                    sk(&once, policy),
+                    once,
+                    "{policy}: not a fixed point on {input:?}"
+                );
+            }
+        }
+    }
+
+    /// The same property over the classes that failed, small enough for every run: each
+    /// base in the Latin, Greek and Cyrillic blocks and Latin and Greek Extended, alone
+    /// and before each of four composing marks, directly and with a control or a
+    /// zero-width space between. The whole of Unicode, and every composing mark, is
+    /// `exhaustive_skeleton_key_*` in `tests/exhaustive_confusables.rs` (tier 3).
+    ///
+    /// Also the key is never itself confusable. Under `preserve` it can be, by design:
+    /// that policy keeps the digit rows `is_confusable` flags (#648).
+    #[test]
+    fn skeleton_key_is_a_fixed_point_over_the_failing_classes() {
+        let bases = (0x20u32..0x250)
+            .chain(0x370..0x530)
+            .chain(0x1E00..0x2000)
+            .filter_map(char::from_u32);
+        let mut failures = Vec::new();
+        for base in bases {
+            let mut probes = vec![base.to_string()];
+            for mark in ['\u{0300}', '\u{0301}', '\u{0308}', '\u{0327}'] {
+                for between in ["", "\u{1}", "\u{200B}"] {
+                    probes.push(format!("{base}{between}{mark}"));
+                }
+            }
+            for probe in probes {
+                let once = sk(&probe, "numeric");
+                if sk(&once, "numeric") != once
+                    || crate::confusables::is_confusable(&once, "latin").unwrap()
+                {
+                    failures.push(probe);
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} probes key to a non-fixed point or a confusable key: {:?}",
+            failures.len(),
+            &failures[..failures.len().min(10)]
+        );
     }
 
     /// FP-1: the `fold_case` actionability predicate gates on the fold *table*

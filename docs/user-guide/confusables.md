@@ -265,10 +265,23 @@ Replace confusable characters with their target-script equivalents:
 
 ### The result is a fixed point
 
-Folding runs until nothing more changes, so `normalize_confusables` is idempotent and
-its output is never itself confusable. That second property is the one that matters:
-the fold exists to produce a skeleton two identifiers can be compared on, and a skeleton
-the library's own detector still flags is no use for that.
+Folding runs until nothing more changes, so `normalize_confusables` is idempotent and,
+under the `numeric` and `tr39` digit policies, its output is never itself confusable.
+That second property is the one that matters: the fold exists to produce a skeleton two
+identifiers can be compared on, and a skeleton the library's own detector still flags is
+no use for that.
+
+`digit_policy="preserve"` gives it up on purpose. It keeps the non-Latin digits, and
+`is_confusable` takes no policy, so it still flags them:
+
+```python
+from disarm import is_confusable, normalize_confusables
+
+zero = "\u0966"  # DEVANAGARI DIGIT ZERO
+assert normalize_confusables(zero) == "0"
+assert normalize_confusables(zero, digit_policy="preserve") == zero
+assert is_confusable(normalize_confusables(zero, digit_policy="preserve"))
+```
 
 One pass is not enough, because folding and canonical composition expose work for each
 other in both directions. A fold can expose a composition — `¥` + U+0300 folds to `Y` +
@@ -316,13 +329,13 @@ reading is right for prose, where a Devanagari zero really is a zero and folding
 letter corrupts the number. TR39's is right for an identifier *skeleton*, whose only job
 is to make two confusable identifiers collide; it does not care whether the collision
 target reads sensibly.
-Three of the 45 divergent rows do not land on a letter: `٠` (U+0660) and `۰` (U+06F0)
+Three of the 47 divergent rows do not land on a letter: `٠` (U+0660) and `۰` (U+06F0)
 fold to `.`, and `𑣣` (U+118E3) folds to the two characters `rn`. If the skeleton feeds a
 label- or path-shaped key, that extra `.` changes its structure. Every value in the
 override set is ASCII — `build.rs` asserts it — so nothing else needs guarding.
 
 
-The two differ on 45 rows and agree on everything else. Reach for `tr39` when
+The two differ on 47 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
 The policy is scoped to the Latin target. The override rows are generated from the
@@ -345,10 +358,22 @@ assert normalize_confusables("٥٠", digit_policy="tr39") == "o."
 assert normalize_confusables("pаypal", digit_policy="tr39") == "paypal"
 ```
 
-The presets (`canonicalize`, `catalog_key`, `search_key`, …) have no such switch and
-always fold numerically: they serve prose and keys, where the numeric reading is
-unambiguously right. Hostname analysis is likewise unaffected — changing the skeleton it
-compares against would silently change what `is_suspicious_hostname` flags.
+The presets take the same switch since #896: `canonicalize`, `canonicalize_strict`,
+`strip_obfuscation`, `search_key`, `catalog_key`, `sort_key` and `skeleton_key` all
+accept `digit_policy`, and all default to `numeric`, because they serve prose and keys.
+
+```python
+from disarm import canonicalize, search_key
+
+assert canonicalize("\u0966") == "0"
+assert canonicalize("\u0966", digit_policy="tr39") == "o"
+assert search_key("\u0966", digit_policy="tr39") == "o"
+```
+
+Under `preserve`, the key builders that transliterate still romanize the digit: see
+[`digit_policy` rescues a numeral only where a fold is what changes it](../security/derived-identifiers.md#digit_policy-rescues-a-numeral-only-where-a-fold-is-what-changes-it).
+Hostname analysis has no switch: changing the skeleton it compares against would
+silently change what `is_suspicious_hostname` flags.
 
 ### Target script
 

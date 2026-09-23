@@ -89,7 +89,34 @@ pub(crate) fn could_compose(c: char) -> bool {
     if u < 0x0590 {
         return (0x0300..=0x036F).contains(&u) || (0x0483..=0x0489).contains(&u);
     }
-    is_combining_mark(c) || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&u)
+    is_combining_mark(c)
+        || (HANGUL_L_BASE..=HANGUL_L_LAST).contains(&u)
+        || composes_with_preceding_starter(c)
+}
+
+/// A starter that is not a combining mark and still composes with the character
+/// before it. Unicode 16 added the first of these outside Hangul: KIRAT RAI VOWEL SIGN
+/// E, U+16D67, which composes with U+16D63 (to U+16D69) and with itself (to U+16D68),
+/// and U+16D69 + U+16D67 is U+16D6A. It is `General_Category=Lo`, so the mark gate
+/// never saw it: the fold of U+16D68 and of its NFD differed, against the
+/// normal-form invariance `normalize_confusables` documents, and the presets' fast-path
+/// guard returned the NFD unnormalized. Found by the Lean model in
+/// `formal/lean/Confusables` (F3, F4).
+///
+/// Conjoining jamo are the other class and are composed by arithmetic instead
+/// ([`Composed::try_compose_hangul`]). `second_elements_of_compositions_are_known`
+/// checks every code point, so a Unicode version that adds a third class fails a test
+/// rather than a caller.
+#[inline]
+pub(crate) const fn composes_with_preceding_starter(c: char) -> bool {
+    c as u32 == 0x16D67
+}
+
+/// Does `c` extend the cluster the character before it anchors? A combining mark, or a
+/// starter that composes backwards ([`composes_with_preceding_starter`]).
+#[inline]
+fn is_cluster_follower(c: char) -> bool {
+    is_combining_mark(c) || composes_with_preceding_starter(c)
 }
 
 pub(crate) struct Composed<'a> {
@@ -176,15 +203,22 @@ impl Iterator for Composed<'_> {
         // precomposed letter or presentation form, or a lone trailing mark) is yielded
         // verbatim — the hot path. Only a cluster that hits the widening map or canonical
         // NFC actually changes; everything else round-trips.
-        let next_is_mark = self.iter.peek().is_some_and(|&(_, c)| is_combining_mark(c));
-        if !next_is_mark {
+        //
+        // A starter that composes backwards follows too (F4): U+16D67 U+16D67 is the NFD
+        // of U+16D68, and with no mark between them the cluster used to end at the first.
+        let next_is_follower = self
+            .iter
+            .peek()
+            .is_some_and(|&(_, c)| is_cluster_follower(c));
+        if !next_is_follower {
             return Some((ch, start));
         }
 
-        // Collect the cluster: anchor + the run of following combining marks.
+        // Collect the cluster: anchor + the run of following marks (and backward-
+        // composing starters).
         let mut end = start + ch.len_utf8();
         while let Some(&(j, c)) = self.iter.peek() {
-            if !is_combining_mark(c) {
+            if !is_cluster_follower(c) {
                 break;
             }
             end = j + c.len_utf8();
@@ -404,5 +438,60 @@ mod tests {
         assert_eq!(compose_str("\u{1100}\u{1161}"), "\u{AC00}"); // ᄀ+ᅡ → 가
                                                                  // jamo-free / mark-free input still borrows (hot path unchanged)
         assert!(matches!(compose_str("hello"), Cow::Borrowed("hello")));
+    }
+
+    #[test]
+    fn kirat_rai_starter_pairs_compose() {
+        // F4 (Lean model, `formal/lean/Confusables`): U+16D67 is a starter, not a mark,
+        // and composes with the starter before it. Every normal form of these three must
+        // reach the precomposed scalar, as a base + mark cluster does.
+        assert_eq!(chars("\u{16D67}\u{16D67}"), vec!['\u{16D68}']);
+        assert_eq!(chars("\u{16D63}\u{16D67}"), vec!['\u{16D69}']);
+        assert_eq!(chars("\u{16D63}\u{16D67}\u{16D67}"), vec!['\u{16D6A}']);
+        // Greedy, as NFC is: three in a row are one composite and a leftover.
+        assert_eq!(
+            chars("\u{16D67}\u{16D67}\u{16D67}"),
+            vec!['\u{16D68}', '\u{16D67}']
+        );
+        // A lone one, or one after a letter it does not compose with, is untouched.
+        assert_eq!(chars("\u{16D67}"), vec!['\u{16D67}']);
+        assert_eq!(chars("a\u{16D67}"), vec!['a', '\u{16D67}']);
+        assert!(needs_composition("\u{16D67}\u{16D67}"));
+        assert_eq!(compose_str("\u{16D67}\u{16D67}"), "\u{16D68}");
+    }
+
+    /// Every character that appears after the first position in the canonical
+    /// decomposition of a primary composite is one the cluster logic knows how to
+    /// follow: a combining mark, a Hangul vowel or trailing jamo (composed by
+    /// arithmetic), or [`composes_with_preceding_starter`]. A new Unicode version that
+    /// adds another backward-composing starter fails here, not in a caller's key.
+    #[test]
+    fn second_elements_of_compositions_are_known() {
+        use unicode_normalization::UnicodeNormalization;
+        let mut unknown = Vec::new();
+        let mut kirat_rai = std::collections::BTreeSet::new();
+        for c in (0u32..=0x10_FFFF).filter_map(char::from_u32) {
+            let nfd: Vec<char> = std::iter::once(c).nfd().collect();
+            // A primary composite: decomposes, and NFC takes the decomposition back to it.
+            if nfd.len() < 2 || nfd.iter().copied().nfc().ne(std::iter::once(c)) {
+                continue;
+            }
+            for &follower in &nfd[1..] {
+                let u = follower as u32;
+                let hangul_vt = (HANGUL_V_BASE..=HANGUL_V_LAST).contains(&u)
+                    || (HANGUL_T_FIRST..=HANGUL_T_LAST).contains(&u);
+                if composes_with_preceding_starter(follower) {
+                    kirat_rai.insert(c);
+                } else if !is_combining_mark(follower) && !hangul_vt {
+                    unknown.push(format!("U+{:04X} in U+{:04X}", u, c as u32));
+                }
+            }
+        }
+        assert!(unknown.is_empty(), "unhandled followers: {unknown:?}");
+        // And the predicate is not dead: it is what the three Kirat Rai composites need.
+        assert_eq!(
+            kirat_rai.into_iter().collect::<Vec<_>>(),
+            vec!['\u{16D68}', '\u{16D69}', '\u{16D6A}']
+        );
     }
 }

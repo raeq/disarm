@@ -367,7 +367,7 @@ disarm_normalize_confusables (
  *
  *  `digit_policy` is `"numeric"` (disarm's reading: a non-Latin digit folds to the ASCII
  *  digit) or `"tr39"` (upstream's, which folds most of them to a Latin letter; three of
- *  the 45 rows are not — two fold to `.` and one to the two characters `rn`). `"tr39"` is
+ *  the 47 rows are not — two fold to `.` and one to the two characters `rn`). `"tr39"` is
  *  scoped to `target = "latin"`: the override rows are generated from the Latin table and
  *  carry TR39's Latin-script targets, so with any other target it is a no-op.
  *  `"preserve"` leaves the digit alone (#648); the other two both produce a mixed-script

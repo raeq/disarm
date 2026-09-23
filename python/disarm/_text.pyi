@@ -24,7 +24,9 @@ class Text:
     def normalize(self, *, form: NormalizationForm = "NFC") -> Text:
         """Unicode normalization (NFC, NFD, NFKC, NFKD)."""
         ...
-    def normalize_confusables(self, *, target_script: str = "latin") -> Text:
+    def normalize_confusables(
+        self, *, target_script: str | Script = "latin", digit_policy: str = "numeric"
+    ) -> Text:
         """Replace confusable homoglyphs with target-script equivalents."""
         ...
     def strip_accents(self) -> Text:
@@ -111,6 +113,7 @@ class Text:
         *,
         lang: str | None = None,
         emoji: str = "cldr",
+        fold_case: bool = True,
     ) -> Text:
         """Apply the ML/NLP normalization pipeline."""
         ...
@@ -141,7 +144,7 @@ class Text:
     def is_normalized(self, *, form: NormalizationForm = "NFC") -> bool:
         """True if already in the specified normalization form."""
         ...
-    def is_confusable(self, *, target_script: str = "latin") -> bool:
+    def is_confusable(self, *, target_script: str | Script = "latin") -> bool:
         """True if text contains confusable homoglyphs."""
         ...
     def is_mixed_script(self) -> bool:

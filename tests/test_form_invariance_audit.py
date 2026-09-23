@@ -117,6 +117,38 @@ def test_recovery_entrypoint_is_form_invariant(name: str, fn: object) -> None:
             assert len(outs) == 1, f"{name} not form-invariant on {ch!r}: {outs}"
 
 
+#: A composition whose second element is a starter rather than a mark: KIRAT RAI VOWEL
+#: SIGN E, U+16D67 (Unicode 16). Spelled out, because `unicodedata` on Python 3.12 is
+#: Unicode 15 and does not decompose them, so `SAMPLE` above cannot reach this class.
+STARTER_COMPOSITIONS = [
+    ("\U00016d68", "\U00016d67\U00016d67"),
+    ("\U00016d69", "\U00016d63\U00016d67"),
+    ("\U00016d6a", "\U00016d63\U00016d67\U00016d67"),
+]
+
+
+@pytest.mark.parametrize("name,fn", _AUDITED, ids=[n for n, _ in _AUDITED])
+def test_recovery_entrypoint_composes_a_starter_pair(name: str, fn: object) -> None:
+    """F3/F4 (the Lean model in `formal/lean/Confusables`): eight of these returned the
+    decomposed form as it came. The compose-at-lookup cluster ended at a starter, and
+    the presets' fast-path guard tested NFKC one character at a time."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        for nfc, nfd in STARTER_COMPOSITIONS:
+            for text in (nfd, f"x{nfd}y"):
+                assert fn(text) == fn(text.replace(nfd, nfc)), f"{name} on {ascii(text)}"
+
+
+@pytest.mark.parametrize("name", ["canonicalize", "canonicalize_strict", "skeleton_key"])
+def test_a_starter_pair_does_not_depend_on_the_digit_policy(name: str) -> None:
+    """F3: `tr39` bypasses the fast-path guard, so it composed what the default did not,
+    although no digit is involved."""
+    fn = getattr(disarm, name)
+    for nfc, nfd in STARTER_COMPOSITIONS:
+        outs = {fn(nfd, digit_policy=policy) for policy in ("numeric", "tr39", "preserve")}
+        assert outs == {nfc}, f"{name} on {ascii(nfd)}: {outs}"
+
+
 def test_allowlist_members_exist_and_are_str_to_str() -> None:
     """Guard the allowlist: every name on it is a real public str->str entrypoint, so
     it can't silently exempt a recovery entrypoint by typo or drift."""

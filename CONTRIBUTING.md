@@ -208,7 +208,7 @@ rather than when behaviour is wrong. Each exists because the drift they catch ha
 | Gate | Guards | Fails when |
 |---|---|---|
 | `bindings/cabi/disarm.h` diff (`C ABI (safer-ffi)` job) | The committed C header | An exported signature changes without the header being regenerated (#580) |
-| `tests/test_doc_table_counts.py` | 11 documented row counts across 5 files | A table is regenerated and prose still quotes the old figure (#591) |
+| `tests/test_doc_table_counts.py` | 32 documented row counts across 16 files | A table is regenerated and prose still quotes the old figure (#591) |
 | `build.rs` ASCII assertions | Generated table values | A generated value is non-ASCII, against #341's contract (#587) |
 | `JvmSignatureTest` (`Java binding (JDK …)` job) | Published JVM signatures | A Kotlin default argument deletes an arity that shipped (#588) |
 
@@ -378,7 +378,11 @@ cargo test --no-default-features \
 # Confusables on the Layer-2 API: the BMP crossed with composing marks, checked for
 # idempotence and for output that is still confusable (#586). Deliberately separate
 # from the lib-level sweep below, which tests Layer 1 — testing the layer beneath the
-# one the bindings call is how #586 survived a year. --release keeps it near 1s.
+# one the bindings call is how #586 survived a year. The same file sweeps
+# `skeleton_key` for idempotence over every scalar, and over the BMP crossed with
+# every composing mark with and without a control between (F1 of the Lean model in
+# formal/lean/Confusables). Under --release that is about a minute; the fold sweeps
+# alone take about a second.
 cargo test --no-default-features --release \
   --test exhaustive_confusables -- --ignored
 

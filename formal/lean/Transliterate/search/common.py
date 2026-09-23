@@ -109,7 +109,7 @@ def is_ascii(s: str) -> bool:
 
 
 def i7_bound(s: str) -> int:
-    return len(s.encode("utf-8")) * 4 + len(s)
+    return len(s.encode("utf-8")) * 5 + len(s)
 
 
 @dataclass

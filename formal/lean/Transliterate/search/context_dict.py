@@ -13,7 +13,7 @@ scheme in {default, strict_iso9, gost7034}:
   I1  ASCII passthrough (all 128 ASCII chars + random ASCII strings)
   I2  ASCII output under errors='ignore'
   I3  f(f(s)) == f(s)
-  I7  len(f(s)) <= 4*bytes(s) + chars(s)
+  I7  len(f(s)) <= 5*bytes(s) + chars(s)
   H   f(a+b) == f(a)+f(b)
 over: every BMP scalar on its own, and every BMP scalar next to an Arabic/Hebrew
 word.

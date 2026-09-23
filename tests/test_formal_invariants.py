@@ -11,7 +11,7 @@ I3: Idempotence         — Applying transliterate twice yields the same as once
 I4: No Exceptions       — No valid Unicode input causes an exception.
 I5: Deterministic       — Same input always produces the same output.
 I6: No Input Size Cap   — Input of any length is accepted (#80 removed the cap).
-I7: Output Length Bound — len(output) ≤ len(input) * 5 + char_count.
+I7: Output Length Bound — len(output) ≤ 5 × utf8_bytes(input) + chars(input).
 """
 
 import string
@@ -183,7 +183,7 @@ class TestI6NoInputSizeCap:
 
 
 class TestI7OutputLengthBound:
-    """I7: For ErrorMode::Ignore, len(output) ≤ len(input) * 5 + char_count.
+    """I7: For ErrorMode::Ignore, len(output) ≤ 5 × utf8_bytes(input) + chars(input).
 
     This bound arises because:
     - Each input byte maps to at most 5 output ASCII bytes. The worst case is one code

@@ -12,7 +12,8 @@ and records
   I1  ASCII in  -> output identical
   I2  errors='ignore' -> output ASCII
   I3  f(f(s)) == f(s)   (for every errors mode; the docs state it for 'ignore')
-  I7  len(f(s)) <= 4*bytes(s) + chars(s)   (for errors='ignore', as the docs state)
+  I7  len(f(s)) <= 5*bytes(s) + chars(s)   (for errors='ignore'; the audit ran with the
+      old bound, 4*bytes, and found U+337F over it: see the README, F3)
   NF  f(s) == f(NFC(s)) == f(NFD(s))   (the #477 normal-form-invariance claim that
       the compose-at-lookup boundary is meant to guarantee; a side premise)
 

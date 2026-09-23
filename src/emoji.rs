@@ -210,13 +210,13 @@ pub(crate) struct CharWindow<'a> {
     rest: std::str::Chars<'a>,
 }
 
-/// Window capacity = MAX_EMOJI_SEQ_LEN so we always have enough lookahead.
+/// Window capacity: twice `MAX_EMOJI_SEQ_LEN`, so a match always has its lookahead.
 ///
 /// Derived from the single source of truth (`tables::max_emoji_seq_len()`, a
 /// `const fn` over the build-generated `MAX_EMOJI_SEQ_LEN`) rather than a
 /// duplicated literal, so the two cannot drift when the CLDR data updates
-/// (#199 review). This also caps the look-ahead a custom Python emoji provider
-/// can match; see the provider call site and `set_emoji_provider`.
+/// (#199 review). It does **not** set what a custom Python emoji provider can
+/// match: the provider call site passes `max_emoji_seq_len()` as its own cap.
 ///
 /// Twice the longest key, not the key itself: the table stores sequences unqualified, and
 /// the trie walk accepts a U+FE0F after any component, so a fully qualified sequence is

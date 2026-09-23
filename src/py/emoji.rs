@@ -136,13 +136,13 @@ fn demojize_impl(
 
         // Try custom Python provider first (if set).
         //
-        // The window fed to the provider is `win.as_slice()`, capped at
-        // `MAX_WINDOW` (9) chars by `CharWindow`'s stack buffer, so a custom
-        // provider can only ever match sequences up to 9 codepoints — the
-        // longest built-in CLDR sequence (`max_emoji_seq_len()`). Longer
+        // The provider is offered at most `max_emoji_seq_len()` code points, the
+        // longest built-in CLDR sequence, through the `max_len` argument below. The
+        // window itself is wider (`MAX_WINDOW` is twice that, for fully qualified
+        // sequences), but the cap is this argument, not the buffer. Longer
         // provider-supported sequences are silently unmatchable; this cap is
         // documented on `set_emoji_provider` / `EmojiProvider.lookup` (#199).
-        // Widening it would enlarge the per-position scan window for every
+        // Widening it would mean more provider calls at every position of every
         // demojize call, so it is intentionally fixed.
         if let Some(prov) = provider {
             if let Some((name, consumed)) =

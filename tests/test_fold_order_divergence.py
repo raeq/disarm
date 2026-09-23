@@ -103,6 +103,34 @@ def test_the_pages_state_the_measured_count(page: Path) -> None:
     assert len(_divergent("latin")) in counts, f"{page.name} does not state the Latin count"
 
 
+def test_the_docstring_and_the_pipeline_state_the_measured_counts() -> None:
+    """The two places #833 did not update, which kept saying 68 and 8.
+
+    The Lean model of the confusable fold (`formal/lean/Confusables`, F6) found them. The
+    docstring is what `help(normalize_confusables)` and the API reference render, so it is
+    read from the function itself; the pipeline comment is read from the source.
+    """
+    latin, cyrillic = len(_divergent("latin")), len(_divergent("cyrillic"))
+    doc = " ".join((disarm.normalize_confusables.__doc__ or "").split())
+    stated = re.search(r"\*\*(\d+) code points get a different answer\*\* .*?\((\d+) for the", doc)
+    assert stated, "the docstring no longer states the divergence count"
+    assert (int(stated.group(1)), int(stated.group(2))) == (latin, cyrillic)
+    assert f"43 of the {latin} favour the preset answer" in doc
+    assert "7 are judgment calls" in doc
+
+    comment = " ".join(
+        line.strip().lstrip("/").strip()
+        for line in (ROOT / "src" / "pipeline.rs").read_text(encoding="utf-8").splitlines()
+    )
+    stated = re.search(
+        r"and (\d+) code points get a different answer than "
+        r"`normalize_confusables` gives standalone \((\d+) for the Cyrillic target\)",
+        comment,
+    )
+    assert stated, "src/pipeline.rs no longer states the divergence count"
+    assert (int(stated.group(1)), int(stated.group(2))) == (latin, cyrillic)
+
+
 def test_the_buckets_add_up() -> None:
     """The four-class table on both pages: 30 + 13 + 15 + 7.
 

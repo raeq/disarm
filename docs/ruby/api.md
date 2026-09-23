@@ -536,13 +536,13 @@ reading is right for prose, where a Devanagari zero really is a zero and folding
 letter corrupts the number. TR39's is right for an identifier *skeleton*, whose only job
 is to make two confusable identifiers collide; it does not care whether the collision
 target reads sensibly.
-Three of the 45 divergent rows do not land on a letter: `٠` (U+0660) and `۰` (U+06F0)
+Three of the 47 divergent rows do not land on a letter: `٠` (U+0660) and `۰` (U+06F0)
 fold to `.`, and `𑣣` (U+118E3) folds to the two characters `rn`. If the skeleton feeds a
 label- or path-shaped key, that extra `.` changes its structure. Every value in the
 override set is ASCII — `build.rs` asserts it — so nothing else needs guarding.
 
 
-The two differ on 45 rows and agree on everything else. Reach for `tr39` when
+The two differ on 47 rows and agree on everything else. Reach for `tr39` when
 comparing against a TR39-derived benchmark, and leave the default alone for text.
 
 The policy is scoped to the Latin target. The override rows are generated from the

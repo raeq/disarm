@@ -122,7 +122,7 @@ class Text:
 
         ``digit_policy="tr39"`` selects upstream's digit targets, which fold most
         non-Latin digits to a Latin letter instead of the ASCII digit (#561). Three of
-        the 45 rows land elsewhere: two fold to ``.`` and one to the two characters
+        the 47 rows land elsewhere: two fold to ``.`` and one to the two characters
         ``rn``. Scoped to ``target_script="latin"``; with any other target it is a
         no-op.
 

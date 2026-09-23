@@ -226,6 +226,42 @@ fn normalize_confusables_output_is_never_confusable() {
     }
 }
 
+/// Completeness is a property of `Numeric` and `Tr39`. `Preserve` keeps the digit rows
+/// by design (#648), and `is_confusable` takes no policy, so it still flags them: the
+/// guide said "never itself confusable" without the qualification until the Lean model of
+/// the fold (`formal/lean/Confusables`, F2) measured 161 Latin code points like this one.
+#[test]
+fn preserve_keeps_what_is_confusable_flags() {
+    let zero = "\u{0966}"; // DEVANAGARI DIGIT ZERO
+    let kept =
+        api::normalize_confusables_with(zero, api::TargetScript::Latin, api::DigitPolicy::Preserve);
+    assert_eq!(kept, zero);
+    assert!(api::is_confusable(&kept, api::TargetScript::Latin));
+    for policy in [api::DigitPolicy::Numeric, api::DigitPolicy::Tr39] {
+        let folded = api::normalize_confusables_with(zero, api::TargetScript::Latin, policy);
+        assert!(
+            !api::is_confusable(&folded, api::TargetScript::Latin),
+            "{policy:?}"
+        );
+    }
+}
+
+/// The borrow contract as `normalize_confusables` documents it (F10). It used to say
+/// "borrowed when the input is already NFC and nothing folds", which fails both ways.
+#[test]
+fn normalize_confusables_borrows_as_documented() {
+    use std::borrow::Cow;
+    let fold = |s| api::normalize_confusables(s, api::TargetScript::Latin);
+    assert!(matches!(fold("paypal"), Cow::Borrowed(_)));
+    // NFC, and nothing folds, but a mark could compose: owned, and equal to the input.
+    let marked = fold("x\u{0301}");
+    assert!(matches!(marked, Cow::Owned(_)));
+    assert_eq!(marked, "x\u{0301}");
+    // Not NFC (its NFC is U+03A9), but nothing could compose and nothing folds.
+    assert!(matches!(fold("\u{2126}"), Cow::Borrowed(_)));
+    assert!(matches!(fold("p\u{0430}ypal"), Cow::Owned(_)));
+}
+
 /// F4 (the Lean model in `formal/lean/Confusables`): the fold is invariant to the
 /// input's normal form for the Unicode 16 compositions whose second element is a
 /// starter, on the layer every non-Python binding calls. The NFD came back as it went in.

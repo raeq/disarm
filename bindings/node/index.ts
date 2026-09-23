@@ -125,7 +125,7 @@ export type TargetScript = 'latin' | 'cyrillic'
  *
  * `'numeric'` (default) sends them to the ASCII digit — `०` becomes `0` — which is right
  * for prose. `'tr39'` uses upstream's targets, which send most of them to a Latin letter
- * (`०` → `o`), and that is what an identifier *skeleton* wants. The two differ on 45 rows.
+ * (`०` → `o`), and that is what an identifier *skeleton* wants. The two differ on 47 rows.
  *
  * Three of those rows do not land on a letter: `٠` and `۰` fold to `.`, and `𑣣` folds to
  * the two characters `rn`. A skeleton feeding a label- or path-shaped key has to allow

@@ -208,7 +208,7 @@ rather than when behaviour is wrong. Each exists because the drift they catch ha
 | Gate | Guards | Fails when |
 |---|---|---|
 | `bindings/cabi/disarm.h` diff (`C ABI (safer-ffi)` job) | The committed C header | An exported signature changes without the header being regenerated (#580) |
-| `tests/test_doc_table_counts.py` | 11 documented row counts across 5 files | A table is regenerated and prose still quotes the old figure (#591) |
+| `tests/test_doc_table_counts.py` | 32 documented row counts across 16 files | A table is regenerated and prose still quotes the old figure (#591) |
 | `build.rs` ASCII assertions | Generated table values | A generated value is non-ASCII, against #341's contract (#587) |
 | `JvmSignatureTest` (`Java binding (JDK …)` job) | Published JVM signatures | A Kotlin default argument deletes an arity that shipped (#588) |
 

@@ -61,9 +61,9 @@ module Disarm
     # right for prose, where a Devanagari zero really is a zero.
     #
     # `:tr39` uses upstream's targets, which send most of them to a Latin letter
-    # (`०` → `o`; three of the 45 rows fold to `.` or to the two characters `rn`
+    # (`०` → `o`; three of the 47 rows fold to `.` or to the two characters `rn`
     # instead). That is what an identifier *skeleton* wants, since its only job is to
-    # make two confusable identifiers collide. The two differ on 45 rows and agree
+    # make two confusable identifiers collide. The two differ on 47 rows and agree
     # everywhere else. Scoped to `target: :latin` — the override rows are generated from
     # the Latin table and carry TR39's Latin-script targets, so with `target: :cyrillic`
     # it is a no-op.

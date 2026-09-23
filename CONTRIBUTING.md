@@ -378,7 +378,11 @@ cargo test --no-default-features \
 # Confusables on the Layer-2 API: the BMP crossed with composing marks, checked for
 # idempotence and for output that is still confusable (#586). Deliberately separate
 # from the lib-level sweep below, which tests Layer 1 — testing the layer beneath the
-# one the bindings call is how #586 survived a year. --release keeps it near 1s.
+# one the bindings call is how #586 survived a year. The same file sweeps
+# `skeleton_key` for idempotence over every scalar, and over the BMP crossed with
+# every composing mark with and without a control between (F1 of the Lean model in
+# formal/lean/Confusables). Under --release that is about a minute; the fold sweeps
+# alone take about a second.
 cargo test --no-default-features --release \
   --test exhaustive_confusables -- --ignored
 

@@ -259,6 +259,17 @@ pub fn unicode_version() -> &'static str {
 /// runs only on non-Latin text, so these characters reach its `collapse_whitespace`
 /// step intact and become a space there. The fixture had no row with either; two were
 /// added.
+///
+/// And a fix from the Lean model of the confusable fold, `formal/lean/Confusables`.
+/// `skeleton_key` moves where its key was not a fixed point. Full case folding left
+/// U+0390 as `i` + U+0308 + U+0301, now U+1E2F; a fold that exposed a composition left
+/// U+00A5 + U+0300 as `y` + U+0300, now U+00FD, and U+04AA + U+0327 as `c` + U+0327,
+/// now `c` like U+00E7. A control or zero-width character between a base and its mark
+/// was removed after the last fold, so `a` + U+0001 + U+0300 keyed as `a` + U+0300 and
+/// now keys as U+00E0; and any character the strip steps remove, sitting there, kept
+/// NFKC from composing the pair, so `I` + U+200B + U+0301 keyed as `l` + U+0301 and now
+/// keys as U+00ED, like `I` + U+0301. The fixture does not track `skeleton_key`, so none
+/// of that shows in it.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).

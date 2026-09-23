@@ -147,7 +147,11 @@ def test_the_documented_pipeline_names_the_second_confusable_pass() -> None:
     mentioning it the first does.
     """
     doc = disarm.skeleton_key.__doc__ or ""
-    assert "fixed-point(fold_case → confusables)" in doc, "the summary lost the second pass"
+    # NFKC joined the loop with F1 (below): the fold and the case fold can each leave the
+    # text decomposed, so the loop recomposes before it compares.
+    assert "fixed-point(fold_case \u2192 confusables \u2192 NFKC)" in doc, (
+        "the summary lost the second pass"
+    )
 
     # The worked example the docstring gives, evaluated.
     ohm = "\u2126"  # OHM SIGN — NFKC folds it to GREEK CAPITAL OMEGA
@@ -177,3 +181,86 @@ def test_the_empty_key_problem_is_not_made_worse() -> None:
     assert disarm.skeleton_key("") == ""
     assert disarm.skeleton_key("paypaI") != ""
     assert disarm.skeleton_key("100", digit_policy="tr39") != ""
+
+
+# --- F1: the key is a fixed point (the Lean model in `formal/lean/Confusables`) ---------
+#
+# `skeleton_key` was not idempotent, so two spellings of one identity could key apart:
+# full case folding emits a decomposed sequence and nothing recomposed it (U+0390), the
+# fold leaves a base beside a mark it composes with (U+00A5 + grave, and the #522 pair
+# U+04AA + cedilla against U+00E7), and a control or invisible between a base and its mark
+# was removed only after the fold. Escapes throughout: a literal invisible in a source
+# file is unreviewable (#802).
+
+#: (input, the key it must reach). Every row failed before the fix.
+F1_WITNESSES = [
+    ("\u0390", "\u1e2f"),  # GREEK SMALL IOTA WITH DIALYTIKA AND TONOS
+    ("\u03b0", "\u01d8"),  # GREEK SMALL UPSILON WITH DIALYTIKA AND TONOS
+    ("\u00a5\u0300", "\u00fd"),  # YEN SIGN folds to Y, which composes with the grave
+    ("\u04aa\u0327", "c"),  # the #522 pair...
+    ("\u00e7", "c"),  # ...and its target, the same key
+    ("a\x01\u0300", "\u00e0"),  # a control between a base and its mark
+    ("cafe\x01\u0301", "caf\u00e9"),
+    ("I\u200b\u0301", "\u00ed"),  # a ZWSP moved the prototype fold onto the base
+    ("I\ufe00\u0301", "\u00ed"),  # so did a variation selector
+    ("I\u202e\u0301", "\u00ed"),  # and a bidi override
+]
+
+
+@pytest.mark.parametrize("policy", ["numeric", "tr39", "preserve"])
+@pytest.mark.parametrize(("text", "key"), F1_WITNESSES, ids=[ascii(t) for t, _ in F1_WITNESSES])
+def test_the_lean_witnesses_reach_a_fixed_point(text: str, key: str, policy: str) -> None:
+    once = disarm.skeleton_key(text, digit_policy=policy)
+    assert once == key
+    assert disarm.skeleton_key(once, digit_policy=policy) == once
+
+
+def test_the_522_pair_collides() -> None:
+    """A spoof key exists to make these two collide, and it did not."""
+    assert disarm.skeleton_key("\u04aa\u0327") == disarm.skeleton_key("\u00e7")
+
+
+#: Bases from the blocks the failures came from, and marks that compose with them.
+_BASES = [chr(c) for r in ((0x20, 0x250), (0x370, 0x530), (0x1E00, 0x2000)) for c in range(*r)]
+_MARKS = ["\u0300", "\u0301", "\u0302", "\u0303", "\u0308", "\u030a", "\u030c", "\u0327"]
+#: A control, a zero-width space, a variation selector, a bidi override, a tag.
+_BETWEEN = ["\x01", "\u200b", "\ufe00", "\u202e", "\U000e0041"]
+
+
+@pytest.mark.parametrize("policy", ["numeric", "tr39"])
+def test_it_is_a_fixed_point_over_the_classes_that_failed(policy: str) -> None:
+    """Idempotent, and never itself confusable, over the failing classes.
+
+    Each base alone and before each mark, directly and with a character from each
+    stripped class between them. The whole of Unicode is `exhaustive_skeleton_key_*` in
+    `tests/exhaustive_confusables.rs` (tier 3). `preserve` is left out of the
+    confusability half on purpose: it keeps the digit rows `is_confusable` flags (#648).
+    """
+    sk = disarm.skeleton_key
+    failures = []
+    for base in _BASES:
+        probes = (
+            [base] + [base + mark for mark in _MARKS] + [base + "\x01" + mark for mark in _MARKS]
+        )
+        for probe in probes:
+            once = sk(probe, digit_policy=policy)
+            if sk(once, digit_policy=policy) != once or disarm.is_confusable(once):
+                failures.append(probe)
+    assert not failures, [ascii(f) for f in failures[:10]]
+
+
+def test_an_invisible_between_a_base_and_its_mark_does_not_move_the_key() -> None:
+    """#805's promise, for the one position it did not hold in.
+
+    The strip steps ran after NFKC, so a character they remove still blocked the
+    composition, and the key saw the base alone: `I` + ZWSP + acute keyed as `l` + acute.
+    """
+    sk = disarm.skeleton_key
+    failures = [
+        (base, between, mark)
+        for base in _BASES
+        for mark in _MARKS
+        for between in _BETWEEN
+        if sk(base + between + mark) != sk(base + mark)
+    ]
+    assert not failures, [ascii("".join(f)) for f in failures[:10]]

@@ -7,7 +7,7 @@
 //! cargo test --no-default-features --test exhaustive_confusables -- --ignored
 //! ```
 //!
-//! The two properties below are what #586 was actually about. `normalize_confusables`
+//! The first two properties below are what #586 was actually about. `normalize_confusables`
 //! ran a single pass, so a base character whose fold *exposed* a composition (or whose
 //! composition exposed a fold) came back half-done: not a fixed point, and still
 //! flagged by `is_confusable`. The spot-check cases live in `api_pure_rust.rs`; these
@@ -92,6 +92,106 @@ fn exhaustive_folded_output_is_never_confusable() {
     assert!(
         failures.is_empty(),
         "Fold left confusable output for {} marked bases:\n{}",
+        failures.len(),
+        failures[..failures.len().min(20)].join("\n")
+    );
+}
+
+/// Every scalar value, not only the BMP: `skeleton_key` reaches astral text too.
+fn all_scalars() -> impl Iterator<Item = char> {
+    (0u32..=0x10_FFFF).filter_map(char::from_u32)
+}
+
+/// The combining marks that take part in a canonical composition: every mark after the
+/// first position in the NFD of a primary composite. Derived rather than listed, so it
+/// follows the Unicode version the crate normalizes with.
+fn composing_marks() -> Vec<char> {
+    use unicode_normalization::char::is_combining_mark;
+    use unicode_normalization::UnicodeNormalization;
+    let mut marks = std::collections::BTreeSet::new();
+    for c in all_scalars() {
+        let nfd: Vec<char> = std::iter::once(c).nfd().collect();
+        if nfd.len() >= 2 && nfd.iter().copied().nfc().eq(std::iter::once(c)) {
+            marks.extend(nfd[1..].iter().copied().filter(|&m| is_combining_mark(m)));
+        }
+    }
+    marks.into_iter().collect()
+}
+
+fn skeleton(text: &str, policy: DigitPolicy) -> String {
+    api::skeleton_key(text, policy)
+        .expect("a typed policy is always valid")
+        .into_owned()
+}
+
+/// `skeleton_key` is a fixed point, and its key is not confusable, on every scalar value
+/// alone. A key that is not a fixed point is not a key: before the Lean model of the fold
+/// (`formal/lean/Confusables`, F1) eight code points failed here, U+0390 first, because
+/// full case folding emits a decomposed sequence and nothing recomposed it.
+///
+/// Confusability is asserted under `numeric` and `tr39` only: `preserve` keeps the digit
+/// rows by design (#648), and `is_confusable` takes no policy, so it flags them.
+#[test]
+#[ignore = "exhaustive: slow, run with --ignored"]
+fn exhaustive_skeleton_key_scalars() {
+    let mut failures = Vec::new();
+    for policy in [
+        DigitPolicy::Numeric,
+        DigitPolicy::Tr39,
+        DigitPolicy::Preserve,
+    ] {
+        for c in all_scalars() {
+            let input = c.to_string();
+            let once = skeleton(&input, policy);
+            let twice = skeleton(&once, policy);
+            let flagged =
+                policy != DigitPolicy::Preserve && api::is_confusable(&once, TargetScript::Latin);
+            if once != twice || flagged {
+                failures.push(format!(
+                    "U+{:04X} {policy:?}: once={once:?}, twice={twice:?}, confusable={flagged}",
+                    c as u32
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "skeleton_key failed on {} scalars:\n{}",
+        failures.len(),
+        failures[..failures.len().min(20)].join("\n")
+    );
+}
+
+/// The same over every BMP base carrying a composing mark, directly and with a control
+/// between the two. Before F1's fix 9,526 of the direct pairs and 40,229 of the
+/// separated ones (over the 85 marks Unicode 14 knows) keyed to a string that keyed
+/// again to something else: the fold left `Y` beside a grave accent, or the control
+/// was removed only after the last fold.
+#[test]
+#[ignore = "exhaustive: slow, run with --ignored"]
+fn exhaustive_skeleton_key_marked_bases() {
+    let marks = composing_marks();
+    let mut failures = Vec::new();
+    for policy in [DigitPolicy::Numeric, DigitPolicy::Tr39] {
+        for base in bmp_bases() {
+            for &mark in &marks {
+                for between in ["", "\u{1}"] {
+                    let input = format!("{base}{between}{mark}");
+                    let once = skeleton(&input, policy);
+                    let twice = skeleton(&once, policy);
+                    let flagged = api::is_confusable(&once, TargetScript::Latin);
+                    if once != twice || flagged {
+                        failures.push(format!(
+                            "{input:?} {policy:?}: once={once:?}, twice={twice:?}, confusable={flagged}"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "skeleton_key failed on {} marked bases:\n{}",
         failures.len(),
         failures[..failures.len().min(20)].join("\n")
     );

@@ -326,8 +326,10 @@ pub fn lookup_default(ch: char) -> Option<&'static str> {
 pub fn lookup_default_toned(ch: char) -> Option<&'static str> {
     let cp = ch as u32;
 
-    if ur::CJK_EXT_A.contains(&cp) || ur::CJK_UNIFIED.contains(&cp) || ur::CJK_COMPAT.contains(&cp)
-    {
+    if ur::CJK_EXT_A.contains(&cp) || ur::CJK_UNIFIED.contains(&cp) {
+        return hanzi_pinyin::lookup_hanzi_toned(ch).or_else(|| transliteration::lookup(ch));
+    }
+    if ur::CJK_COMPAT.contains(&cp) {
         return hanzi_pinyin::lookup_hanzi_toned(canonical_ideograph(ch))
             .or_else(|| transliteration::lookup(ch));
     }

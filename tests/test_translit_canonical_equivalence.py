@@ -11,6 +11,7 @@ decomposition, against both its NFC and its NFD form, in both tone modes.
 
 from __future__ import annotations
 
+import functools
 import sys
 import unicodedata
 
@@ -19,7 +20,9 @@ import pytest
 from disarm import transliterate
 
 
-def _decomposable() -> list[str]:
+@functools.cache
+def _decomposable() -> tuple[str, ...]:
+    """Scanned once and shared by both tone modes (Copilot review on #1013)."""
     out = []
     for cp in range(0x80, sys.maxunicode + 1):
         if 0xD800 <= cp <= 0xDFFF:
@@ -27,7 +30,7 @@ def _decomposable() -> list[str]:
         ch = chr(cp)
         if unicodedata.normalize("NFD", ch) != ch or unicodedata.normalize("NFC", ch) != ch:
             out.append(ch)
-    return out
+    return tuple(out)
 
 
 @pytest.mark.parametrize("tones", [False, True])

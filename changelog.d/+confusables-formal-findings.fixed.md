@@ -1,4 +1,4 @@
-- **A `skeleton_key` defect found by a Lean model of the confusable fold
+- **Two defects found by a Lean model of the confusable fold
   (`formal/lean/Confusables`).** The model mirrors the fold, compose-at-lookup and
   `skeleton_key` step by step, agrees with the library on 404,205 differential inputs,
   and each of its counterexamples was reproduced on the library before anything changed.
@@ -19,6 +19,18 @@
     129,200 Latin, Greek and Cyrillic base-mark pairs moved that way for each invisible
     tried. `tests/exhaustive_confusables.rs` now sweeps `skeleton_key` over every scalar
     and the BMP crossed with every composing mark (tier 3).
+  - **The Unicode 16 Kirat Rai compositions were left decomposed.** U+16D67 is a
+    starter, not a mark, and composes with the character before it: U+16D67 U+16D67 is
+    the NFD of U+16D68. Compose-at-lookup ended a cluster at the first non-mark, so
+    `normalize_confusables` answered the two forms differently, against the normal-form
+    invariance it documents. The presets' fast-path guard tested NFKC one character at a
+    time, so `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `skeleton_key`,
+    `security_clean`, `normalize_user_input` and `slugify_unicode` returned the NFD as
+    it came under the default policy, while `digit_policy="tr39"`, which bypasses the
+    guard, composed it. A cluster now takes in the starter, the guard declines it, and a
+    test walks every primary composition in Unicode so that a third class of
+    backward-composing starter fails a test before it reaches a key.
 
-  `skeleton_key` output moves for these inputs; `KEY_SCHEMA_VERSION` 10 is unreleased
-  and records it.
+  `skeleton_key` output moves for the first. `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation` and `normalize_confusables` move for Kirat Rai text in NFD, as
+  `skeleton_key` does. `KEY_SCHEMA_VERSION` 10 is unreleased and records both.

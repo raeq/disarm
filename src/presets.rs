@@ -776,8 +776,16 @@ fn acts_on_nonascii(
         // #471: the cheap conjoining-jamo range check runs first. NFKC *composes* an
         // L+V(+T) jamo sequence into one syllable — a cross-character operation; each
         // jamo is NFKC-stable in isolation, so the per-scalar `nfkc_changes` cannot
-        // see it. A jamo must therefore always decline the fast path.
-        || (m.nfkc && (is_conjoining_jamo(ch) || nfkc_changes(ch)))
+        // see it. A jamo must therefore always decline the fast path. The same holds
+        // for the one other starter that composes with the character before it,
+        // U+16D67 (Kirat Rai, Unicode 16): U+16D67 U+16D67 is the NFD of U+16D68, and
+        // the default policy returned it unnormalized while `tr39`, which bypasses
+        // this guard, composed it (F3, found by the Lean model in
+        // `formal/lean/Confusables`).
+        || (m.nfkc
+            && (is_conjoining_jamo(ch)
+                || crate::compose::composes_with_preceding_starter(ch)
+                || nfkc_changes(ch)))
         || (m.strip_accents && decomposes_to_mark(ch))
         || m.zalgo_cap.is_some_and(|cap| nfd_mark_run_exceeds(ch, cap))
 }
@@ -2543,6 +2551,35 @@ mod tests {
                 let guarded = strip_obfuscation(&input).unwrap();
                 let full = without_fastpath(|| strip_obfuscation(&input).unwrap());
                 assert_eq!(guarded, full, "fast path != full on L={l:#06X} V={v:#06X}");
+            }
+        }
+    }
+
+    /// F3 (the Lean model in `formal/lean/Confusables`): the one starter outside Hangul
+    /// that composes with the character before it. U+16D67 U+16D67 is the NFD of
+    /// U+16D68, each is NFKC-stable alone and neither is a mark, so the guard fast-pathed
+    /// the pair and every NFKC preset returned it unnormalized under the default policy,
+    /// while `tr39`, which bypasses the guard, composed it.
+    #[test]
+    fn fast_path_composes_kirat_rai() {
+        let cases = [
+            ("\u{16D67}\u{16D67}", "\u{16D68}"),
+            ("\u{16D63}\u{16D67}", "\u{16D69}"),
+            ("\u{16D63}\u{16D67}\u{16D67}", "\u{16D6A}"),
+        ];
+        for (input, composed) in cases {
+            for (name, f) in all_presets() {
+                let guarded = f(input);
+                let full = without_fastpath(|| f(input));
+                assert_eq!(guarded, full, "{name}: fast path != full on {input:?}");
+            }
+            for (name, out) in [
+                ("canonicalize", canonicalize(input).unwrap()),
+                ("canonicalize_strict", canonicalize_strict(input).unwrap()),
+                ("strip_obfuscation", strip_obfuscation(input).unwrap()),
+                ("skeleton_key", skeleton_key(input, "numeric").unwrap()),
+            ] {
+                assert_eq!(out, composed, "{name} left {input:?} decomposed");
             }
         }
     }

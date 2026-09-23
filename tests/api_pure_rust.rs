@@ -226,6 +226,33 @@ fn normalize_confusables_output_is_never_confusable() {
     }
 }
 
+/// F4 (the Lean model in `formal/lean/Confusables`): the fold is invariant to the
+/// input's normal form for the Unicode 16 compositions whose second element is a
+/// starter, on the layer every non-Python binding calls. The NFD came back as it went in.
+#[test]
+fn normalize_confusables_composes_a_starter_pair() {
+    for (nfc, nfd) in [
+        ("\u{16D68}", "\u{16D67}\u{16D67}"),
+        ("\u{16D69}", "\u{16D63}\u{16D67}"),
+        ("\u{16D6A}", "\u{16D63}\u{16D67}\u{16D67}"),
+    ] {
+        for policy in [
+            api::DigitPolicy::Numeric,
+            api::DigitPolicy::Tr39,
+            api::DigitPolicy::Preserve,
+        ] {
+            let fold = |s| api::normalize_confusables_with(s, api::TargetScript::Latin, policy);
+            assert_eq!(fold(nfd), fold(nfc), "{nfd:?} under {policy:?}");
+            assert_eq!(fold(nfd), nfc);
+        }
+        assert_eq!(
+            api::skeleton_key(nfd, api::DigitPolicy::Numeric).unwrap(),
+            nfc,
+            "skeleton_key on {nfd:?}"
+        );
+    }
+}
+
 /// `f(f(x)) == f(x)` on the Layer-2 path, under both digit policies and both targets.
 #[test]
 fn normalize_confusables_is_idempotent() {

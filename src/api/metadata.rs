@@ -260,7 +260,7 @@ pub fn unicode_version() -> &'static str {
 /// step intact and become a space there. The fixture had no row with either; two were
 /// added.
 ///
-/// And a fix from the Lean model of the confusable fold, `formal/lean/Confusables`.
+/// And three fixes from the Lean model of the confusable fold, `formal/lean/Confusables`.
 /// `skeleton_key` moves where its key was not a fixed point. Full case folding left
 /// U+0390 as `i` + U+0308 + U+0301, now U+1E2F; a fold that exposed a composition left
 /// U+00A5 + U+0300 as `y` + U+0300, now U+00FD, and U+04AA + U+0327 as `c` + U+0327,
@@ -270,6 +270,12 @@ pub fn unicode_version() -> &'static str {
 /// NFKC from composing the pair, so `I` + U+200B + U+0301 keyed as `l` + U+0301 and now
 /// keys as U+00ED, like `I` + U+0301. The fixture does not track `skeleton_key`, so none
 /// of that shows in it.
+///
+/// `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `normalize_confusables`
+/// and `skeleton_key` also move for the Kirat Rai compositions, whose second element is
+/// a starter rather than a mark: U+16D67 U+16D67 came back as it went in and is now
+/// U+16D68, as its NFC always keyed (and U+16D69, U+16D6A likewise). The fixture had no
+/// Kirat Rai; six rows were added, both forms of each.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -305,7 +311,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "b237aab41eb5e56b115bbcb06423a446c52950c97d1df9a5e4495c527f9bd127";
+    "63e34eae2198c5a991354a099d567895c41b2e7e832169997d026313d6768efc";
 
 /// The key-schema counter, as a function (#645).
 ///

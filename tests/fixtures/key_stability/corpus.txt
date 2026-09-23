@@ -23194,3 +23194,9 @@ abc\x0b\x08def
 ​ZZZZZZ\rpaypal
 pay\u2028pal
 pay\u2029pal
+𖵨
+𖵨
+𖵩
+𖵩
+𖵪
+𖵪

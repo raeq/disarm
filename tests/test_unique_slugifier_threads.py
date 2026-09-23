@@ -33,11 +33,15 @@ def _run(u: UniqueSlugifier, titles: list[str]) -> tuple[list[str], list[BaseExc
             with lock:
                 slugs.append(slug)
 
-    threads = [threading.Thread(target=worker, args=(t,)) for t in titles]
+    # Daemon threads, and an explicit check that each finished: a hung call must fail
+    # here by name, not as a missing slug, and must not hold the interpreter open at
+    # exit (Copilot review on #1014).
+    threads = [threading.Thread(target=worker, args=(t,), daemon=True) for t in titles]
     for t in threads:
         t.start()
     for t in threads:
         t.join(timeout=30)
+    assert not any(t.is_alive() for t in threads), "a call did not return within 30 s"
     return slugs, errors
 
 

@@ -17,8 +17,10 @@
 //! one test, in this binary of their own, cap first.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use disarm::api::{self, Transliterate};
 use disarm::tables::MAX_REGISTERED_LANGS;
@@ -85,11 +87,13 @@ fn registration_is_atomic_with_its_cap_and_with_the_seal() {
             .collect()
     };
     let barrier = Arc::new(Barrier::new(writers + 1));
+    let total = Arc::new(AtomicUsize::new(0));
     let handles: Vec<_> = codes
         .clone()
         .into_iter()
         .map(|code| {
             let barrier = Arc::clone(&barrier);
+            let total = Arc::clone(&total);
             thread::spawn(move || {
                 let mut mapping = wide_mapping();
                 barrier.wait();
@@ -100,12 +104,23 @@ fn registration_is_atomic_with_its_cap_and_with_the_seal() {
                         return landed;
                     }
                     landed += 1;
+                    total.fetch_add(1, Ordering::Relaxed);
                 }
             })
         })
         .collect();
     barrier.wait();
-    thread::sleep(std::time::Duration::from_millis(50));
+    // Seal once the writers are demonstrably running, rather than after a fixed sleep:
+    // two writes per writer means every one of them is inside its loop, so a seal now
+    // lands while registrations are in flight (Copilot review on #1014).
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while total.load(Ordering::Relaxed) < 2 * writers {
+        assert!(
+            Instant::now() < deadline,
+            "the writers never ran before the seal"
+        );
+        thread::yield_now();
+    }
     api::seal_registrations();
     let at_seal = read_back(&codes);
     let landed: usize = handles

@@ -557,8 +557,9 @@ Disarm.normalize_confusables("g\u{0966}\u{0966}gle", digit_policy: :tr39) # => "
 
 ### `Disarm.ml_normalize`
 
-ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold] →
-strip control → strip zero-width → collapse whitespace.
+ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate → strip
+accents → emoji→text → [case fold] → strip control → strip zero-width → collapse
+whitespace → NFC.
 
 `fold_case:` defaults to `true`, which suits the uncased tokenizers most pipelines use.
 Pass `false` in front of a **cased** model — folding is destructive, cannot be undone

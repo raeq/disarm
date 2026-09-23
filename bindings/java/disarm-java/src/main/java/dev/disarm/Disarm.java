@@ -730,8 +730,9 @@ public final class Disarm {
     }
 
     /**
-     * ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
-     * [case fold] → strip control → strip zero-width → collapse whitespace.
+     * ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate →
+     * strip accents → emoji→text → [case fold] → strip control → strip zero-width →
+     * collapse whitespace → NFC.
      *
      * <p>Folds no confusables, so it is <b>not</b> a homoglyph defence at any setting;
      * compose it after {@link #normalizeConfusables(String, TargetScript)} when a model

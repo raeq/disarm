@@ -333,7 +333,16 @@ class TestPresets:
                 assert len(step) == 2, f"{name}: step {step!r} has wrong length"
 
     def test_security_clean_starts_with_nfkc(self) -> None:
-        assert PRESETS["canonicalize"][0] == ("normalize", "NFKC")
+        # The first *normalization* is NFKC. Two steps precede it and change nothing a
+        # normalization would see first: the deletion resolver (#937), which has to read
+        # the code points as the renderer saw them, and the digit-policy pre-fold, a no-op
+        # under the default.
+        steps = PRESETS["canonicalize"]
+        assert steps[:3] == [
+            ("resolve_deletions", None),
+            ("policy_pre_fold", "latin"),
+            ("normalize", "NFKC"),
+        ]
 
     def test_display_clean_is_minimal(self) -> None:
         # strip_bidi → strip_invisibles (#413) → strip_control → strip_zero_width

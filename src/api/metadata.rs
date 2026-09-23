@@ -276,6 +276,27 @@ pub fn unicode_version() -> &'static str {
 /// a starter rather than a mark: U+16D67 U+16D67 came back as it went in and is now
 /// U+16D68, as its NFC always keyed (and U+16D69, U+16D6A likewise). The fixture had no
 /// Kirat Rai; six rows were added, both forms of each.
+///
+/// And four fixes from the Lean model of the presets, `formal/lean/Presets`, each moving a
+/// key only where it was not a fixed point, so no stable value moves:
+///
+/// * `strip_obfuscation` and `ml_normalize` end with an NFC pass. A control (both) or a
+///   zero-width character (`ml_normalize`) between two characters that compose was
+///   stripped after the last step that composes: conjoining jamo U+1100 + NUL + U+1161
+///   keyed as the two jamo, and the key of that was U+AC00. It is U+AC00 now. The fixture
+///   had no such row and was green through the change; three were added, and
+///   `strip_obfuscation` is the column that moves on them.
+/// * `search_key` and `sort_key` under `digit_policy="tr39"` or `"preserve"` run to a fixed
+///   point: U+A760 keyed as U+A761 and is now `w`; U+01C1 (`search_key`) as `||` and is now
+///   `ll`; U+0100 (`sort_key`, `tr39`) as U+0101 and is now U+00E3. The default policy does
+///   not move, and the fixture, which is built under the default, cannot see it.
+/// * The named profiles run to a fixed point, which moves `llm_guardrail`,
+///   `ml_corpus_normalize` and `normalize_web_input` on strings such as U+00A2 + U+0338
+///   (was `c` + U+0338, now `c`). Profiles are not in the fixture.
+/// * The output ceiling bounds growth rather than size, after every step. No stored key
+///   moves: an input over 10 MiB that no step grows is accepted where one with an
+///   actionable byte was refused, and an input that `ml_normalize`'s emoji naming grows by
+///   more than 10 MiB is refused where it used to return up to ten times its size.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -311,7 +332,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "63e34eae2198c5a991354a099d567895c41b2e7e832169997d026313d6768efc";
+    "7ff458bc43283deda49c910af3a0072d6b11d603eb65a5a63b154571c7e96ff4";
 
 /// The key-schema counter, as a function (#645).
 ///

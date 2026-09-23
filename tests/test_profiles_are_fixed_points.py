@@ -160,3 +160,115 @@ def test_a_pipeline_without_normalization_still_folds_once() -> None:
     single = disarm.TextPipeline(confusables=True)
     assert [n for n, _ in single.steps] == ["confusables"]
     assert single("\u0430pple") == "apple"
+
+
+# ---------------------------------------------------------------------------
+# The Lean model of the presets (`formal/lean/Presets`), Findings 3 and 4
+# ---------------------------------------------------------------------------
+#
+# The sweeps above are one code point, or a base and a mark. Both findings need a second
+# character of another kind: a negation overlay on a symbol the fold turns into a letter
+# (or on a PUA code point the PUA strip deletes), or a removable character between two
+# characters that compose. The model found them over its words and the library search
+# confirmed them over millions of strings; the profiles now run to a fixed point.
+
+
+def _w(*cps: int) -> str:
+    return "".join(map(chr, cps))
+
+
+#: The model's witnesses, and the shapes around them.
+LEAN_WITNESSES = [
+    _w(0xA2, 0x338),
+    _w(0x222A, 0x338),
+    _w(0x2200, 0x20D2),
+    _w(0xE000, 0x338),
+    _w(0xF0000, 0x20D2),
+    _w(0x1100, 0x200B, 0x1161),
+    _w(0x1100, 0x0, 0x1161),
+    _w(0x1100, 0x8, 0x1161),
+    _w(0x65, 0x8, 0x301),
+    _w(0x63, 0x0, 0x327),
+    _w(0x49, 0xE000, 0x301),
+    _w(0x61, 0x200B, 0x300),
+    _w(0x3D, 0x200B, 0x338),
+]
+
+
+@pytest.mark.parametrize("name", disarm.list_profiles())
+def test_the_profile_is_a_fixed_point_on_the_lean_witnesses(name: str) -> None:
+    pipeline = disarm.get_pipeline(name)
+    for text in LEAN_WITNESSES:
+        once = pipeline(text)
+        assert pipeline(once) == once, f"{name}({text!r}) = {once!r} moves again"
+
+
+#: The two negation overlays #749 keeps on a base that is not alphanumeric.
+OVERLAYS = (0x338, 0x20D2)
+
+#: A sample of each Private Use Area, whose code points `strip_pua` deletes after the mark
+#: strip has kept an overlay on them.
+PUA_SAMPLE = (0xE000, 0xF8FF, 0xF0000, 0x100000)
+
+
+@functools.cache
+def _bases_the_fold_moves() -> tuple[int, ...]:
+    """The bases of Finding 3: every code point the confusable fold rewrites."""
+    return tuple(
+        cp
+        for cp in _bases_that_can_move_under_a_fold()
+        if disarm.normalize_confusables(chr(cp)) != chr(cp)
+    )
+
+
+@pytest.mark.parametrize("name", disarm.list_profiles())
+def test_the_profile_is_a_fixed_point_on_pair_strings(name: str) -> None:
+    """Every base the fold rewrites, and the PUA, beside each overlay on either side: the
+    model's `pairs` family, cut to the bases Finding 3 needs."""
+    pipeline = disarm.get_pipeline(name)
+    moved = []
+    for cp in (*_bases_the_fold_moves(), *PUA_SAMPLE):
+        for overlay in OVERLAYS:
+            for text in (_w(cp, overlay), _w(overlay, cp)):
+                once = pipeline(text)
+                if pipeline(once) != once:
+                    moved.append((hex(cp), hex(overlay), once))
+    assert not moved, f"{name}: {len(moved)} pairs move on a second pass; {moved[:5]}"
+
+
+#: The model's `F1` family, cut down: bases of every class a step branches on, the
+#: characters a profile removes, and marks that compose with the bases.
+F1_BASES = (0x61, 0x65, 0x75, 0x41, 0x49, 0xA2, 0x3D, 0x3C, 0x20, 0x31, 0xDF, 0xE000, 0xE9)
+F1_GLUE = (0x200B, 0x34F, 0x8, 0x7F, 0xFE0F, 0xAD, 0x202E, 0xE0041, 0x0, 0x2060, 0x200D, 0xFDD0)
+F1_MARKS = (0x300, 0x301, 0x302, 0x308, 0x30A, 0x327, 0x338, 0x20D2)
+
+
+@pytest.mark.parametrize("name", disarm.list_profiles())
+def test_the_profile_is_a_fixed_point_on_separated_compositions(name: str) -> None:
+    """Finding 4: a character removed after `normalize` between a base and a mark."""
+    pipeline = disarm.get_pipeline(name)
+    moved = []
+    for base in F1_BASES:
+        for glue in F1_GLUE:
+            for mark in F1_MARKS:
+                for text in (_w(base, glue, mark), _w(base, mark, glue, mark)):
+                    once = pipeline(text)
+                    if pipeline(once) != once:
+                        moved.append(ascii(text))
+    assert not moved, f"{name}: {len(moved)} move; {moved[:5]}"
+
+
+@pytest.mark.parametrize("name", disarm.list_profiles())
+def test_the_profile_is_a_fixed_point_on_separated_jamo(name: str) -> None:
+    """The model's `F3` family without the trailing consonant: a leading consonant and a
+    vowel, which compose with no mark involved, with a removable character between."""
+    pipeline = disarm.get_pipeline(name)
+    glue = (0x200B, 0x34F, 0x8, 0x7F, 0xFE0F, 0xAD, 0x202E, 0x0, 0x2060, 0x200D, 0xFDD0)
+    moved = []
+    for lead in range(0x1100, 0x1113):
+        for vowel in range(0x1161, 0x1176):
+            for g in glue:
+                once = pipeline(_w(lead, g, vowel))
+                if pipeline(once) != once:
+                    moved.append((hex(lead), hex(g), hex(vowel)))
+    assert not moved, f"{name}: {len(moved)} move; {moved[:5]}"

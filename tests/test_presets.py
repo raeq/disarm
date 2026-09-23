@@ -437,24 +437,28 @@ class TestMlNormalizeEmojiStyle:
 class TestPresetsMetadataOrder:
     """#141: PRESETS metadata must reflect the real execution order."""
 
-    def test_strip_obfuscation_confusables_after_demojize(self) -> None:
-        # src/presets.rs::_strip_obfuscation runs confusables AFTER demojize so
-        # typographic punctuation inside emoji names is folded too (idempotency).
+    def test_strip_obfuscation_order(self) -> None:
+        # There is no demojize step to order against since #910 — a comparison surface
+        # must not write attacker-chosen words — and `PRESETS` listed one until the Lean
+        # model's Finding 5. The fold still runs before strip_accents, which strips any
+        # mark a skeleton emits, and a terminal NFC closes the list (Finding 4).
         from disarm import PRESETS
 
         steps = [name for name, _ in PRESETS["strip_obfuscation"]]
-        assert steps.index("confusables") > steps.index("demojize")
+        assert "demojize" not in steps
         assert steps == [
+            "resolve_deletions",
+            "policy_pre_fold",
             "normalize",
             "strip_zalgo",
             "strip_bidi",
             "strip_zero_width",
-            "demojize",
             "strip_invisibles",
             "confusables",
             "strip_accents",
             "strip_control",  # #433: explicit before the fold
             "collapse_whitespace",
+            "normalize",
         ]
 
 

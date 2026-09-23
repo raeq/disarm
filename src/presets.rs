@@ -53,6 +53,14 @@ struct PresetCtx<'a> {
     /// instead keeps one list per preset and leaves the monomorphisation of #695/#868
     /// alone. Every other preset sets `Numeric`, which is what they did implicitly.
     digit_policy: crate::confusables::DigitPolicy,
+    /// The byte length of the text the preset was called with: the base the output ceiling
+    /// measures growth from ([`check_growth`]).
+    ///
+    /// On the context rather than read from each step's input, because a step inside a
+    /// `FixedPoint`, and every pass of the policy iteration, sees an intermediate string
+    /// that has already grown. Measuring from there would let each pass grow by the full
+    /// allowance again.
+    input_len: usize,
 }
 
 /// One preset stage. A preset is a `const &[Step]`; ordering, subsetting, and
@@ -187,6 +195,7 @@ macro_rules! static_steps {
             $(
                 if apply_into($step, &cur, ctx, &mut scratch)? {
                     std::mem::swap(&mut cur, &mut scratch);
+                    check_growth(&cur, ctx)?;
                 }
             )*
             Ok(cur)
@@ -315,19 +324,11 @@ fn apply_into(
     out: &mut String,
 ) -> Result<bool, crate::ErrorRepr> {
     match step {
+        // #768's ceiling used to sit here, on NFKC alone. It is on the runners now, after
+        // every step, because NFKC is not the only step that grows the text: see
+        // `check_growth`.
         Step::Nfkc => {
             crate::normalize::normalize_into(input, "NFKC", out)?;
-            // #768: NFKC is an amplification the caller cannot foresee from the input
-            // size, which is the reason `limits.rs` gives for capping the replacement
-            // pre-pass — and NFKC was not capped. `U+FDFA` expands to 18 characters, so
-            // 6 MB in produced 60 MB out. Checked against produced output, the same shape
-            // the replacement cap uses.
-            if out.len() > crate::limits::MAX_NORMALIZE_OUTPUT_BYTES {
-                return Err(crate::ErrorRepr::NormalizeOutputTooLarge {
-                    size: out.len(),
-                    max: crate::limits::MAX_NORMALIZE_OUTPUT_BYTES,
-                });
-            }
             Ok(true)
         }
         Step::Nfc => {
@@ -987,6 +988,45 @@ fn run_static<'a>(
     Ok(Cow::Owned(apply(text, ctx)?))
 }
 
+/// [`run_static`], iterated to a fixed point under any digit policy but the default.
+///
+/// For the two key builders with no confusable fold of their own, `search_key` and
+/// `sort_key`. Under `Tr39` or `Preserve` their only fold is [`Step::PolicyPreFold`], on
+/// the raw text, and three later steps make new sources it never saw: `FoldCase` turns a
+/// capital with no row into a lowercase letter that has one (`U+A760` to `U+A761`, which
+/// folds to `w`; under `tr39`, `U+0100` to `U+0101`, which folds to `U+00E3`), and
+/// `Transliterate` emits `|`, `"` and `` ` ``, which are sources too (`U+01C1` to `||`,
+/// then `ll`). So the key was not a fixed point: `search_key("\u{A760}", tr39)` was
+/// `\u{A761}`, and the key of that was `w`. Finding 2 of the Lean model in
+/// `formal/lean/Presets`.
+///
+/// Moving the fold would not do: it runs on the raw text so that it reads a non-Latin
+/// digit before transliteration consumes it (#896). Iterating the whole builder closes
+/// every one of those routes at once, bounded like `Step::FixedPoint`.
+///
+/// Under `Numeric` the pre-fold is a no-op and the builders were already fixed points, so
+/// this returns [`run_static`]'s answer untouched and the default key cannot move.
+fn run_static_policy_fixed<'a>(
+    mask: Actionable,
+    text: &'a str,
+    ctx: &PresetCtx,
+    apply: impl Fn(&str, &PresetCtx) -> Result<String, crate::ErrorRepr>,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    let first = run_static(mask, text, ctx, &apply)?;
+    if ctx.digit_policy == crate::confusables::DigitPolicy::Numeric {
+        return Ok(first);
+    }
+    let mut cur = first.into_owned();
+    for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
+        let next = apply(&cur, ctx)?;
+        if next == cur {
+            break;
+        }
+        cur = next;
+    }
+    Ok(Cow::Owned(cur))
+}
+
 /// Apply a step list once via the two-buffer ping-pong, returning the owned result.
 /// Shared by `run` (the top-level pass, after the fast-path guard) and
 /// `Step::FixedPoint` (one pass of its inner sub-pipeline, #467).
@@ -996,9 +1036,39 @@ fn apply_steps(steps: &[Step], input: &str, ctx: &PresetCtx) -> Result<String, c
     for &step in steps {
         if apply_into(step, &cur, ctx, &mut scratch)? {
             std::mem::swap(&mut cur, &mut scratch);
+            check_growth(&cur, ctx)?;
         }
     }
     Ok(cur)
+}
+
+/// The preset output ceiling (#768): no step may leave the text more than
+/// [`MAX_NORMALIZE_OUTPUT_BYTES`](crate::limits::MAX_NORMALIZE_OUTPUT_BYTES) longer than the
+/// input the preset was called with.
+///
+/// Checked after every step that wrote, by both runners, so the one rule holds whichever
+/// step does the growing. It used to be an absolute size test on the `Nfkc` arm alone,
+/// and that was wrong twice over (Finding 6 of the Lean model in `formal/lean/Presets`):
+///
+/// * NFKC is not the only amplifier. `ml_normalize`'s `Demojize` runs after it and names
+///   U+1FAF0 in 40 bytes, so 10.4 MB of it became 106.6 MB with no error.
+/// * An absolute size is a cap on *input*, which `limits.rs` says disarm does not impose.
+///   11 MiB of `a` was accepted, and the same text with one `"` in front was rejected as
+///   having "expanded", because the quote made the fast path decline and NFKC then saw
+///   11 MiB.
+///
+/// Growth is what an input-size check cannot foresee, which is the reason the ceiling
+/// exists; so growth is what it bounds.
+#[inline]
+fn check_growth(out: &str, ctx: &PresetCtx) -> Result<(), crate::ErrorRepr> {
+    if out.len().saturating_sub(ctx.input_len) > crate::limits::MAX_NORMALIZE_OUTPUT_BYTES {
+        return Err(crate::ErrorRepr::NormalizeOutputTooLarge {
+            input: ctx.input_len,
+            size: out.len(),
+            max: crate::limits::MAX_NORMALIZE_OUTPUT_BYTES,
+        });
+    }
+    Ok(())
 }
 
 /// Run `f` with the #458 fast-path guard disabled (test-only): forces the full
@@ -1074,9 +1144,10 @@ fn is_bidi_or_format(ch: char) -> bool {
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → strip bidi/format → strip invisibles → strip_control →
-/// strip_zero_width → collapse_whitespace → cap marks (zalgo) → NFC →
-/// confusables → NFC
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip bidi/format → strip
+/// invisibles → strip_control → strip_zero_width → collapse_whitespace → drop repeated
+/// marks → cap marks at 3 (zalgo) → NFC → fixed point(confusables → NFC) → drop repeated
+/// marks
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, removes dangerous bidi overrides and
@@ -1126,7 +1197,8 @@ pub(crate) fn canonicalize_with(
             Step::StripControl,
             Step::StripZeroWidth,
             Step::CollapseWs,
-            // 3b. Cap combining marks at 2 per base (#429), matching canonicalize_strict.
+            // 3b. Cap combining marks at 3 per base (#429; 3 since #788, the figure
+            //     `is_zalgo` flags above), matching canonicalize_strict.
             //     Removes zalgo stacking so a stacked token matches its base in a denylist
             //     comparison, while keeping legitimate diacritics (`café`, `Việt`). Runs
             //     AFTER the control / zero-width strip above so a stripped invisible
@@ -1192,6 +1264,7 @@ pub(crate) fn canonicalize_with(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1199,7 +1272,8 @@ pub(crate) fn canonicalize_with(
 
 /// ML/NLP text normalization pipeline.
 ///
-/// Pipeline: NFKC → emoji→text → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: resolve deletions → NFKC → emoji→text → [transliterate] → strip_accents →
+/// emoji→text → [fold_case] → strip_control → strip_zero_width → collapse_whitespace → NFC
 ///
 /// Produces clean, accent-free, lowercased text suitable for tokenizers,
 /// embeddings, and feature extraction. Emoji are expanded to their CLDR
@@ -1223,7 +1297,7 @@ pub(crate) fn ml_normalize<'a>(
 ) -> Result<Cow<'a, str>, crate::ErrorRepr> {
     // `const` declared before the prologue to satisfy
     // clippy::items_after_statements; it has no runtime effect.
-    const STEPS: &[Step; 10] = &[
+    const STEPS: &[Step; 11] = &[
         // FIRST, before `Nfkc` (#937). A sanitizer that turns `fool` into `fovJol`
         // has not recovered the input for a model — it has produced a third string
         // the model has never seen, which is what the attack wanted.
@@ -1274,12 +1348,19 @@ pub(crate) fn ml_normalize<'a>(
         Step::StripControl,
         Step::StripZeroWidth,
         Step::CollapseWs,
+        // 7. Terminal NFC, as `sort_key` has (#416). The two strips above run after the
+        //    last step that composes, so a character they remove from between two that
+        //    compose leaves the pair apart until the next call: conjoining jamo L + ZWSP +
+        //    V came back as L V, and the key of that is the syllable. A jamo pair composes
+        //    with no mark involved, which is why `StripAccents` never hid it. Finding 4
+        //    of the Lean model in `formal/lean/Presets`.
+        Step::NfcIfNonAscii,
     ];
     // #559: the `fold_case=false` variant, DERIVED from `STEPS` rather than written
     // out a second time — the two lists cannot drift, and `without_fold_case` const-
     // asserts that exactly one `FoldCase` was removed, so reordering or dropping the
     // step above fails the build instead of silently changing what the flag does.
-    const STEPS_NO_FOLD: [Step; 9] = without_fold_case(STEPS);
+    const STEPS_NO_FOLD: [Step; 10] = without_fold_case(STEPS);
 
     crate::transliterate::validate_lang(lang)?;
     // Validate emoji_style — only two modes are supported.
@@ -1297,29 +1378,30 @@ pub(crate) fn ml_normalize<'a>(
             strict_iso9: false,
             emoji_cldr: emoji_style == "cldr",
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: text.len(),
         },
     )
 }
 
-/// Drop the single [`Step::FoldCase`] from a 9-step preset list, in `const` context.
+/// Drop the single [`Step::FoldCase`] from `ml_normalize`'s step list, in `const` context.
 ///
 /// Backs `ml_normalize`'s `fold_case=false` mode (#559). Deriving the shorter list from
 /// the longer one — instead of maintaining two literals — means an edit to the pipeline
 /// automatically reaches both, and the assertion below turns "someone removed or
 /// duplicated `FoldCase`" into a build failure rather than a behaviour change nobody
 /// notices. `Step::Nfkc` is only the array's initial filler; every slot is overwritten.
-const fn without_fold_case(steps: &[Step; 10]) -> [Step; 9] {
-    let mut out = [Step::Nfkc; 9];
+const fn without_fold_case(steps: &[Step; 11]) -> [Step; 10] {
+    let mut out = [Step::Nfkc; 10];
     let mut read = 0;
     let mut write = 0;
     while read < steps.len() {
         if !matches!(steps[read], Step::FoldCase) {
             // Check before the write, not after the loop: with zero `FoldCase` steps
-            // the 10th write would hit `out[9]` and abort const-eval with a generic
+            // the 11th write would hit `out[10]` and abort const-eval with a generic
             // out-of-bounds panic, hiding the reason. Assert here so the message the
             // maintainer sees names the actual invariant.
             assert!(
-                write < 9,
+                write < 10,
                 "ml_normalize's step list must contain exactly one Step::FoldCase"
             );
             out[write] = steps[read];
@@ -1328,7 +1410,7 @@ const fn without_fold_case(steps: &[Step; 10]) -> [Step; 9] {
         read += 1;
     }
     assert!(
-        write == 9,
+        write == 10,
         "ml_normalize's step list must contain exactly one Step::FoldCase"
     );
     out
@@ -1336,8 +1418,9 @@ const fn without_fold_case(steps: &[Step; 10]) -> [Step; 9] {
 
 /// Library catalog key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
-/// confusables → strip_accents → fold_case → collapse_whitespace
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi → strip
+/// invisibles → fold_case → fixed point(transliterate → confusables → strip_accents) →
+/// fold_case → strip_control → strip_zero_width → collapse_whitespace
 ///
 /// Transliteration runs before confusable normalization so that non-Latin
 /// scripts receive correct phonetic romanization (e.g. Cyrillic г→g, not
@@ -1444,6 +1527,7 @@ pub(crate) fn catalog_key_with<'a>(
             strict_iso9,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1451,12 +1535,15 @@ pub(crate) fn catalog_key_with<'a>(
 
 /// Search index key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
-/// strip_accents → fold_case → collapse_whitespace
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi → strip
+/// invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control →
+/// strip_zero_width → collapse_whitespace
 ///
 /// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
 /// key.  Like `catalog_key` but without confusable normalization — lighter and
-/// faster for search indexes where homoglyph attacks are not a concern.
+/// faster for search indexes where homoglyph attacks are not a concern. Under a
+/// non-default digit policy the pre-fold is the whole confusable table, and the list
+/// runs to a fixed point ([`search_key_with`]).
 ///
 /// `strip_bidi` runs early (#93) so an invisible char (bidi override, soft
 /// hyphen) embedded in a stored value still produces the same key as the clean
@@ -1471,6 +1558,10 @@ pub(crate) fn search_key<'a>(
 
 /// `search_key`, folding under `digit_policy` (#896). This builder has no fold of its
 /// own; the pre-fold on the raw text is the whole reach, as it was for the pre-pass.
+///
+/// Under a policy other than the default that fold is the whole confusable table, not
+/// only the digit rows, and the builder is iterated to a fixed point
+/// ([`run_static_policy_fixed`]); the default runs once, as it always has.
 pub(crate) fn search_key_with<'a>(
     text: &'a str,
     lang: Option<&str>,
@@ -1527,7 +1618,7 @@ pub(crate) fn search_key_with<'a>(
         ]
     }
     crate::transliterate::validate_lang(lang)?;
-    run_static(
+    run_static_policy_fixed(
         MASK,
         text,
         &PresetCtx {
@@ -1535,6 +1626,7 @@ pub(crate) fn search_key_with<'a>(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1604,8 +1696,9 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
 
 /// Sort key generation pipeline.
 ///
-/// Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate-non-Latin → fold_case
-/// → collapse_whitespace → NFC (if non-ASCII)
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi → strip invisibles
+/// → fold_case → transliterate-non-Latin → fold_case → strip_control → strip_zero_width →
+/// collapse_whitespace → drop repeated marks → cap marks at 3 → NFC (if non-ASCII)
 ///
 /// The second `fold_case` lowercases any uppercase a transliteration *emits* (e.g.
 /// Old Persian `𐏈` → `Auramazda`), and the terminal NFC recomposes a base+mark left
@@ -1636,7 +1729,8 @@ pub(crate) fn sort_key<'a>(
 }
 
 /// `sort_key`, folding under `digit_policy` (#896). No fold of its own; the pre-fold on
-/// the raw text is the whole reach, as it was for the pre-pass.
+/// the raw text is the whole reach, as it was for the pre-pass. Iterated to a fixed point
+/// under a policy other than the default, like [`search_key_with`].
 pub(crate) fn sort_key_with<'a>(
     text: &'a str,
     lang: Option<&str>,
@@ -1730,7 +1824,7 @@ pub(crate) fn sort_key_with<'a>(
         ]
     }
     crate::transliterate::validate_lang(lang)?;
-    run_static(
+    run_static_policy_fixed(
         MASK,
         text,
         &PresetCtx {
@@ -1738,6 +1832,7 @@ pub(crate) fn sort_key_with<'a>(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1778,6 +1873,7 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1791,11 +1887,12 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
 /// is not an XSS or injection defense — encode at the output sink (see
 /// `THREAT_MODEL.md`).
 ///
-/// Pipeline: NFKC → strip_bidi → strip_zero_width → strip_control → strip
-///           invisible classes (#413) → strip_zalgo → confusables →
-///           collapse_whitespace → NFC (terminal NFC recomposes any base+mark
-///           left adjacent by a stripped invisible, keeping the preset
-///           idempotent — #416/#413)
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi →
+///           strip_zero_width → strip_control → strip invisible classes (#413) →
+///           fixed point(fixed point(confusables → NFC) → strip cross-script marks) →
+///           drop repeated marks → strip_zalgo → collapse_whitespace → NFC (terminal
+///           NFC recomposes any base+mark left adjacent by a stripped invisible,
+///           keeping the preset idempotent — #416/#413)
 ///
 /// Accepts multilingual input in its original script while neutralizing
 /// Unicode-level abuse:
@@ -1806,7 +1903,8 @@ pub(crate) fn strip_format(text: &str) -> Cow<'_, str> {
 ///   character — the same figure `is_zalgo` flags above, so this preset never strips
 ///   from text the library calls ordinary (#788) — preventing
 ///   stacked diacritical abuse while preserving legitimate diacritics (é, ñ, ệ)
-/// - **confusables**: neutralizes cross-script homoglyph attacks
+/// - **confusables**: neutralizes cross-script homoglyph attacks, iterated with the
+///   cross-script mark strip (#615, #638); the cap runs after both (#862)
 /// - **collapse_whitespace**: final whitespace-run normalization
 ///
 /// Unlike `canonicalize`, this pipeline strips zalgo text.  Unlike
@@ -1922,6 +2020,7 @@ pub(crate) fn canonicalize_strict_with(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -1929,17 +2028,16 @@ pub(crate) fn canonicalize_strict_with(
 
 /// Maximum-strength text deobfuscation pipeline.
 ///
-/// Pipeline: NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
-///          → demojize → normalize_confusables → strip_accents
-///          → collapse_whitespace
+/// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_zalgo(max_marks=0)
+///          → strip_bidi → strip_zero_width → strip invisibles → confusables
+///          → strip_accents → strip_control → collapse_whitespace → NFC
 ///
-/// `normalize_confusables` runs *after* `demojize` so typographic punctuation in
-/// emoji names (e.g. the `’` in "woman’s hat") is folded too; otherwise the
-/// output would not be idempotent.
+/// No `demojize` since #910: a comparison surface must not write attacker-chosen words
+/// into the value being compared, so an emoji is left where it stands.
 ///
 /// Strips ALL combining marks, resolves homoglyph spoofing via TR39
-/// confusable mapping (visual similarity), expands emoji to text, removes
-/// accents, and collapses whitespace. **Preserves case** — case is not
+/// confusable mapping (visual similarity), removes accents, and collapses
+/// whitespace. **Preserves case** — case is not
 /// deception (proper nouns, acronyms, sentence boundaries are meaningful).
 /// Chain with `fold_case()` if lowercasing is also needed.
 ///
@@ -2013,6 +2111,13 @@ pub(crate) fn strip_obfuscation_with(
             //    is NOT folded.
             Step::StripControl,
             Step::CollapseWs,
+            // 9. Terminal NFC (#416), as `sort_key` has. The control strip above runs
+            //    after the last step that composes, so a control between two characters
+            //    that compose left them apart until the next call: conjoining jamo L +
+            //    NUL + V came back as L V, whose key is the syllable. The mark strips
+            //    cannot hide it, because a jamo pair composes with no mark involved.
+            //    Finding 4 of the Lean model in `formal/lean/Presets`.
+            Step::NfcIfNonAscii,
         ]
     }
     run_static(
@@ -2023,6 +2128,7 @@ pub(crate) fn strip_obfuscation_with(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -2151,6 +2257,7 @@ pub(crate) fn skeleton_key<'a>(
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy,
+            input_len: text.len(),
         },
         apply,
     )
@@ -2171,8 +2278,9 @@ pub(crate) fn skeleton_key<'a>(
 /// Defined as `preset(text) == text`, but it avoids materialising the normalized copy
 /// whenever the pipeline's `Guard::Inert` classification hands back a borrow.
 ///
-/// `preset` accepts the eight preset names, the three deprecated 0.11 aliases that
-/// `PRESETS` still documents, and any policy-profile name.
+/// `preset` accepts the nine preset names, the three deprecated 0.11 aliases that
+/// `PRESETS` still documents, and any policy-profile name. `skeleton_key` answers under
+/// its default `digit_policy`, `"numeric"`, as every other preset here does.
 pub(crate) fn is_canonical(text: &str, preset: &str) -> Result<bool, crate::ErrorRepr> {
     // A borrowed `Cow` proves no step touched the input. An owned one only proves a buffer
     // was allocated — several steps build one and write the input back unchanged — so it
@@ -2196,6 +2304,9 @@ pub(crate) fn is_canonical(text: &str, preset: &str) -> Result<bool, crate::Erro
         "catalog_key" => catalog_key(text, None, false)?,
         "sort_key" => sort_key(text, None)?,
         "ml_normalize" => ml_normalize(text, None, "cldr", true)?,
+        // Since `PRESETS` lists it (Finding 5 of the Lean model in `formal/lean/Presets`):
+        // the registry the docstring names is the one this dispatch has to accept.
+        "skeleton_key" => skeleton_key(text, "numeric")?,
         // Profiles are the other half of the registry. A pipeline returns an owned String,
         // so the borrow fast path is unavailable, but the comparison is still the answer.
         other => match crate::pipeline::get_pipeline(other)? {
@@ -2253,7 +2364,7 @@ mod is_canonical_tests {
 
     #[test]
     fn every_preset_name_dispatches() {
-        // Plain ASCII is a fixed point of all eight.
+        // Plain ASCII is a fixed point of all nine.
         for preset in [
             "canonicalize",
             "canonicalize_strict",
@@ -2263,6 +2374,7 @@ mod is_canonical_tests {
             "catalog_key",
             "sort_key",
             "ml_normalize",
+            "skeleton_key",
         ] {
             assert!(
                 is_canonical("abc", preset).unwrap(),
@@ -2271,7 +2383,7 @@ mod is_canonical_tests {
         }
         // Fullwidth separates them, which is the point of taking a preset argument at
         // all: `strip_format` has no NFKC step, so ＡＢＣ *is* its own canonical form
-        // there while the other seven fold it to ABC.
+        // there while the other eight fold it to ABC.
         let fullwidth = "\u{FF21}\u{FF22}\u{FF23}";
         assert!(is_canonical(fullwidth, "strip_format").unwrap());
         for preset in [
@@ -2282,6 +2394,7 @@ mod is_canonical_tests {
             "catalog_key",
             "sort_key",
             "ml_normalize",
+            "skeleton_key",
         ] {
             assert!(
                 !is_canonical(fullwidth, preset).unwrap(),
@@ -2357,6 +2470,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         // Devanagari zero: `Numeric` reads it as a number, `Tr39` as an identifier
         // skeleton, `Preserve` leaves it in its own script.
@@ -2372,6 +2486,7 @@ mod tests {
                 strict_iso9: ctx.strict_iso9,
                 emoji_cldr: ctx.emoji_cldr,
                 digit_policy: policy,
+                input_len: 0,
             };
             apply_into(Step::ConfusablesCtx("latin"), input, &ctx, &mut out)
                 .expect("the latin target is valid");
@@ -3098,6 +3213,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         let got = run(steps, "  HE\u{202E}LLO  ", &ctx).unwrap();
         let want = whitespace::collapse_whitespace(&case_fold::fold_case_impl(&strip_bidi(
@@ -3113,6 +3229,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         assert_eq!(run(&[], "café \u{202E}x", &ctx).unwrap(), "café \u{202E}x");
     }
@@ -3126,6 +3243,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         let steps = &[
             Step::FoldCase,
@@ -3340,6 +3458,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         let mut out = String::new();
         for input in [
@@ -3628,7 +3747,7 @@ mod tests {
         let mut rest = src;
         // Two forms since #695. Most presets use `static_steps! { … [ … ] }`, which also
         // emits their compile-time mask and unrolled applier. `ml_normalize` keeps a plain
-        // `const STEPS: &[Step; 9]` because it selects between two lists at runtime — and
+        // `const STEPS: &[Step; 11]` because it selects between two lists at runtime — and
         // it links every table through its own `Transliterate` and `Demojize` steps
         // anyway, so converting it would buy nothing. Both are scanned: a gate that
         // silently stopped covering a pipeline is what the floor assertion below catches.
@@ -3641,7 +3760,7 @@ mod tests {
                     continue;
                 }
             } else {
-                // Only an array *literal*. `const STEPS_NO_FOLD: [Step; 8] =
+                // Only an array *literal*. `const STEPS_NO_FOLD: [Step; 10] =
                 // without_fold_case(STEPS);` is one line with no `];` terminator, so
                 // treating it as a pipeline made the scan swallow the next function's
                 // array and drop `catalog_key` entirely — a gate silently covering one
@@ -3771,6 +3890,7 @@ mod tests {
             strict_iso9: false,
             emoji_cldr: false,
             digit_policy: crate::confusables::DigitPolicy::Numeric,
+            input_len: 0,
         };
         let mut out = String::new();
         assert!(!apply_into(
@@ -3977,7 +4097,7 @@ mod tests {
     /// reordering that happened to keep the length would still be caught.
     #[test]
     fn no_fold_step_list_is_the_folded_list_minus_fold_case() {
-        const FULL: &[Step; 10] = &[
+        const FULL: &[Step; 11] = &[
             Step::ResolveDeletions,
             Step::Nfkc,
             Step::Demojize {
@@ -4003,6 +4123,7 @@ mod tests {
             Step::StripControl,
             Step::StripZeroWidth,
             Step::CollapseWs,
+            Step::NfcIfNonAscii,
         ];
         let derived = without_fold_case(FULL);
         let expected: Vec<_> = FULL
@@ -4755,5 +4876,216 @@ mod tests {
                 prop_assert!(!canonicalize_strict(&s).unwrap().chars().any(is_bidi_or_format));
             }
         }
+    }
+}
+
+/// Regression tests for the findings of the Lean model of the presets, `formal/lean/Presets`.
+///
+/// Each finding is a string that a preset maps to something it would map again. The
+/// witnesses are the model's own; the sweeps are small enough for every run.
+#[cfg(test)]
+mod presets_formal_findings {
+    use super::*;
+    use crate::confusables::DigitPolicy;
+
+    const POLICIES: [DigitPolicy; 2] = [DigitPolicy::Tr39, DigitPolicy::Preserve];
+
+    fn search(text: &str, policy: DigitPolicy) -> String {
+        search_key_with(text, None, policy).unwrap().into_owned()
+    }
+
+    fn sort(text: &str, policy: DigitPolicy) -> String {
+        sort_key_with(text, None, policy).unwrap().into_owned()
+    }
+
+    fn catalog(text: &str, policy: DigitPolicy) -> String {
+        catalog_key_with(text, None, false, policy)
+            .unwrap()
+            .into_owned()
+    }
+
+    /// Finding 2. Under `tr39` or `preserve` the only fold `search_key` and `sort_key` have
+    /// is the pre-fold on the raw text, and `FoldCase` and `Transliterate` make sources
+    /// after it: U+A760 has no row and folds to U+A761, which does; U+01C1 transliterates
+    /// to `||`; under `tr39`, U+0100 folds to U+0101, whose row is U+00E3.
+    #[test]
+    fn the_policy_keys_are_fixed_points_on_the_lean_witnesses() {
+        for policy in POLICIES {
+            assert_eq!(search("\u{A760}", policy), "w", "{policy:?}");
+            assert_eq!(search("\u{01C1}", policy), "ll", "{policy:?}");
+            assert_eq!(sort("\u{A760}", policy), "w", "{policy:?}");
+            assert_eq!(sort("\u{0100}", policy), "\u{E3}", "{policy:?}");
+            for input in ["\u{A760}", "\u{01C1}", "\u{0100}", "|\"`", "x\u{A760}y"] {
+                for (name, key) in [
+                    ("search_key", search as fn(&str, DigitPolicy) -> String),
+                    ("sort_key", sort),
+                    ("catalog_key", catalog),
+                ] {
+                    let once = key(input, policy);
+                    assert_eq!(key(&once, policy), once, "{name}[{policy:?}]({input:?})");
+                }
+            }
+        }
+    }
+
+    /// The same, over the Latin, Greek, Cyrillic and Latin Extended blocks, one scalar at
+    /// a time, for all three builders the policy reaches without a fold of their own or
+    /// with one (`catalog_key`, which never failed, is here so it cannot start).
+    #[test]
+    fn the_policy_keys_are_fixed_points_over_the_blocks_that_failed() {
+        let scalars = (0x20u32..0x530)
+            .chain(0x1E00..0x2000)
+            .chain(0xA720..0xA800)
+            .filter_map(char::from_u32);
+        let mut failures = Vec::new();
+        for ch in scalars {
+            let text = ch.to_string();
+            for policy in POLICIES {
+                for (name, key) in [
+                    ("search_key", search as fn(&str, DigitPolicy) -> String),
+                    ("sort_key", sort),
+                    ("catalog_key", catalog),
+                ] {
+                    let once = key(&text, policy);
+                    if key(&once, policy) != once {
+                        failures.push(format!("{name}[{policy:?}] U+{:04X}", ch as u32));
+                    }
+                }
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "{} keys move on a second pass: {:?}",
+            failures.len(),
+            &failures[..failures.len().min(10)]
+        );
+    }
+
+    /// The iteration is for the non-default policies only. Under the default the pre-fold
+    /// does nothing, the builders were already fixed points, and a stored key must not
+    /// move: `sort_key` has no fold, so U+A761 stays U+A761, and `search_key` leaves the
+    /// `||` its transliteration writes for U+01C1 as `||`.
+    #[test]
+    fn the_default_policy_is_not_iterated() {
+        assert_eq!(sort("\u{A760}", DigitPolicy::Numeric), "\u{A761}");
+        assert_eq!(
+            sort_key("\u{A760}", None).unwrap(),
+            sort("\u{A760}", DigitPolicy::Numeric)
+        );
+        assert_eq!(search("\u{01C1}", DigitPolicy::Numeric), "||");
+        assert_eq!(search_key("\u{01C1}", None).unwrap(), "||");
+    }
+
+    /// Finding 4. A control (and, in `ml_normalize`, a zero-width character) between two
+    /// characters that compose was stripped after the last step that composes. Conjoining
+    /// jamo compose with no mark involved, so no mark strip hid it.
+    #[test]
+    fn a_stripped_character_between_two_jamo_does_not_keep_them_apart() {
+        for glue in ["\u{0}", "\u{1}", "\u{200B}"] {
+            let text = format!("\u{1100}{glue}\u{1161}");
+            for policy in [
+                DigitPolicy::Numeric,
+                DigitPolicy::Tr39,
+                DigitPolicy::Preserve,
+            ] {
+                let once = strip_obfuscation_with(&text, policy).unwrap();
+                assert_eq!(once, "\u{AC00}", "strip_obfuscation[{policy:?}]({text:?})");
+            }
+            for fold in [true, false] {
+                let once = ml_normalize(&text, None, "cldr", fold).unwrap();
+                assert_eq!(once, "\u{AC00}", "ml_normalize(fold={fold})({text:?})");
+            }
+        }
+    }
+
+    /// The terminal NFC must not undo a step before it: a string that ends decomposed only
+    /// because of a mark the preset keeps (#749's negation overlay on a surviving base) is
+    /// still a fixed point.
+    #[test]
+    fn the_terminal_nfc_leaves_both_presets_fixed_points() {
+        for text in [
+            "=\u{338}",
+            "=\u{0}\u{338}",
+            "=\u{200B}\u{338}",
+            "\u{A2}\u{338}",
+            "e\u{0}\u{301}",
+            "c\u{0}\u{327}",
+            "\u{1100}\u{0}\u{1161}\u{0}\u{11A8}",
+        ] {
+            let once = strip_obfuscation(text).unwrap().into_owned();
+            assert_eq!(strip_obfuscation(&once).unwrap(), once, "{text:?}");
+            let once = ml_normalize(text, None, "cldr", true).unwrap().into_owned();
+            assert_eq!(
+                ml_normalize(&once, None, "cldr", true).unwrap(),
+                once,
+                "{text:?}"
+            );
+        }
+    }
+
+    fn ctx(input_len: usize) -> PresetCtx<'static> {
+        PresetCtx {
+            lang: None,
+            strict_iso9: false,
+            emoji_cldr: false,
+            digit_policy: DigitPolicy::Numeric,
+            input_len,
+        }
+    }
+
+    /// Finding 6. The ceiling bounds growth over the preset's input, not the size of the
+    /// output: an input of any size that no step grows passes, and one byte of growth over
+    /// the allowance fails, whatever the absolute sizes.
+    #[test]
+    fn the_ceiling_is_on_growth() {
+        let max = crate::limits::MAX_NORMALIZE_OUTPUT_BYTES;
+        let at_the_limit = "a".repeat(max + 7);
+        assert!(check_growth(&at_the_limit, &ctx(7)).is_ok());
+        assert!(check_growth(&at_the_limit, &ctx(6)).is_err());
+        // Shrinking and size alone never trip it.
+        assert!(check_growth("", &ctx(max * 3)).is_ok());
+        assert!(check_growth(&at_the_limit, &ctx(max * 3)).is_ok());
+        match check_growth(&at_the_limit, &ctx(6)) {
+            Err(crate::ErrorRepr::NormalizeOutputTooLarge {
+                input,
+                size,
+                max: m,
+            }) => {
+                assert_eq!((input, size, m), (6, max + 7, max));
+            }
+            other => panic!("expected the output ceiling, got {other:?}"),
+        }
+    }
+
+    /// NFKC is not the only step that grows the text. `ml_normalize` names U+1FAF0 in 40
+    /// bytes after NFKC has passed it, so 1.2 MB of it grew to 12 MB, past the ceiling,
+    /// with no error: the check sat on the `Nfkc` arm alone.
+    #[test]
+    fn a_step_after_nfkc_is_bounded_too() {
+        let text = "\u{1FAF0}".repeat(300_000);
+        match ml_normalize(&text, None, "cldr", true) {
+            Err(crate::ErrorRepr::NormalizeOutputTooLarge { input, .. }) => {
+                assert_eq!(input, text.len());
+            }
+            other => panic!(
+                "expected the output ceiling, got {:?}",
+                other.map(|s| s.len())
+            ),
+        }
+        // Under the ceiling it still succeeds, and emoji="none" does not grow at all.
+        assert!(ml_normalize(&"\u{1FAF0}".repeat(1_000), None, "cldr", true).is_ok());
+        assert!(ml_normalize(&text, None, "none", true).is_ok());
+    }
+
+    /// The growth is measured from the preset's input on every pass, not from each pass's
+    /// input: a `FixedPoint` (and the policy iteration) sees text that has already grown,
+    /// and measuring from there would grant the allowance again on every pass.
+    #[test]
+    fn the_growth_base_is_the_preset_input_inside_a_fixed_point() {
+        let max = crate::limits::MAX_NORMALIZE_OUTPUT_BYTES;
+        let grown = "a".repeat(max + 2);
+        let c = ctx(1);
+        // One pass of a FixedPoint whose input has already grown past the allowance.
+        assert!(apply_steps(&[Step::FoldCase], &grown, &c).is_err());
     }
 }

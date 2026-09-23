@@ -267,9 +267,10 @@ isZalgo(stripZalgo('Z\u0301\u0301\u0301\u0301')) // => false
 
 `stripObfuscation` removes obfuscation (zero-width, bidi, combining-mark abuse,
 homoglyphs) while keeping legible content — it does **not** transliterate.
-`canonicalize` is the aggressive NFKC → strip-bidi → strip-invisibles →
-strip-control/zero-width → collapse → cap-marks → NFC → confusables → NFC preset
-(confusables sandwiched between NFC passes for idempotency).
+`canonicalize` is the aggressive resolve-deletions → NFKC → strip-bidi →
+strip-invisibles → strip-control/zero-width → collapse → drop-repeated-marks →
+cap-marks → NFC → confusables-and-NFC-to-a-fixed-point → drop-repeated-marks preset (the
+fold is iterated with NFC for idempotency).
 
 ```ts
 stripObfuscation('рroduсt') // => 'product'
@@ -482,8 +483,9 @@ normalizeConfusables('g\u0966\u0966gle', { digitPolicy: 'tr39' }) // => 'google'
 
 ### `mlNormalize(text, options?)`
 
-ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents → [case fold] →
-strip control → strip zero-width → collapse whitespace. Produces clean, accent-free text
+ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate → strip
+accents → emoji→text → [case fold] → strip control → strip zero-width → collapse
+whitespace → NFC. Produces clean, accent-free text
 for tokenizers, embeddings, and feature extraction.
 
 `foldCase` defaults to `true`, which suits the uncased tokenizers most pipelines use. Pass

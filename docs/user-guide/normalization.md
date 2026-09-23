@@ -180,8 +180,8 @@ assert stream_safe(zalgo) == zalgo  # under the bound
 Legitimate stacking is nowhere near it either — Hebrew points, Arabic harakat and Indic
 conjuncts are all untouched.
 
-**Not a size bound.** The presets already cap produced output; `stream_safe()` does not
-change how much text a call can return.
+**Not a size bound.** The presets already cap how far a call can grow its input;
+`stream_safe()` does not change how much text a call can return.
 
 ### The predicate is a conjunction
 

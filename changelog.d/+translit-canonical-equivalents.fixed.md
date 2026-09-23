@@ -1,0 +1,10 @@
+- **Canonically equivalent input transliterated differently in two places.** Found by a
+  Lean audit of the argument for invariants I1 to I3 (`formal/lean/Transliterate`), then
+  swept over every code point with a canonical decomposition. GREEK DIALYTIKA AND OXIA
+  (U+1FEE) and GREEK OXIA (U+1FFD) had table rows reading `x`, where their canonical
+  equivalents U+0385 and U+00B4 give `"` and a space; they now agree. And with
+  `tones=True` the 156 CJK compatibility ideographs lost their tones, because the toned
+  pinyin table is keyed by the unified ideograph each one decomposes to:
+  `transliterate("\uf901", tones=True)` gave `geng` where U+66F4 gives `gēng`. The
+  lookup now goes through the canonical equivalent. Two more single characters therefore
+  reduce `slugify` to `""`, and the census in `docs/limitations.md` moves to 243,401.

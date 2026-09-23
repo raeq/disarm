@@ -328,7 +328,8 @@ pub fn lookup_default_toned(ch: char) -> Option<&'static str> {
 
     if ur::CJK_EXT_A.contains(&cp) || ur::CJK_UNIFIED.contains(&cp) || ur::CJK_COMPAT.contains(&cp)
     {
-        return hanzi_pinyin::lookup_hanzi_toned(ch).or_else(|| transliteration::lookup(ch));
+        return hanzi_pinyin::lookup_hanzi_toned(canonical_ideograph(ch))
+            .or_else(|| transliteration::lookup(ch));
     }
 
     if ur::HANGUL_SYLLABLES.contains(&cp) || ur::HANGUL_COMPAT_JAMO.contains(&cp) {
@@ -336,6 +337,27 @@ pub fn lookup_default_toned(ch: char) -> Option<&'static str> {
     }
 
     transliteration::lookup(ch)
+}
+
+/// The unified ideograph a CJK compatibility ideograph is canonically equivalent to, or
+/// `ch` itself.
+///
+/// The toned pinyin table is keyed by unified ideographs, so the 156 compatibility
+/// ideographs it could name missed it and fell through to toneless pinyin: `tones=True`
+/// gave `geng` for U+F901 and `gēng` for its canonical equivalent U+66F4. Every
+/// compatibility ideograph decomposes to exactly one code point, so the lookup can go
+/// through that one (found by the Lean audit of the I1-I3 argument, `formal/`).
+fn canonical_ideograph(ch: char) -> char {
+    let mut only = None;
+    let mut count = 0;
+    unicode_normalization::char::decompose_canonical(ch, |d| {
+        count += 1;
+        only = Some(d);
+    });
+    match (count, only) {
+        (1, Some(d)) => d,
+        _ => ch,
+    }
 }
 
 /// Look up the romanization for a Hangul syllable or compatibility jamo.

@@ -1248,7 +1248,8 @@ mod tests {
                 let n = passes(&text, &config);
                 prop_assert!(n.is_some(), "{text:?}: {n:?} passes");
                 let out = sf(&text, sep, max_length, platform, keep_ext);
-                prop_assert_eq!(sf(&out, sep, max_length, platform, keep_ext), out.clone());
+                let again = sf(&out, sep, max_length, platform, keep_ext);
+                prop_assert_eq!(&again, &out);
                 if platform != "posix" {
                     prop_assert!(!is_device_name(&out), "{text:?} -> {out:?}");
                 }

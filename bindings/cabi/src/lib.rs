@@ -6,10 +6,13 @@
 //! substrate to the JNI binding (which calls the core directly for the JVM hot
 //! path), intended for iOS/Swift, Kotlin-Native, Panama/FFM, and C/C++ consumers.
 //!
-//! Strings cross the boundary as NUL-terminated UTF-8 (`char *`). Every string a
-//! `disarm_*` function returns (directly or inside a [`DisarmResult`]) transfers
-//! ownership to the caller, who must free it with [`disarm_string_free`]. Nullable
-//! arguments (e.g. `lang`) are passed as a NULL `char *`.
+//! Strings cross the boundary as NUL-terminated `char *`. Every string a `disarm_*`
+//! function returns is UTF-8 (directly or inside a [`DisarmResult`]), transfers
+//! ownership to the caller, who must free it with [`disarm_string_free`], and is
+//! read-only until then. Arguments should be UTF-8; bytes that are not are decoded
+//! lossily (U+FFFD) at the boundary, never trusted. Nullable arguments (e.g. `lang`)
+//! are passed as a NULL `char *`; every other pointer argument must be non-NULL. See
+//! [`disarm_string_free`] for the whole contract.
 //!
 //! Scalar transforms return a `char *` (or [`DisarmResult`]) directly. The
 //! **structured reports** — [`disarm_analyze_hostname`], [`disarm_inspect_anomalies`],
@@ -17,6 +20,8 @@
 //! cross the boundary as a **JSON string** (still freed with [`disarm_string_free`]):
 //! one transport for every nested shape, trivially parsed by a Go/C/Swift consumer.
 //! The reusable handles from the JNI binding can still be layered on as needed.
+
+use std::borrow::Cow;
 
 use disarm_core::api;
 use safer_ffi::prelude::*;
@@ -54,9 +59,23 @@ fn err(e: &disarm_core::Error) -> DisarmResult {
     }
 }
 
-/// Decode an optional C string argument (NULL → `None`) to `Option<&str>`.
-fn opt_str<'a>(s: Option<char_p::Ref<'a>>) -> Option<&'a str> {
-    s.map(|v| v.to_str())
+/// Decode a C string argument, replacing any byte sequence that is not UTF-8 with
+/// U+FFFD — the same contract every other binding applies at its boundary (#469).
+///
+/// safer-ffi's `char_p::Ref::to_str` is `str::from_utf8_unchecked`, so a C caller that
+/// passed Latin-1 or truncated bytes produced a `&str` that was not UTF-8, which is
+/// undefined behaviour the moment the core reads it: `disarm_strip_bidi("caf\xE9")`
+/// crashed, `disarm_fold_case` aborted with a panic that could not unwind, and
+/// `disarm_canonicalize` returned bytes that were not UTF-8 either. Found by the
+/// bindings harness (`formal/bindings`, C1). Valid input borrows; only malformed input
+/// allocates.
+fn arg(s: char_p::Ref<'_>) -> Cow<'_, str> {
+    String::from_utf8_lossy(s.to_bytes())
+}
+
+/// Decode an optional C string argument (NULL → `None`), as [`arg`] does.
+fn opt_str(s: Option<char_p::Ref<'_>>) -> Option<Cow<'_, str>> {
+    s.map(arg)
 }
 
 // ── Transliteration ─────────────────────────────────────────────────────────────
@@ -64,7 +83,7 @@ fn opt_str<'a>(s: Option<char_p::Ref<'a>>) -> Option<&'a str> {
 /// Unicode → ASCII with the default scheme.
 #[ffi_export]
 fn disarm_transliterate(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::transliterate(text.to_str()).into_owned())
+    to_c(api::transliterate(&arg(text)).into_owned())
 }
 
 /// Transliterate with a scheme (`"default"` | `"strict_iso9"` | `"gost7034"`) and an
@@ -75,7 +94,7 @@ fn disarm_transliterate_opts(
     scheme: char_p::Ref<'_>,
     lang: Option<char_p::Ref<'_>>,
 ) -> DisarmResult {
-    match build_transliterate(text.to_str(), scheme.to_str(), opt_str(lang)) {
+    match build_transliterate(&arg(text), &arg(scheme), opt_str(lang).as_deref()) {
         Ok(s) => ok(s),
         Err(e) => err(&e),
     }
@@ -84,8 +103,8 @@ fn disarm_transliterate_opts(
 /// Reverse-transliterate Latin → native script. `lang` is `"el"` | `"ru"` | `"uk"`.
 #[ffi_export]
 fn disarm_reverse_transliterate(text: char_p::Ref<'_>, lang: char_p::Ref<'_>) -> DisarmResult {
-    match lang.to_str().parse::<api::ReverseLang>() {
-        Ok(l) => ok(api::reverse_transliterate(text.to_str(), l)),
+    match arg(lang).parse::<api::ReverseLang>() {
+        Ok(l) => ok(api::reverse_transliterate(&arg(text), l)),
         Err(e) => err(&e),
     }
 }
@@ -110,11 +129,7 @@ fn build_transliterate(
 /// Fold cross-script confusables toward `target` (`"latin"` | `"cyrillic"` | `"arabic"` | `"hebrew"`).
 #[ffi_export]
 fn disarm_normalize_confusables(text: char_p::Ref<'_>, target: char_p::Ref<'_>) -> DisarmResult {
-    build_normalize_confusables(
-        text.to_str(),
-        target.to_str(),
-        api::DigitPolicy::Numeric.as_str(),
-    )
+    build_normalize_confusables(&arg(text), &arg(target), api::DigitPolicy::Numeric.as_str())
 }
 
 /// [`disarm_normalize_confusables`] with an explicit `digit_policy` (#561).
@@ -135,7 +150,7 @@ fn disarm_normalize_confusables_opts(
     target: char_p::Ref<'_>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    build_normalize_confusables(text.to_str(), target.to_str(), digit_policy.to_str())
+    build_normalize_confusables(&arg(text), &arg(target), &arg(digit_policy))
 }
 
 /// Shared body of the two entry points above: parse both tokens (target first, so the
@@ -162,8 +177,8 @@ fn parse_policy(digit_policy: &str) -> Result<api::DigitPolicy, disarm_core::Err
 /// Apply a normalization form: `"NFC"` | `"NFD"` | `"NFKC"` | `"NFKD"`.
 #[ffi_export]
 fn disarm_normalize(text: char_p::Ref<'_>, form: char_p::Ref<'_>) -> DisarmResult {
-    match form.to_str().parse::<api::NormalizationForm>() {
-        Ok(f) => ok(api::normalize(text.to_str(), f)),
+    match arg(form).parse::<api::NormalizationForm>() {
+        Ok(f) => ok(api::normalize(&arg(text), f)),
         Err(e) => err(&e),
     }
 }
@@ -173,26 +188,26 @@ fn disarm_normalize(text: char_p::Ref<'_>, form: char_p::Ref<'_>) -> DisarmResul
 /// Strip diacritics, leaving base letters.
 #[ffi_export]
 fn disarm_strip_accents(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_accents(text.to_str()).into_owned())
+    to_c(api::strip_accents(&arg(text)).into_owned())
 }
 
 /// Unicode case folding (aggressive lowercase for caseless comparison).
 #[ffi_export]
 fn disarm_fold_case(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::fold_case(text.to_str()).into_owned())
+    to_c(api::fold_case(&arg(text)).into_owned())
 }
 
 /// Whether case folding and simple lowercasing agree, so `text` is a stable
 /// identity key ("groß.txt" is not; "gross.txt" is).
 #[ffi_export]
 fn disarm_is_case_fold_stable(text: char_p::Ref<'_>) -> bool {
-    api::is_case_fold_stable(text.to_str())
+    api::is_case_fold_stable(&arg(text))
 }
 
 /// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
 #[ffi_export]
 fn disarm_demojize(text: char_p::Ref<'_>, strip_modifiers: bool) -> char_p::Box {
-    to_c(api::demojize(text.to_str(), strip_modifiers))
+    to_c(api::demojize(&arg(text), strip_modifiers))
 }
 
 /// Replace every emoji with `replacement`, verbatim (#972). Free the result with
@@ -204,11 +219,8 @@ fn disarm_demojize(text: char_p::Ref<'_>, strip_modifiers: bool) -> char_p::Box 
 /// inserted exactly as given — `""` closes an intra-word split and `" "` keeps two
 /// words apart, and no rule serves both.
 #[ffi_export]
-fn disarm_replace_emoji(
-    text: char_p::Ref<'_>,
-    replacement: char_p::Ref<'_>,
-) -> char_p::Box {
-    to_c(api::replace_emoji(text.to_str(), replacement.to_str()))
+fn disarm_replace_emoji(text: char_p::Ref<'_>, replacement: char_p::Ref<'_>) -> char_p::Box {
+    to_c(api::replace_emoji(&arg(text), &arg(replacement)))
 }
 
 // ── Text cleaning (infallible) ──────────────────────────────────────────────────
@@ -216,49 +228,49 @@ fn disarm_replace_emoji(
 /// Collapse runs of whitespace to single spaces and trim.
 #[ffi_export]
 fn disarm_collapse_whitespace(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::collapse_whitespace(text.to_str()))
+    to_c(api::collapse_whitespace(&arg(text)))
 }
 
 /// Remove control characters.
 #[ffi_export]
 fn disarm_strip_control_chars(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_control_chars(text.to_str()))
+    to_c(api::strip_control_chars(&arg(text)))
 }
 
 /// Remove zero-width characters.
 #[ffi_export]
 fn disarm_strip_zero_width_chars(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_zero_width_chars(text.to_str()))
+    to_c(api::strip_zero_width_chars(&arg(text)))
 }
 
 /// Remove bidi control characters.
 #[ffi_export]
 fn disarm_strip_bidi(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_bidi(text.to_str()))
+    to_c(api::strip_bidi(&arg(text)))
 }
 
 /// Strip the Unicode Tags block (U+E0000–U+E007F), preserving valid emoji flags.
 #[ffi_export]
 fn disarm_strip_tags(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_tags(text.to_str()))
+    to_c(api::strip_tags(&arg(text)))
 }
 
 /// Strip every variation selector (VS1–VS256).
 #[ffi_export]
 fn disarm_strip_variation_selectors(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_variation_selectors(text.to_str()))
+    to_c(api::strip_variation_selectors(&arg(text)))
 }
 
 /// Strip every Unicode noncharacter.
 #[ffi_export]
 fn disarm_strip_noncharacters(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_noncharacters(text.to_str()))
+    to_c(api::strip_noncharacters(&arg(text)))
 }
 
 /// Strip every Private Use Area code point.
 #[ffi_export]
 fn disarm_strip_pua(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_pua(text.to_str()))
+    to_c(api::strip_pua(&arg(text)))
 }
 
 // ── Deobfuscation & key-derivation presets (fallible) ───────────────────────────
@@ -269,7 +281,7 @@ fn disarm_strip_pua(text: char_p::Ref<'_>) -> char_p::Box {
 /// the sender never wrote.
 #[ffi_export]
 fn disarm_canonicalize_strict(text: char_p::Ref<'_>) -> DisarmResult {
-    match api::canonicalize_strict(text.to_str()) {
+    match api::canonicalize_strict(&arg(text)) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -291,13 +303,13 @@ fn disarm_canonicalize_strict(text: char_p::Ref<'_>) -> DisarmResult {
 /// Infallible: returns the string directly rather than a `DisarmResult`.
 #[ffi_export]
 fn disarm_strip_format(text: char_p::Ref<'_>) -> char_p::Box {
-    to_c(api::strip_format(text.to_str()).into_owned())
+    to_c(api::strip_format(&arg(text)).into_owned())
 }
 
 /// Aggressively strip obfuscation (invisibles, bidi, zero-width, etc.).
 #[ffi_export]
 fn disarm_strip_obfuscation(text: char_p::Ref<'_>) -> DisarmResult {
-    match api::strip_obfuscation(text.to_str()) {
+    match api::strip_obfuscation(&arg(text)) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -313,7 +325,7 @@ fn disarm_strip_obfuscation(text: char_p::Ref<'_>) -> DisarmResult {
 /// ordinary non-Latin text from firing; a delimiter-only string is not reported.
 #[ffi_export]
 fn disarm_canonicalize(text: char_p::Ref<'_>) -> DisarmResult {
-    match api::canonicalize(text.to_str()) {
+    match api::canonicalize(&arg(text)) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -322,7 +334,7 @@ fn disarm_canonicalize(text: char_p::Ref<'_>) -> DisarmResult {
 /// Case/accent/script-insensitive search key; `lang` may be NULL.
 #[ffi_export]
 fn disarm_search_key(text: char_p::Ref<'_>, lang: Option<char_p::Ref<'_>>) -> DisarmResult {
-    match api::search_key(text.to_str(), opt_str(lang)) {
+    match api::search_key(&arg(text), opt_str(lang).as_deref()) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -331,7 +343,7 @@ fn disarm_search_key(text: char_p::Ref<'_>, lang: Option<char_p::Ref<'_>>) -> Di
 /// Collation sort key (preserves base accented characters); `lang` may be NULL.
 #[ffi_export]
 fn disarm_sort_key(text: char_p::Ref<'_>, lang: Option<char_p::Ref<'_>>) -> DisarmResult {
-    match api::sort_key(text.to_str(), opt_str(lang)) {
+    match api::sort_key(&arg(text), opt_str(lang).as_deref()) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -344,7 +356,7 @@ fn disarm_catalog_key(
     lang: Option<char_p::Ref<'_>>,
     strict_iso9: bool,
 ) -> DisarmResult {
-    match api::catalog_key(text.to_str(), opt_str(lang), strict_iso9) {
+    match api::catalog_key(&arg(text), opt_str(lang).as_deref(), strict_iso9) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -356,11 +368,11 @@ fn disarm_catalog_key(
 /// linked against it — the shape `disarm_normalize_confusables_opts` uses.
 #[ffi_export]
 fn disarm_canonicalize_opts(text: char_p::Ref<'_>, digit_policy: char_p::Ref<'_>) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::canonicalize_with(text.to_str(), policy) {
+    match api::canonicalize_with(&arg(text), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -372,11 +384,11 @@ fn disarm_canonicalize_strict_opts(
     text: char_p::Ref<'_>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::canonicalize_strict_with(text.to_str(), policy) {
+    match api::canonicalize_strict_with(&arg(text), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -388,11 +400,11 @@ fn disarm_strip_obfuscation_opts(
     text: char_p::Ref<'_>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::strip_obfuscation_with(text.to_str(), policy) {
+    match api::strip_obfuscation_with(&arg(text), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -406,11 +418,11 @@ fn disarm_search_key_opts(
     lang: Option<char_p::Ref<'_>>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::search_key_with(text.to_str(), opt_str(lang), policy) {
+    match api::search_key_with(&arg(text), opt_str(lang).as_deref(), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -423,11 +435,11 @@ fn disarm_sort_key_opts(
     lang: Option<char_p::Ref<'_>>,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::sort_key_with(text.to_str(), opt_str(lang), policy) {
+    match api::sort_key_with(&arg(text), opt_str(lang).as_deref(), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -441,11 +453,11 @@ fn disarm_catalog_key_opts(
     strict_iso9: bool,
     digit_policy: char_p::Ref<'_>,
 ) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::catalog_key_with(text.to_str(), opt_str(lang), strict_iso9, policy) {
+    match api::catalog_key_with(&arg(text), opt_str(lang).as_deref(), strict_iso9, policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -457,11 +469,11 @@ fn disarm_catalog_key_opts(
 /// `"tr39"` (adds `1 ≡ l` and `0 ≡ O`) or `"preserve"`.
 #[ffi_export]
 fn disarm_skeleton_key(text: char_p::Ref<'_>, digit_policy: char_p::Ref<'_>) -> DisarmResult {
-    let policy = match parse_policy(digit_policy.to_str()) {
+    let policy = match parse_policy(&arg(digit_policy)) {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
-    match api::skeleton_key(text.to_str(), policy) {
+    match api::skeleton_key(&arg(text), policy) {
         Ok(s) => ok(s.into_owned()),
         Err(e) => err(&e),
     }
@@ -471,7 +483,7 @@ fn disarm_skeleton_key(text: char_p::Ref<'_>, digit_policy: char_p::Ref<'_>) -> 
 /// registry spoofing the confusable tables deliberately do not model: `paypa1`, `adm1n`.
 #[ffi_export]
 fn disarm_edit_distance(a: char_p::Ref<'_>, b: char_p::Ref<'_>) -> usize {
-    api::edit_distance(a.to_str(), b.to_str())
+    api::edit_distance(&arg(a), &arg(b))
 }
 
 /// The candidate closest to `value`, or `null` beyond `max_distance` (#894).
@@ -487,7 +499,7 @@ fn disarm_nearest_match(
     candidates_json: char_p::Ref<'_>,
     max_distance: usize,
 ) -> DisarmResult {
-    let Ok(candidates) = serde_json::from_str::<Vec<String>>(candidates_json.to_str()) else {
+    let Ok(candidates) = serde_json::from_str::<Vec<String>>(&arg(candidates_json)) else {
         return DisarmResult {
             value: None,
             error: Some(to_c(
@@ -496,7 +508,7 @@ fn disarm_nearest_match(
         };
     };
     let hit = api::nearest_match(
-        value.to_str(),
+        &arg(value),
         candidates.iter().map(String::as_str),
         max_distance,
     );
@@ -517,7 +529,7 @@ fn disarm_nearest_match(
 /// preset would report "not canonical" for a question that was never asked.
 #[ffi_export]
 fn disarm_is_canonical(text: char_p::Ref<'_>, preset: char_p::Ref<'_>) -> i8 {
-    match api::is_canonical(text.to_str(), preset.to_str()) {
+    match api::is_canonical(&arg(text), &arg(preset)) {
         Ok(true) => 1,
         Ok(false) => 0,
         Err(_) => -1,
@@ -527,19 +539,19 @@ fn disarm_is_canonical(text: char_p::Ref<'_>, preset: char_p::Ref<'_>) -> i8 {
 /// Whether the hostname looks like a mixed-script / confusable / bidi IDN spoof.
 #[ffi_export]
 fn disarm_is_suspicious_hostname(host: char_p::Ref<'_>) -> bool {
-    api::is_suspicious_hostname(host.to_str()).suspicious
+    api::is_suspicious_hostname(&arg(host)).suspicious
 }
 
 /// Whether `text` mixes characters from more than one script.
 #[ffi_export]
 fn disarm_is_mixed_script(text: char_p::Ref<'_>) -> bool {
-    api::is_mixed_script(text.to_str())
+    api::is_mixed_script(&arg(text))
 }
 
 /// Whether `text` mixes strong LTR and strong RTL characters ("BiDi Swap").
 #[ffi_export]
 fn disarm_has_bidi_conflict(text: char_p::Ref<'_>) -> bool {
-    api::has_bidi_conflict(text.to_str())
+    api::has_bidi_conflict(&arg(text))
 }
 
 /// All twelve UAX #9 explicit formatting characters, uncontexted (#778).
@@ -549,7 +561,7 @@ fn disarm_has_bidi_conflict(text: char_p::Ref<'_>) -> bool {
 /// ordinary in right-to-left text.
 #[ffi_export]
 fn disarm_has_bidi_control(text: char_p::Ref<'_>) -> bool {
-    api::has_bidi_control(text.to_str())
+    api::has_bidi_control(&arg(text))
 }
 
 // ── Measurements (infallible) ───────────────────────────────────────────────────
@@ -557,14 +569,14 @@ fn disarm_has_bidi_control(text: char_p::Ref<'_>) -> bool {
 /// Number of grapheme clusters (user-perceived characters) in `text`.
 #[ffi_export]
 fn disarm_grapheme_len(text: char_p::Ref<'_>) -> u64 {
-    api::grapheme_len(text.to_str()) as u64
+    api::grapheme_len(&arg(text)) as u64
 }
 
 /// Total terminal display width of `text` (`ambiguous_wide` treats ambiguous
 /// East-Asian width characters as wide).
 #[ffi_export]
 fn disarm_terminal_width(text: char_p::Ref<'_>, ambiguous_wide: bool) -> u64 {
-    api::terminal_width(text.to_str(), ambiguous_wide) as u64
+    api::terminal_width(&arg(text), ambiguous_wide) as u64
 }
 
 // ── Structured reports (JSON transport, #553) ───────────────────────────────────
@@ -599,7 +611,7 @@ fn disarm_analyze_hostname(host: char_p::Ref<'_>) -> char_p::Box {
 /// `disarm_transliterate` / `_opts` and `disarm_normalize_confusables` / `_opts`.
 #[ffi_export]
 fn disarm_analyze_hostname_opts(host: char_p::Ref<'_>, contractions: bool) -> char_p::Box {
-    let a = api::analyze_hostname_with(host.to_str(), contractions);
+    let a = api::analyze_hostname_with(&arg(host), contractions);
     to_c(
         serde_json::json!({
             "suspicious": a.suspicious,
@@ -630,8 +642,8 @@ fn disarm_analyze_hostname_opts(host: char_p::Ref<'_>, contractions: bool) -> ch
 /// zalgo, mixed-script) still fire, matching the other bindings' no-arg behaviour.
 #[ffi_export]
 fn disarm_inspect_anomalies(text: char_p::Ref<'_>, lexicon_json: char_p::Ref<'_>) -> char_p::Box {
-    let words: Vec<String> = serde_json::from_str(lexicon_json.to_str()).unwrap_or_default();
-    let report = api::inspect_anomalies(text.to_str(), &api::lexicon(words));
+    let words: Vec<String> = serde_json::from_str(&arg(lexicon_json)).unwrap_or_default();
+    let report = api::inspect_anomalies(&arg(text), &api::lexicon(words));
     let findings: Vec<_> = report
         .findings
         .iter()
@@ -678,14 +690,14 @@ fn disarm_find_key_collisions(
     // Parse the key first: an unknown token is a real core `Error` with the
     // canonical message, and reporting it before the JSON means a caller who got
     // both wrong is told about the one they can fix from the docs.
-    let key: api::KeyForm = match key.to_str().parse() {
+    let key: api::KeyForm = match arg(key).parse() {
         Ok(k) => k,
         Err(e) => return err(&e),
     };
     // A parse failure is NOT an empty set: reading "malformed input" as "no
     // collisions" is the exact confusion this function exists to prevent, so it
     // is reported as an error string rather than as a clean result.
-    let Ok(values) = serde_json::from_str::<Vec<String>>(values_json.to_str()) else {
+    let Ok(values) = serde_json::from_str::<Vec<String>>(&arg(values_json)) else {
         return DisarmResult {
             value: None,
             error: Some(to_c(
@@ -693,7 +705,7 @@ fn disarm_find_key_collisions(
             )),
         };
     };
-    match api::find_key_collisions(&values, key, opt_str(lang)) {
+    match api::find_key_collisions(&values, key, opt_str(lang).as_deref()) {
         Ok(found) => ok(serde_json::json!(found
             .iter()
             .map(|c| serde_json::json!({
@@ -711,7 +723,7 @@ fn disarm_find_key_collisions(
 /// `reason`, `discriminators_hit`).
 #[ffi_export]
 fn disarm_inspect_auto_lang(text: char_p::Ref<'_>) -> char_p::Box {
-    let a = api::inspect_auto_lang(text.to_str());
+    let a = api::inspect_auto_lang(&arg(text));
     to_c(
         serde_json::json!({
             "script": a.script,
@@ -727,7 +739,7 @@ fn disarm_inspect_auto_lang(text: char_p::Ref<'_>) -> char_p::Box {
 /// an error in the [`DisarmResult`] for an unknown code.
 #[ffi_export]
 fn disarm_lang_info(code: char_p::Ref<'_>) -> DisarmResult {
-    match api::lang_info(code.to_str()) {
+    match api::lang_info(&arg(code)) {
         Ok(m) => ok(serde_json::json!({
             "name": m.name,
             "script": m.script,
@@ -743,7 +755,7 @@ fn disarm_lang_info(code: char_p::Ref<'_>) -> DisarmResult {
 /// `context_aware`), or an error in the [`DisarmResult`] for an unknown name.
 #[ffi_export]
 fn disarm_script_info(name: char_p::Ref<'_>) -> DisarmResult {
-    match api::script_info(name.to_str()) {
+    match api::script_info(&arg(name)) {
         Ok(m) => ok(serde_json::json!({
             "name": m.name,
             "default_lang": m.default_lang,
@@ -765,7 +777,7 @@ fn disarm_script_info(name: char_p::Ref<'_>) -> DisarmResult {
 /// script.
 #[ffi_export]
 fn disarm_confusable_coverage(script: char_p::Ref<'_>) -> DisarmResult {
-    match api::confusable_coverage(script.to_str()) {
+    match api::confusable_coverage(&arg(script)) {
         Ok(row) => ok(serde_json::json!({
             "script": row.script,
             "sources": row.sources,
@@ -825,9 +837,9 @@ fn disarm_ml_normalize(
     fold_case: bool,
 ) -> DisarmResult {
     match api::ml_normalize(
-        text.to_str(),
-        opt_str(lang),
-        emoji_style.to_str(),
+        &arg(text),
+        opt_str(lang).as_deref(),
+        &arg(emoji_style),
         fold_case,
     ) {
         Ok(s) => ok(s.into_owned()),
@@ -854,16 +866,16 @@ fn disarm_sanitize_filename(
     lang: Option<char_p::Ref<'_>>,
     preserve_extension: bool,
 ) -> DisarmResult {
-    let platform: api::Platform = match platform.to_str().parse() {
+    let platform: api::Platform = match arg(platform).parse() {
         Ok(p) => p,
         Err(e) => return err(&e),
     };
     match api::sanitize_filename(
-        text.to_str(),
-        separator.to_str(),
+        &arg(text),
+        &arg(separator),
         max_length,
         platform,
-        opt_str(lang),
+        opt_str(lang).as_deref(),
         preserve_extension,
     ) {
         Ok(s) => ok(s),
@@ -881,7 +893,7 @@ fn disarm_sanitize_filename(
 /// does not apply those rows because folding a legitimate `m` to `rn` corrupts prose.
 #[ffi_export]
 fn disarm_unmapped_confusables(target: char_p::Ref<'_>) -> DisarmResult {
-    match target.to_str().parse::<api::TargetScript>() {
+    match arg(target).parse::<api::TargetScript>() {
         Ok(target) => {
             let items: Vec<String> = api::unmapped_confusables(target)
                 .into_iter()
@@ -902,9 +914,9 @@ fn disarm_find_unmapped_confusables(
     text: char_p::Ref<'_>,
     target: char_p::Ref<'_>,
 ) -> DisarmResult {
-    match target.to_str().parse::<api::TargetScript>() {
+    match arg(target).parse::<api::TargetScript>() {
         Ok(target) => {
-            let items: Vec<_> = api::find_unmapped_confusables(text.to_str(), target)
+            let items: Vec<_> = api::find_unmapped_confusables(&arg(text), target)
                 .into_iter()
                 .map(|u| serde_json::json!({ "char": u.ch.to_string(), "offset": u.offset }))
                 .collect();
@@ -919,6 +931,17 @@ fn disarm_find_unmapped_confusables(
 /// Free a string previously returned by any `disarm_*` function. NULL-safe: the
 /// argument is a nullable owned box, so passing NULL (e.g. the unused half of a
 /// [`DisarmResult`]) is a no-op; a non-NULL box is dropped, freeing it.
+///
+/// The contract for every `disarm_*` function (found by `formal/bindings`, C1-C3):
+///
+/// - **Arguments.** Every `char const *` argument must be non-NULL and NUL-terminated,
+///   except those documented as nullable (such as `lang`). Bytes that are not UTF-8
+///   are accepted: each malformed sequence is read as U+FFFD, as every other binding
+///   does, so Latin-1 or truncated input never reaches the core as invalid text.
+/// - **Results.** A returned string is owned by the caller until passed here, and is
+///   **read-only**: do not write through it, not even to shorten it. An empty result
+///   can be a shared static, and a string shortened in place is freed with the wrong
+///   size.
 #[ffi_export]
 fn disarm_string_free(string: Option<char_p::Box>) {
     drop(string);

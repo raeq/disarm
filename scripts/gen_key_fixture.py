@@ -64,13 +64,22 @@ FUNCTIONS = (
 #: escaped rather than removed.
 _ESCAPES = (("\\", r"\\"), ("\t", r"\t"), ("\n", r"\n"), ("\r", r"\r"))
 
+#: LINE SEPARATOR and PARAGRAPH SEPARATOR, written as `\uXXXX`. Raw, each one renders as
+#: a line break in an editor and a diff, so a row holding one reads as two rows.
+_LINE_BREAKS = frozenset("\u2028\u2029")
+
 
 def escape(value: str) -> str:
     for raw, escaped in _ESCAPES:
         value = value.replace(raw, escaped)
-    # Remaining C0/C1 controls, which have no short form above.
+    # Remaining C0/C1 controls, which have no short form above, and the two Unicode
+    # line breaks that are neither.
     return "".join(
-        ch if not (ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F) else f"\\x{ord(ch):02x}"
+        f"\\u{ord(ch):04x}"
+        if ch in _LINE_BREAKS
+        else ch
+        if not (ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F)
+        else f"\\x{ord(ch):02x}"
         for ch in value
     )
 
@@ -84,6 +93,13 @@ def unescape(value: str) -> str:
                 try:
                     out.append(chr(int(value[i + 2 : i + 4], 16)))
                     i += 4
+                    continue
+                except ValueError:
+                    pass
+            if nxt == "u" and i + 5 < len(value):
+                try:
+                    out.append(chr(int(value[i + 2 : i + 6], 16)))
+                    i += 6
                     continue
                 except ValueError:
                     pass

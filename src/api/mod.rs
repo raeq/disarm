@@ -246,9 +246,25 @@ mod tests {
     }
 
     #[test]
+    fn sanitize_filename_bad_separator_is_invalid_argument() {
+        // Finding 2 of the Lean model: the separator reaches the output unfiltered, so
+        // one carrying a path separator (or NUL, whitespace, non-ASCII) is refused.
+        for sep in ["/", "\\", "\0", " ", "\u{202E}"] {
+            let err = sanitize_filename("../etc/passwd", sep, 255, Platform::Posix, None, true)
+                .unwrap_err();
+            assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument, "{sep:?}");
+            assert_eq!(err.code(), "invalid_filename_separator");
+        }
+        assert_eq!(
+            sanitize_filename("a:b", "", 255, Platform::Universal, None, true).unwrap(),
+            "ab"
+        );
+    }
+
+    #[test]
     fn sanitize_filename_bad_lang_is_invalid_argument() {
-        // The one fallible argument: an unknown language code surfaces the opaque
-        // Error, classified as InvalidArgument (the first fallible Layer-2 path).
+        // An unknown language code surfaces the opaque Error, classified as
+        // InvalidArgument (the first fallible Layer-2 path).
         let err =
             sanitize_filename("x", "_", 255, Platform::Universal, Some("zzz"), true).unwrap_err();
         assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument);

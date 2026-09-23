@@ -478,6 +478,20 @@ pub(crate) enum ErrorRepr {
         /// The offending character's code point.
         codepoint: u32,
     },
+
+    /// `separator` for `sanitize_filename` contains a character a filename must not
+    /// carry: one the platform forbids, a path separator (`/` or `\` on every
+    /// platform), whitespace, a control, or anything outside printable ASCII. The
+    /// separator is inserted after the illegal characters are removed, so an
+    /// unvalidated one put `/`, NUL or a bidi control straight back into the name.
+    #[error(
+        "separator must be printable, non-space ASCII with no character that is illegal \
+         in a filename and no path separator (found U+{codepoint:04X})"
+    )]
+    InvalidFilenameSeparator {
+        /// The offending character's code point.
+        codepoint: u32,
+    },
 }
 
 impl ErrorRepr {
@@ -500,6 +514,7 @@ impl ErrorRepr {
             ErrorRepr::InvalidUrlComponent { .. } => "invalid_url_component",
             ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
             ErrorRepr::InvalidLogReplacement { .. } => "invalid_log_replacement",
+            ErrorRepr::InvalidFilenameSeparator { .. } => "invalid_filename_separator",
             ErrorRepr::UnknownProfile { .. } => "unknown_profile",
             ErrorRepr::UnknownLangInfo { .. } => "unknown_lang_info",
             ErrorRepr::UnknownScript { .. } => "unknown_script",
@@ -603,6 +618,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
+            | ErrorRepr::InvalidFilenameSeparator { .. }
             | ErrorRepr::UnknownProfile { .. }
             | ErrorRepr::UnknownLangInfo { .. }
             | ErrorRepr::UnknownScript { .. }
@@ -706,6 +722,7 @@ impl Error {
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }
             | ErrorRepr::InvalidLogReplacement { .. }
+            | ErrorRepr::InvalidFilenameSeparator { .. }
             | ErrorRepr::UnknownProfile { .. }
             | ErrorRepr::UnknownLangInfo { .. }
             | ErrorRepr::UnknownScript { .. }
@@ -892,6 +909,7 @@ mod tests {
             ErrorRepr::InvalidPlatform { got: "x".into() },
             ErrorRepr::InvalidTargetScript { got: "x".into() },
             ErrorRepr::InvalidLogReplacement { codepoint: 0x0A },
+            ErrorRepr::InvalidFilenameSeparator { codepoint: 0x2F },
             ErrorRepr::UnknownLang {
                 got: "x".into(),
                 suggestion: String::new(),
@@ -1000,6 +1018,10 @@ mod tests {
             ),
             (ErrorRepr::InvalidEmojiStyle { got: MARKER.into() }, true),
             (ErrorRepr::InvalidPlatform { got: MARKER.into() }, true),
+            (
+                ErrorRepr::InvalidFilenameSeparator { codepoint: 0x2F },
+                false,
+            ),
             (ErrorRepr::InvalidTargetScript { got: MARKER.into() }, true),
             (
                 ErrorRepr::UnknownLang {
@@ -1160,6 +1182,7 @@ mod tests {
             ErrorRepr::InvalidPipelineNormForm { got: "x".into() },
             ErrorRepr::InvalidEmojiStyle { got: "x".into() },
             ErrorRepr::InvalidPlatform { got: "x".into() },
+            ErrorRepr::InvalidFilenameSeparator { codepoint: 0x2F },
             ErrorRepr::InvalidTargetScript { got: "x".into() },
             ErrorRepr::UnknownLang {
                 got: "x".into(),

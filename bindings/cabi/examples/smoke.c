@@ -292,6 +292,15 @@ int main(void) {
     disarm_string_free(fbad.value);
     disarm_string_free(fbad.error);
 
+    /* A separator that would put a path separator back into the name is refused
+     * (Lean model finding 2): "/" turned "../etc/passwd" into "/etc/passwd". */
+    DisarmResult_t fsep = disarm_sanitize_filename("../etc/passwd", "/", 255, "universal", NULL, true);
+    printf("%-28s %-6s\n", "sanitize bad separator",
+           (fsep.error && !fsep.value) ? "OK" : "FAIL");
+    if (!(fsep.error && !fsep.value)) failures++;
+    disarm_string_free(fsep.value);
+    disarm_string_free(fsep.error);
+
     /* #698: strip_format keeps the SCRIPT — the property that separates it from
      * canonicalize. Cyrillic in, Cyrillic out, with the zero-width joiner gone. */
     char *kept = disarm_strip_format("\xd0\xb0\xd1\x80\xe2\x80\x8d\xd1\x80");

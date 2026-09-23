@@ -494,8 +494,12 @@ pub fn canonicalize(text: String, digit_policy: String) -> Result<String, NapiEr
 /// A safe **filename**, not a safe URL path segment. `%` is legal in a filename, so one
 /// the caller typed is kept — `sanitizeFilename("..%2Fetc")` returns `"%2Fetc"` — and a
 /// consumer that percent-decodes the result must validate *after* decoding. What this
-/// will not do is manufacture one: `%` never appears in the output unless it appeared in
-/// the input (#721).
+/// will not do is manufacture one: every `%` in the output is one the input contained, or
+/// part of the separator (#721).
+///
+/// `separator` must be printable, non-space ASCII with no character illegal on
+/// `platform` and no path separator (`/`, `\`); anything else throws
+/// `DisarmInvalidArgument`. `""` is allowed.
 #[napi]
 pub fn sanitize_filename(
     text: String,

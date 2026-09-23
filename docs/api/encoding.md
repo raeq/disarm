@@ -49,6 +49,27 @@ text, had_errors = decode_to_utf8(raw_bytes, min_confidence=1.0)
 
 `had_errors=False` is not a fidelity guarantee — windows-1252 and other single-byte encodings map every byte to a codepoint without inserting U+FFFD, so a wrong-encoding decode yields mojibake with `had_errors=False`. Pass `strict=True` to raise on U+FFFD insertion, but prefer explicit encoding metadata for critical data.
 
+An explicit encoding is the encoding used. Auto-detection reads a byte-order mark first,
+but a BOM never overrides an encoding you named: only that encoding's own BOM is removed,
+and any other is decoded as data. A UTF-16 label that names no byte order (`"utf-16"`,
+`"unicode"`, `"ucs-2"`) is the exception, and still takes its byte order from a UTF-16 BOM.
+
+```python
+from disarm import DisarmError, decode_to_utf8
+
+# FE FF is a UTF-16BE BOM, and these bytes are not UTF-8.
+try:
+    decode_to_utf8(b"\xfe\xff\x00A", "utf-8", strict=True)
+except DisarmError:
+    pass
+else:
+    raise AssertionError("expected a lossy-decode error")
+
+assert decode_to_utf8(b"\xfe\xff\x00A") == ("A", False)  # auto-detection follows the BOM
+assert decode_to_utf8(b"\xfe\xff\x00A", "utf-16") == ("A", False)
+assert decode_to_utf8(b"\xef\xbb\xbfA", "utf-8") == ("A", False)  # its own BOM is removed
+```
+
 Supports all WHATWG encodings: UTF-8, windows-1252, ISO-8859-1, Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, and more.
 
 ## Malformed `str` input (lone surrogates)

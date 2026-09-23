@@ -478,6 +478,25 @@ RSpec.describe Disarm do
       expect { Disarm.sanitize_filename("x", platform: :amiga) }
         .to raise_error(Disarm::InvalidArgument)
     end
+
+    it "raises Disarm::InvalidArgument on a separator a filename cannot carry" do
+      ["/", "\\", " ", "\u0000", "\u202e", ":"].each do |separator|
+        expect { Disarm.sanitize_filename("../etc/passwd", separator: separator) }
+          .to raise_error(Disarm::InvalidArgument)
+      end
+      expect(Disarm.sanitize_filename("a:b", separator: "")).to eq("ab")
+    end
+
+    it "does not leave a device name when the stem sanitizes away" do
+      expect(Disarm.sanitize_filename("*.con")).to eq("_con")
+      expect(Disarm.sanitize_filename("*.NUL", platform: :windows)).to eq("_NUL")
+    end
+
+    it "returns a fixed point" do
+      once = Disarm.sanitize_filename("ab_cd", max_length: 3, preserve_extension: false)
+      expect(once).to eq("ab")
+      expect(Disarm.sanitize_filename(once, max_length: 3, preserve_extension: false)).to eq(once)
+    end
   end
 
   describe "reverse transliteration" do

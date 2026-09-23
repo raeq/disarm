@@ -3,7 +3,7 @@
 //! Shim in `src/py/filename.rs`; crates.io surface is
 //! `crate::api::sanitize_filename` (typed `Platform`). Fallible at Layer 2:
 //! the `lang` parameter is validated against the registrable transliteration
-//! language set, a genuine runtime error.
+//! language set, and the `separator` against what a filename may carry.
 
 use unicode_normalization::UnicodeNormalization;
 
@@ -25,8 +25,6 @@ const WINDOWS_RESERVED: &[&str] = &[
 const UNIVERSAL_ILLEGAL: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|', '\0'];
 const POSIX_ILLEGAL: &[char] = &['/', '\0'];
 
-use std::borrow::Cow;
-
 use crate::utils::floor_char_boundary;
 
 /// Replace a `%` that transliteration manufactured, leaving one the caller typed (#721).
@@ -46,23 +44,88 @@ use crate::utils::floor_char_boundary;
 /// `UNIVERSAL_ILLEGAL` and nothing removed it. The remedy at the dot-collapse covered one
 /// spelling of traversal and not the other.
 ///
-/// The test is `contains('%')` on the **raw input**, so the property is exact: `%` never
-/// appears in the output unless it appeared in the input. A caller who typed `%` keeps it
-/// — passing a literal `%2E%2E%2F` through is defensible, since the caller wrote it; a
-/// sanitizer *manufacturing* one from fullwidth characters is not. Filenames reach
-/// percent-decoders routinely (`Content-Disposition`, object-storage keys, static-file
-/// routes), so `serve(unquote(segment))` is a common enough shape to be worth the check.
+/// A caller who typed `%` keeps it — passing a literal `%2E%2E%2F` through is defensible,
+/// since the caller wrote it; a sanitizer *manufacturing* one from fullwidth characters is
+/// not. Filenames reach percent-decoders routinely (`Content-Disposition`, object-storage
+/// keys, static-file routes), so `serve(unquote(segment))` is a common enough shape to be
+/// worth the check.
 ///
-/// Borrows on the overwhelmingly common path: no `%` in the transliterated text at all.
-fn neutralize_introduced_percent<'a>(
-    transliterated: &'a str,
-    raw_input: &str,
-    separator: &str,
-) -> Cow<'a, str> {
-    if !transliterated.contains('%') || raw_input.contains('%') {
-        return Cow::Borrowed(transliterated);
+/// The test used to be `contains('%')` on the whole raw input, which made the rule hold
+/// only for input with no `%` at all: one typed `%` let every manufactured one through
+/// (a `%` followed by fullwidth `%2E%2E%2F` gave `"%%2E%2E%2F"`). It is now per
+/// character. Transliteration passes an ASCII `%` through unchanged and never removes
+/// one, so the output has exactly as many `%` as the input unless something was
+/// manufactured — one count on the common path. Only when the counts differ is the text
+/// transliterated again **between** the typed `%`, and each `%` inside a segment is the
+/// manufactured kind. The typed ones are the split points, so they come back exactly
+/// where they were.
+///
+/// With no typed `%` the only segment is the whole text, so that case is unchanged from
+/// #721. With typed ones, a segment is transliterated without its neighbours as context
+/// (inter-script spacing, auto-detected language) — only on input that both typed a `%`
+/// and folded another one in.
+fn transliterate_keeping_typed_percent(text: &str, lang: Option<&str>, separator: &str) -> String {
+    let translit = |s: &str| -> String {
+        transliterate::transliterate_impl(
+            s,
+            lang,
+            crate::ErrorMode::Ignore,
+            "",
+            false,
+            false,
+            false,
+        )
+        .into_owned()
+    };
+    let whole = translit(text);
+    let percents = |s: &str| s.bytes().filter(|&b| b == b'%').count();
+    if percents(&whole) == percents(text) {
+        return whole;
     }
-    Cow::Owned(transliterated.replace('%', separator))
+    let mut out = String::with_capacity(whole.len());
+    for (i, segment) in text.split('%').enumerate() {
+        if i > 0 {
+            out.push('%');
+        }
+        out.push_str(&translit(segment).replace('%', separator));
+    }
+    out
+}
+
+/// Whether `c` may appear in a `sanitize_filename` separator (Finding 2 of the Lean
+/// model).
+///
+/// The separator is inserted *after* the illegal characters are removed, so it is the
+/// one string that reaches the output without passing the filter — and before this check
+/// nothing looked at it: `separator="/"` turned `"../etc/passwd"` into `"/etc/passwd"`,
+/// `"\0"` put NUL in the name, and `" "` let `"con _"` truncate to a bare `"con"`. So it is
+/// held to what the stem keeps, and a little more:
+///
+/// - **Printable, non-space ASCII.** Rules out controls, every kind of whitespace, and
+///   invisible or bidi characters (`U+202E` would be a filename-spoofing primitive). It is
+///   also what keeps the output a fixed point: the output is otherwise ASCII, and a
+///   non-ASCII separator would be transliterated by the next call, giving another name.
+/// - **Not illegal on the platform** — the same set the stem loop removes.
+/// - **Not a path separator on any platform**: `\` is legal in a POSIX filename, but a
+///   separator of `\` still builds a path on Windows, which is where these names end up.
+///
+/// The empty separator is allowed (and documented): illegal runs are simply dropped.
+fn is_separator_char(c: char, illegal_chars: &[char]) -> bool {
+    c.is_ascii_graphic() && c != '/' && c != '\\' && !illegal_chars.contains(&c)
+}
+
+/// Reject a separator carrying a character [`is_separator_char`] refuses — the same
+/// shape as `validate_log_replacement` for `strip_log_injection`.
+fn validate_separator(separator: &str, illegal_chars: &[char]) -> Result<(), crate::ErrorRepr> {
+    if let Some(c) = separator
+        .chars()
+        .find(|&c| !is_separator_char(c, illegal_chars))
+    {
+        return Err(crate::ErrorRepr::InvalidFilenameSeparator {
+            codepoint: c as u32,
+        });
+    }
+    Ok(())
 }
 
 /// Check if a stem (filename without extension) matches a Windows reserved name.
@@ -74,6 +137,17 @@ fn is_windows_reserved(stem: &str) -> bool {
     WINDOWS_RESERVED
         .iter()
         .any(|r| stem.eq_ignore_ascii_case(r))
+}
+
+/// The part of a finished filename Windows matches against the device list: everything
+/// before the first dot, with trailing spaces removed (`"nul.txt"`, `"nul .txt"` and
+/// `"nul"` all open the device).
+fn windows_device_stem(name: &str) -> &str {
+    let stem = match name.find('.') {
+        Some(pos) => &name[..pos],
+        None => name,
+    };
+    stem.trim_end_matches(' ')
 }
 
 /// Apply max_length truncation with optional extension preservation.
@@ -141,23 +215,6 @@ fn collapse_dot_sequences(text: &str) -> String {
     result
 }
 
-/// Sanitize a string into a safe filename.
-///
-/// # `max_length` semantics
-/// `max_length` is measured in **bytes** (UTF-8 encoded), not Unicode
-/// characters. This matches the unit used by all major OS filesystem limits
-/// (ext4, APFS, NTFS: 255 bytes). The helper `floor_char_boundary` ensures
-/// that truncation never splits a multi-byte character.
-///
-/// # `preserve_extension` edge cases
-/// When `preserve_extension = true`:
-/// - If the extension alone (including the leading `.`) is ≥ `max_length`,
-///   the extension is dropped and the whole result is truncated to `max_length`.
-/// - Otherwise the stem is truncated to `max_length − extension_len` bytes
-///   and the full extension is appended.
-///
-/// When `preserve_extension = false`, the entire string (stem + extension)
-/// is truncated to `max_length` bytes as a unit.
 /// Final filename hygiene shared by both return paths (#485/#487), run on the fully
 /// assembled name so it covers the extension branch — which re-prepends `'.'` and is exempt
 /// from the stem's leading/trailing dot trim, so the assembled name can keep a leading dot
@@ -177,6 +234,60 @@ fn finalize_name(name: String) -> String {
     }
 }
 
+/// The arguments one sanitizing pass needs, validated.
+struct PassConfig<'a> {
+    separator: &'a str,
+    max_length: usize,
+    illegal_chars: &'a [char],
+    /// `universal` and `windows`: the name must not be a Windows device name.
+    checks_reserved: bool,
+    preserve_extension: bool,
+}
+
+/// Upper bound on sanitizing passes, the confirming one included; see
+/// [`sanitize_filename`]. Every input of the Lean model's 8.5-million-case grid settles
+/// within four (`fixed_point_within_the_pass_bound`); most need two, the second only
+/// confirming. The margin is deliberate: hitting the bound costs idempotence, never
+/// safety.
+const MAX_PASSES: usize = 8;
+
+/// Sanitize a string into a safe filename.
+///
+/// # `max_length` semantics
+/// `max_length` is measured in **bytes** (UTF-8 encoded), not Unicode
+/// characters. This matches the unit used by all major OS filesystem limits
+/// (ext4, APFS, NTFS: 255 bytes). The helper `floor_char_boundary` ensures
+/// that truncation never splits a multi-byte character.
+///
+/// # `preserve_extension` edge cases
+/// When `preserve_extension = true`:
+/// - If the extension alone (including the leading `.`) is ≥ `max_length`,
+///   the extension is dropped and the whole result is truncated to `max_length`.
+/// - Otherwise the stem is truncated to `max_length − extension_len` bytes
+///   and the full extension is appended.
+///
+/// When `preserve_extension = false`, the entire string (stem + extension)
+/// is truncated to `max_length` bytes as a unit.
+///
+/// # The output is a fixed point
+///
+/// `sanitize_filename(sanitize_filename(x)) == sanitize_filename(x)` (#487 criterion 2).
+/// One pass cannot promise that on its own: its steps each undo a precondition of an
+/// earlier one — an extension that cleans to `"."` is dropped, so the next call splits at
+/// an earlier dot (`"_.x.*"` gave `"_.x"`, then `"x"`); truncation can end the stem in the
+/// separator or a dot (`"ab_"`, `"a..txt"`); an empty separator makes the dots around a
+/// deleted space adjacent (`"a..b"`). #570 fixed one of these at its source and the Lean
+/// model found four more, with a proposed per-step fix that still left 100 of 8.5 million
+/// grid cases open under truncation.
+///
+/// So the pass is applied again to its own output until it stops changing, at most
+/// [`MAX_PASSES`] times. That is idempotent by construction wherever it converges: the
+/// result `y` satisfies `pass(y) == y`, and a second call on `y` starts from `y`. The
+/// passes after the first are cheap. The first pass's output is ASCII (transliteration
+/// emits ASCII, and [`is_separator_char`] admits only ASCII), and on ASCII input NFC,
+/// transliteration and the `%` rule are all the identity, so they are skipped and only
+/// the string surgery runs again. Every pass, the last one included, ends with the
+/// reserved-name check, so stopping at the bound can cost idempotence but never safety.
 pub(crate) fn sanitize_filename(
     text: &str,
     separator: &str,
@@ -200,6 +311,14 @@ pub(crate) fn sanitize_filename(
             })
         }
     };
+    validate_separator(separator, illegal_chars)?;
+    let config = PassConfig {
+        separator,
+        max_length,
+        illegal_chars,
+        checks_reserved: platform != "posix",
+        preserve_extension,
+    };
 
     // NFC normalize first — ensures consistent representation across platforms.
     // macOS APFS uses NFD internally; NFC here prevents mismatched filenames
@@ -209,27 +328,36 @@ pub(crate) fn sanitize_filename(
     // Collapse .. path traversal sequences before transliteration.
     let safe_text = collapse_dot_sequences(&nfc_text);
 
-    // Transliterate to ASCII
-    let transliterated = transliterate::transliterate_impl(
-        &safe_text,
-        lang,
-        crate::ErrorMode::Ignore,
-        "",
-        false,
-        false,
-        false,
-    )
-    .into_owned();
+    // Transliterate to ASCII, and neutralize a `%` the transliteration manufactured
+    // (#721): the same before/after comparison the dot-collapse in `sanitize_pass`
+    // embodies, for the other spelling of the same traversal. That collapse runs again
+    // on the transliterated text because characters like U+2026 HORIZONTAL ELLIPSIS
+    // (→ "...") or U+00B7 MIDDLE DOT (→ ".") can reintroduce ".." sequences.
+    let transliterated = transliterate_keeping_typed_percent(&safe_text, lang, separator);
 
-    // Collapse dots again after transliteration — characters like U+2026
-    // HORIZONTAL ELLIPSIS (→ "...") or U+00B7 MIDDLE DOT (→ ".") can
-    // reintroduce ".." sequences after transliteration.
-    let transliterated = collapse_dot_sequences(&transliterated);
+    let mut name = sanitize_pass(&transliterated, &config);
+    for _ in 1..MAX_PASSES {
+        debug_assert!(name.is_ascii(), "a pass emitted non-ASCII: {name:?}");
+        let next = sanitize_pass(&name, &config);
+        if next == name {
+            break;
+        }
+        name = next;
+    }
+    Ok(name)
+}
 
-    // #721: and neutralize a `%` the same step manufactured. Same before/after comparison
-    // the dot-collapse above embodies, for the other spelling of the same traversal.
-    let transliterated =
-        neutralize_introduced_percent(&transliterated, text, separator).into_owned();
+/// One sanitizing pass over already-transliterated text. See [`sanitize_filename`].
+fn sanitize_pass(text: &str, config: &PassConfig<'_>) -> String {
+    let &PassConfig {
+        separator,
+        max_length,
+        illegal_chars,
+        checks_reserved,
+        preserve_extension,
+    } = config;
+
+    let transliterated = collapse_dot_sequences(text);
 
     // #570: trim trailing dots and spaces BEFORE choosing the extension boundary.
     //
@@ -280,9 +408,24 @@ pub(crate) fn sanitize_filename(
         }
     }
 
-    // Strip trailing separator
-    while result.ends_with(separator) && !separator.is_empty() {
-        result.truncate(result.len() - separator.len());
+    // Strip trailing separators — except the first one of a stem that is nothing else.
+    //
+    // The loop above never *generates* a leading separator, so a stem made only of
+    // separators is one the caller typed, or the `_` the reserved-name rule below put
+    // there: `"PRN.txt"` at `max_length=5` is `"_PRN.txt"` cut to `"_.txt"`. Stripping
+    // that stem to nothing made the next call return `"txt"` — the extension it had just
+    // preserved, as the whole name — so the output was not a fixed point. Keeping one
+    // separator keeps it one. Only a stem the strip would have emptied is affected
+    // (`"_.x"` now stays `"_.x"`, where it used to become `"x"`).
+    if !separator.is_empty() {
+        let mut keep = result.len();
+        while result[..keep].ends_with(separator) {
+            keep -= separator.len();
+        }
+        if keep == 0 && !result.is_empty() {
+            keep = separator.len();
+        }
+        result.truncate(keep);
     }
 
     // Strip leading dots and spaces with a single drain (avoids O(k²) repeated shifts).
@@ -322,23 +465,12 @@ pub(crate) fn sanitize_filename(
         clean
     });
 
-    // Handle Windows reserved names — must re-append extension before returning
-    if matches!(platform, "universal" | "windows") && is_windows_reserved(&result) {
-        let mut final_name = format!("_{result}");
-        if let Some(ref ext) = sanitized_ext {
-            final_name.push_str(ext);
-        }
-        apply_max_length(
-            &mut final_name,
-            sanitized_ext.as_deref(),
-            max_length,
-            preserve_extension,
-        );
-        return Ok(finalize_name(final_name));
-    }
-
-    // Append sanitized extension
+    // A stem that is itself a reserved name is prefixed before truncation, so the
+    // extension-aware cut below budgets for the `_` (`"CON.txt"` → `"_CON.txt"`).
     let mut final_name = result;
+    if checks_reserved && is_windows_reserved(&final_name) {
+        final_name.insert(0, '_');
+    }
     if let Some(ref ext) = sanitized_ext {
         final_name.push_str(ext);
     }
@@ -351,27 +483,25 @@ pub(crate) fn sanitize_filename(
         preserve_extension,
     );
 
-    // Post-truncation reserved name check — truncation can create a reserved
-    // name (e.g., "NULtra.txt" truncated to 3 bytes → "NUL").
-    if matches!(platform, "universal" | "windows") {
-        let check_stem = match final_name.find('.') {
-            Some(pos) => &final_name[..pos],
-            None => &final_name,
-        };
-        if is_windows_reserved(check_stem) {
-            final_name.insert(0, '_');
-            apply_max_length(
-                &mut final_name,
-                sanitized_ext.as_deref(),
-                max_length,
-                preserve_extension,
-            );
-        }
-    }
+    // Final hygiene + never-empty / never-`.`-`..` fallback (#485/#487).
+    let mut final_name = finalize_name(final_name);
 
-    // Final hygiene + never-empty / never-`.`-`..` fallback, shared with the reserved
-    // branch above (#485/#487).
-    Ok(finalize_name(final_name))
+    // The reserved-name check that matters reads the name as it is returned, after the
+    // truncation and after `finalize_name`'s trim — the two steps that can turn a safe
+    // stem into a device name: `"NULtra.txt"` truncated to 3 bytes is `"NUL"`, and a stem
+    // that sanitizes to nothing leaves the extension as the whole name, `"*.con"` →
+    // `".con"` → `"con"` (Finding 1 of the Lean model: every earlier check read the empty
+    // stem, then `finalize_name` stripped the dot). A `_` prefix never starts a device
+    // name, so the name after the re-cut and re-trim below is not one either.
+    if checks_reserved && is_windows_reserved(windows_device_stem(&final_name)) {
+        final_name.insert(0, '_');
+        let kept_ext = sanitized_ext
+            .as_deref()
+            .filter(|e| e.len() > 1 && final_name.ends_with(e));
+        apply_max_length(&mut final_name, kept_ext, max_length, preserve_extension);
+        final_name = finalize_name(final_name);
+    }
+    final_name
 }
 
 #[cfg(test)]
@@ -819,6 +949,308 @@ mod tests {
                         "exceeds max_length {max_length} for input '{input}': got '{result}' (len={})",
                         result.len()
                     );
+                }
+            }
+        }
+    }
+
+    // Findings 1, 2, 3 and 15 of the Lean model of the sanitizers
+    // (`formal/lean/Sanitizers/README.md`), pinned at the layer that owns them.
+    mod formal_findings {
+        use super::super::*;
+
+        const PLATFORMS: [&str; 3] = ["universal", "windows", "posix"];
+
+        fn sf(text: &str, sep: &str, max_length: usize, platform: &str, keep_ext: bool) -> String {
+            sanitize_filename(text, sep, max_length, platform, None, keep_ext).unwrap()
+        }
+
+        fn default(text: &str) -> String {
+            sf(text, "_", 255, "universal", true)
+        }
+
+        fn is_device_name(name: &str) -> bool {
+            is_windows_reserved(windows_device_stem(name))
+        }
+
+        /// How many passes `sanitize_filename` runs, the confirming one included, or
+        /// `None` if the output is still changing at `MAX_PASSES`. Mirrors the loop there.
+        fn passes(text: &str, config: &PassConfig<'_>) -> Option<usize> {
+            let nfc: String = text.nfc().collect();
+            let prepared = transliterate_keeping_typed_percent(
+                &collapse_dot_sequences(&nfc),
+                None,
+                config.separator,
+            );
+            let mut name = sanitize_pass(&prepared, config);
+            for n in 2..=MAX_PASSES {
+                let next = sanitize_pass(&name, config);
+                if next == name {
+                    return Some(n);
+                }
+                name = next;
+            }
+            None
+        }
+
+        /// Finding 1: a stem that sanitizes to nothing left the extension as the whole
+        /// name, and `finalize_name` stripped its dot *after* both reserved checks had
+        /// read the empty stem.
+        #[test]
+        fn empty_stem_does_not_expose_a_device_name() {
+            for input in [
+                "_.con", "*.con", " .nul", "/.aux", "../.con", "\0.com1", "?.LPT1",
+            ] {
+                for platform in ["universal", "windows"] {
+                    let out = sf(input, "_", 255, platform, true);
+                    assert!(!is_device_name(&out), "{input:?} ({platform}) -> {out:?}");
+                    assert_eq!(sf(&out, "_", 255, platform, true), out, "{input:?}");
+                }
+            }
+            assert_eq!(default("*.con"), "_con");
+            assert_eq!(sf("*.NUL", "_", 255, "windows", true), "_NUL");
+            assert_eq!(default("../.con"), "_con");
+            // A typed separator is a stem, so nothing needs prefixing.
+            assert_eq!(default("_.con"), "_.con");
+            // Windows reads the device name before the FIRST dot; the split is at the last.
+            assert_eq!(default("nul.tar.gz"), "_nul.tar.gz");
+            assert_eq!(sf("*.con.tar.gz", "_", 255, "windows", true), "_con.tar.gz");
+            // POSIX does not check device names, and still returns no dotfile.
+            assert_eq!(sf("/.con", "_", 255, "posix", true), "con");
+        }
+
+        /// Finding 1 as swept: every scalar `c` in `c + ".con"` (185 failed).
+        #[test]
+        fn every_ascii_character_before_a_device_extension() {
+            for c in (0u8..=0x7F).map(char::from) {
+                for ext in [".con", ".NUL", ".aux", ".com1", ".lpt9"] {
+                    let input = format!("{c}{ext}");
+                    for platform in ["universal", "windows"] {
+                        let out = sf(&input, "_", 255, platform, true);
+                        assert!(!is_device_name(&out), "{input:?} ({platform}) -> {out:?}");
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn the_device_stem_is_what_windows_reads() {
+            assert_eq!(windows_device_stem("nul.txt"), "nul");
+            assert_eq!(windows_device_stem("nul .txt"), "nul");
+            assert_eq!(windows_device_stem("con.tar.gz"), "con");
+            assert_eq!(windows_device_stem("aux"), "aux");
+        }
+
+        /// Finding 2: the separator reached the output unvalidated.
+        #[test]
+        fn a_separator_a_filename_cannot_carry_is_rejected() {
+            let rejects = |sep: &str, platform: &str| {
+                matches!(
+                    sanitize_filename("a b", sep, 255, platform, None, true),
+                    Err(crate::ErrorRepr::InvalidFilenameSeparator { .. })
+                )
+            };
+            for platform in PLATFORMS {
+                for sep in [
+                    "/", "\\", "\0", " ", "\t", "\n", "\u{7F}", "-\u{1B}", "\u{A0}", "\u{3000}",
+                    "\u{202E}", "\u{200B}", "\u{E9}",
+                ] {
+                    assert!(rejects(sep, platform), "{sep:?} accepted on {platform}");
+                }
+                for sep in ["", "_", "-", ".", "--", "~", "+"] {
+                    assert!(!rejects(sep, platform), "{sep:?} rejected on {platform}");
+                }
+            }
+            // What is illegal depends on the platform, as it does for the stem.
+            for sep in [":", "*", "?", "\"", "<", ">", "|"] {
+                assert!(
+                    rejects(sep, "universal") && rejects(sep, "windows"),
+                    "{sep:?}"
+                );
+                assert!(!rejects(sep, "posix"), "{sep:?}");
+            }
+            // The error names the character.
+            assert_eq!(
+                sanitize_filename("x", "-/", 255, "posix", None, true)
+                    .unwrap_err()
+                    .code(),
+                "invalid_filename_separator"
+            );
+        }
+
+        /// Finding 2's reproductions, which now fail instead of returning these.
+        #[test]
+        fn the_reproductions_are_refused() {
+            assert!(sanitize_filename("../etc/passwd", "/", 255, "universal", None, true).is_err());
+            assert!(sanitize_filename("a b", "\0", 255, "universal", None, true).is_err());
+            assert!(sanitize_filename("con _", " ", 4, "universal", None, false).is_err());
+            assert!(sanitize_filename("AUX .txt", " ", 255, "universal", None, false).is_err());
+        }
+
+        /// Finding 3: outputs that a second call changed.
+        #[test]
+        fn the_non_fixed_points_are_fixed_points() {
+            let cases: [(&str, &str, usize, bool, &str); 7] = [
+                ("_.x.*", "_", 255, true, "_.x"),
+                ("ab_cd", "_", 3, false, "ab"),
+                ("a.bcd.txt", "_", 6, true, "a.txt"),
+                ("a. .b", "", 255, false, "a.b"),
+                (". ./", "-", 255, false, "-"),
+                ("PRN.txt", "_", 5, true, "_.txt"),
+                ("../../../etc/passwd", "_", 255, true, "_.etcpasswd"),
+            ];
+            for (input, sep, max_length, keep_ext, want) in cases {
+                for platform in PLATFORMS {
+                    let once = sf(input, sep, max_length, platform, keep_ext);
+                    if platform != "posix" {
+                        assert_eq!(once, want, "{input:?} ({platform})");
+                    }
+                    let twice = sf(&once, sep, max_length, platform, keep_ext);
+                    assert_eq!(twice, once, "{input:?} ({platform}) not a fixed point");
+                }
+            }
+        }
+
+        /// Finding 15: one typed `%` let every manufactured one through.
+        #[test]
+        fn a_typed_percent_does_not_license_a_manufactured_one() {
+            let fw = "\u{FF05}\u{FF12}\u{FF25}\u{FF05}\u{FF12}\u{FF25}\u{FF05}\u{FF12}\u{FF26}";
+            assert_eq!(default(&format!("%{fw}etc.txt")), "%_2E_2E_2Fetc.txt");
+            assert_eq!(default(&format!("{fw}%etc.txt")), "_2E_2E_2F%etc.txt");
+            assert_eq!(default(&format!("{fw}etc.txt")), "_2E_2E_2Fetc.txt");
+            // Typed ones stay exactly where they were.
+            assert_eq!(default("100%.txt"), "100%.txt");
+            assert_eq!(default("..%2Fetc"), "%2Fetc");
+            for c in ["\u{609}", "\u{60A}", "\u{66A}", "\u{FE6A}", "\u{FF05}"] {
+                let out = default(&format!("%a{c}b%.txt"));
+                assert_eq!(out.matches('%').count(), 2, "{c:?} -> {out:?}");
+            }
+        }
+
+        /// The pass loop skips NFC and transliteration from the second pass on, which is
+        /// exact only because both are the identity on ASCII, for every language.
+        #[test]
+        fn preparation_is_the_identity_on_ascii() {
+            let ascii: String = (0u8..=0x7F).map(char::from).collect();
+            let langs: Vec<Option<String>> = std::iter::once(None)
+                .chain(crate::tables::list_langs().into_iter().map(Some))
+                .collect();
+            for lang in &langs {
+                let out = transliterate_keeping_typed_percent(&ascii, lang.as_deref(), "_");
+                assert_eq!(out, ascii, "lang {lang:?}");
+            }
+            let nfc: String = ascii.nfc().collect();
+            assert_eq!(nfc, ascii);
+        }
+
+        fn grid_words(alphabet: &[char], max_len: usize) -> Vec<String> {
+            let mut words = vec![String::new()];
+            let mut frontier = vec![String::new()];
+            for _ in 0..max_len {
+                let mut next = Vec::new();
+                for w in &frontier {
+                    for &c in alphabet {
+                        let mut n = w.clone();
+                        n.push(c);
+                        next.push(n);
+                    }
+                }
+                words.extend(next.iter().cloned());
+                frontier = next;
+            }
+            words
+        }
+
+        /// P1-P9 of the model over its filename grid, and the pass bound.
+        fn check_grid(max_word: usize) -> usize {
+            let alphabet = ['.', ' ', '/', '*', '_', 'c', 'o', 'n', 'x'];
+            let mut worst = 0;
+            for word in grid_words(&alphabet, max_word) {
+                for sep in ["_", "", "-", "."] {
+                    for max_length in [0, 1, 2, 3, 4, 5, 6, 8] {
+                        for platform in ["universal", "posix"] {
+                            let illegal = if platform == "posix" {
+                                POSIX_ILLEGAL
+                            } else {
+                                UNIVERSAL_ILLEGAL
+                            };
+                            for keep_ext in [true, false] {
+                                let config = PassConfig {
+                                    separator: sep,
+                                    max_length,
+                                    illegal_chars: illegal,
+                                    checks_reserved: platform != "posix",
+                                    preserve_extension: keep_ext,
+                                };
+                                let n = passes(&word, &config);
+                                assert!(n.is_some(), "no fixed point for {word:?} {sep:?}");
+                                worst = worst.max(n.unwrap_or(0));
+                                let out = sf(&word, sep, max_length, platform, keep_ext);
+                                let case = format!("{word:?} {sep:?} {max_length} {platform} {keep_ext} -> {out:?}");
+                                assert!(!out.is_empty() && out != "." && out != "..", "{case}");
+                                assert!(!out.starts_with(['.', ' ']), "{case}");
+                                assert!(!out.ends_with(['.', ' ']), "{case}");
+                                assert!(!out.contains(".."), "{case}");
+                                assert!(
+                                    !out.chars().any(|c| illegal.contains(&c) || c.is_control()),
+                                    "{case}"
+                                );
+                                assert!(max_length == 0 || out.len() <= max_length, "{case}");
+                                if platform != "posix" {
+                                    assert!(!is_device_name(&out), "{case}");
+                                }
+                                let again = sf(&out, sep, max_length, platform, keep_ext);
+                                assert_eq!(again, out, "not a fixed point: {case}");
+                            }
+                        }
+                    }
+                }
+            }
+            worst
+        }
+
+        #[test]
+        fn grid_up_to_three_characters() {
+            let worst = check_grid(3);
+            assert!(worst <= 3, "took {worst} passes");
+        }
+
+        /// The model's grid at its full size (words up to 5 characters). Tier 3.
+        #[test]
+        #[ignore = "exhaustive: the Lean model's sanitize_filename grid; Tier 3"]
+        fn fixed_point_within_the_pass_bound() {
+            let worst = check_grid(5);
+            assert!(worst <= 4, "took {worst} passes");
+        }
+
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(2000))]
+
+            /// Off the grid: arbitrary text, multi-character separators, every platform.
+            #[test]
+            fn random_inputs_reach_a_fixed_point(
+                text in "([. /*_\\-%:\\\\a-z0-9]|\\PC){0,24}",
+                sep in prop::sample::select(vec!["_", "", "-", ".", "--", "ab", "._", "~"]),
+                max_length in 0usize..20,
+                platform in prop::sample::select(PLATFORMS.to_vec()),
+                keep_ext in proptest::bool::ANY,
+            ) {
+                let illegal = if platform == "posix" { POSIX_ILLEGAL } else { UNIVERSAL_ILLEGAL };
+                let config = PassConfig {
+                    separator: sep,
+                    max_length,
+                    illegal_chars: illegal,
+                    checks_reserved: platform != "posix",
+                    preserve_extension: keep_ext,
+                };
+                let n = passes(&text, &config);
+                prop_assert!(n.is_some(), "{text:?}: {n:?} passes");
+                let out = sf(&text, sep, max_length, platform, keep_ext);
+                prop_assert_eq!(sf(&out, sep, max_length, platform, keep_ext), out.clone());
+                if platform != "posix" {
+                    prop_assert!(!is_device_name(&out), "{text:?} -> {out:?}");
                 }
             }
         }

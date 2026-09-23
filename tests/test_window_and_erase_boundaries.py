@@ -151,18 +151,28 @@ class TestEraseAfterCarriageReturn:
         """
         assert pipe(text) == expected
 
-    def test_blank_cells_to_the_right_are_not_a_line_to_keep(self) -> None:
-        """Only visible text to the right sends a no-cell character ahead of the line.
+    def test_a_no_cell_character_never_takes_a_cell(self, pipe: TextPipeline) -> None:
+        """On an empty line too, and whatever lies to the right (Lean model).
 
-        Erases blank cells rather than removing them, so a backspace can also bring
-        the cursor to column 0 with cells to its right — blank ones. Treating that
-        like the post-`CR` case changed output with no `CR` in it at all:
-        `"ab\\b\\b\u200b\\b"` gave `"\u200b"` where `"\u200b\\b"` gives `""`
-        (Copilot on #1005).
+        #1005 sent it ahead of the line only when visible text lay to the right. On an
+        empty line it took cell 0, so every overwrite after a later `CR` landed a
+        column off: one leading U+200B defeated the resolution. A backspace at column
+        0 then has no cell to erase, so the character is kept, as a terminal keeps it.
         """
-        pipe = TextPipeline(resolve_deletions=True)
-        assert pipe("ab\b\b\u200b\b") == pipe("\u200b\b") == ""
-        assert pipe("ab\b\b\u200bY") == "\u200bY"
+        assert pipe("\u200bZZZZZZ\rpaypal") == "\u200bpaypal"
+        assert pipe("\u0301ZZZZZZ\rpaypal") == "\u0301paypal"
+        assert pipe("\u200ba\ra") == "\u200ba"
+        no_cr = TextPipeline(resolve_deletions=True)
+        assert no_cr("ab\b\b\u200b\b") == no_cr("\u200b\b") == "\u200b"
+        assert no_cr("ab\b\b\u200bY") == "\u200bY"
+
+    @pytest.mark.parametrize("brk", ["\x0b", "\x0c", "\x85", "\u2028", "\u2029"])
+    def test_every_line_break_the_detector_knows_ends_a_line(
+        self, pipe: TextPipeline, brk: str
+    ) -> None:
+        """VT, FF, NEL, LS and PS were cells here and line breaks to the detector."""
+        assert pipe(f"abc{brk}\rX") == f"abc{brk}X"
+        assert TextPipeline(resolve_deletions=True)(f"pay{brk}\bpal") == f"pay{brk}pal"
 
     def test_the_behaviour_without_a_return_is_unchanged(self) -> None:
         pipe = TextPipeline(resolve_deletions=True)

@@ -267,7 +267,8 @@ pub fn transliterate(text: &str) -> Cow<'_, str> {
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) if a key is not exactly one
 /// character, ([`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit)) past the
 /// registered-language cap, or ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once
-/// [`seal_registrations`] has been called.
+/// [`seal_registrations`] has been called. The cap holds under concurrent
+/// registration: two calls racing for the last slot cannot both take it.
 pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<(), Error> {
     crate::transliterate::register_lang(code, mappings).map_err(Error::from)
 }
@@ -296,6 +297,9 @@ pub fn clear_replacements() -> Result<(), Error> {
 /// this, every `register_*`/`remove_*`/`clear_*` call fails, so an application can
 /// configure canonicalization at startup and prevent later code from mutating the
 /// process-global state every caller shares (#64). Idempotent.
+///
+/// A registration running on another thread when this is called either finishes
+/// first or fails: none lands after this returns.
 pub fn seal_registrations() {
     crate::tables::seal_registrations();
 }

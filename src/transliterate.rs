@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::MutexGuard;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::tables;
@@ -1635,27 +1636,33 @@ pub fn strip_accents_into(text: &str, out: &mut String) {
     out.extend(kept.nfc());
 }
 
-/// Reject a registration mutation once the tables have been sealed (#64).
-/// `pub(crate)` so sibling modules (e.g. the emoji provider setter, #104) can
-/// enforce the same latch.
-pub(crate) fn check_not_sealed(op: &str) -> Result<(), crate::ErrorRepr> {
+/// Reject a registration mutation once the tables have been sealed (#64), and
+/// otherwise hold the registration gate until the returned guard is dropped.
+///
+/// Bind the guard for the whole mutation (`let _gate = unsealed_gate(op)?;`, never
+/// `let _ = …`): the check is only worth anything while the gate is held, because
+/// `seal_registrations` takes the same gate. `pub(crate)` so sibling modules (e.g. the
+/// emoji provider setter, #104) enforce the same latch.
+pub(crate) fn unsealed_gate(op: &str) -> Result<MutexGuard<'static, ()>, crate::ErrorRepr> {
+    let gate = tables::registration_gate();
     if tables::registrations_sealed() {
         return Err(crate::ErrorRepr::Sealed { op: op.to_owned() });
     }
-    Ok(())
+    Ok(gate)
 }
 
 /// Register or override a transliteration mapping for a language code (#38).
 ///
 /// Pure Layer-1 core of the `_register_lang` shim: enforces the seal latch and
-/// the registered-language cap, then delegates to `tables::register_lang`,
-/// returning the native [`crate::ErrorRepr`]. The PyO3 wrapper lives in
+/// the registered-language cap, under the registration gate so that neither check
+/// can be overtaken before the insert (see `tables::REGISTRATION_GATE`), then
+/// delegates to `tables::register_lang`, returning the native [`crate::ErrorRepr`]. The PyO3 wrapper lives in
 /// `crate::py::transliterate`.
 pub(crate) fn register_lang(
     code: &str,
     mappings: HashMap<String, String>,
 ) -> Result<(), crate::ErrorRepr> {
-    check_not_sealed("register_lang")?;
+    let _gate = unsealed_gate("register_lang")?;
     // Guard against unbounded growth of the global language table.
     let current = tables::registered_lang_count();
     if current >= tables::MAX_REGISTERED_LANGS {
@@ -1683,7 +1690,7 @@ pub(crate) fn register_lang(
 pub(crate) fn register_replacements(
     replacements: HashMap<String, String>,
 ) -> Result<(), crate::ErrorRepr> {
-    check_not_sealed("register_replacements")?;
+    let _gate = unsealed_gate("register_replacements")?;
     tables::register_replacements(replacements).map_err(|projected| {
         crate::ErrorRepr::RegisterReplacementsLimit {
             max: tables::MAX_REPLACEMENTS,
@@ -1697,7 +1704,7 @@ pub(crate) fn register_replacements(
 /// Returns `Ok(true)` if the key was present, `Ok(false)` otherwise. Pure
 /// Layer-1 core of the `_remove_replacement` shim.
 pub(crate) fn remove_replacement(key: &str) -> Result<bool, crate::ErrorRepr> {
-    check_not_sealed("remove_replacement")?;
+    let _gate = unsealed_gate("remove_replacement")?;
     Ok(tables::remove_replacement(key))
 }
 
@@ -1705,7 +1712,7 @@ pub(crate) fn remove_replacement(key: &str) -> Result<bool, crate::ErrorRepr> {
 ///
 /// Pure Layer-1 core of the `_clear_replacements` shim.
 pub(crate) fn clear_replacements() -> Result<(), crate::ErrorRepr> {
-    check_not_sealed("clear_replacements")?;
+    let _gate = unsealed_gate("clear_replacements")?;
     tables::clear_replacements();
     Ok(())
 }

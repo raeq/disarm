@@ -225,6 +225,16 @@ pub(crate) struct CharWindow<'a> {
 /// holds every table key to it.
 const MAX_WINDOW: usize = 2 * tables::max_emoji_seq_len();
 
+// The window's growth loop stops once a doubled scan leaves the match unchanged, and that
+// stop is sound only from four code points up (`grow_stop_sound` in the Lean model,
+// `formal/lean/Emoji`). At three, `👨 U+FE0E U+FE0E ZWJ 1 U+FE0F U+20E3` stops one
+// character short of the keycap that completes it (`window3_is_not_enough`). Nothing
+// asserted it; a table update that shrank the longest key would have broken it silently.
+const _: () = assert!(
+    MAX_WINDOW >= 4,
+    "CharWindow needs at least four code points"
+);
+
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.
     pub(crate) fn new(mut chars: std::str::Chars<'a>) -> Self {
@@ -1513,6 +1523,37 @@ mod tests {
             demojize_rust("\u{2764}\u{FE0F}\u{200D}\u{1F525}", false),
             "heart on fire"
         );
+    }
+
+    /// The selector rule, class by class (Copilot review on #1015).
+    #[test]
+    fn a_selector_follows_only_an_emoji_base() {
+        for base in [
+            '\u{2764}',
+            '\u{1F3F3}',
+            '1',
+            '#',
+            '*',
+            '\u{00A9}',
+            '\u{1F468}',
+        ] {
+            assert!(tables::selector_may_follow(base), "{base:?}");
+        }
+        for not_base in [
+            '\u{200D}',
+            '\u{FE0E}',
+            '\u{FE0F}',
+            '\u{20E3}',
+            '\u{1F1E6}',
+            '\u{1F1FF}',
+            '\u{1F3FB}',
+            '\u{1F3FF}',
+            '\u{E0067}',
+            'a',
+            '\u{20AC}',
+        ] {
+            assert!(!tables::selector_may_follow(not_base), "{not_base:?}");
+        }
     }
 
     #[test]

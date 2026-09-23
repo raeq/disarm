@@ -127,7 +127,7 @@ def exists_in_db(slug: str) -> bool:
 unique = UniqueSlugifier(check=exists_in_db)
 ```
 
-The `check` callback is called for each candidate slug. If it returns `True`, the slugifier increments the suffix and tries again.
+The `check` callback is called for each candidate slug. If it returns `True`, the slugifier increments the suffix and tries again. An empty slug (an input with nothing sluggable) is returned as it is, without calling `check`.
 
 ---
 

@@ -339,7 +339,8 @@ pub(crate) enum ErrorRepr {
     /// `UniqueSlugifier` `max_length` too small to ever produce a unique slug.
     #[error(
         "max_length={max_length} is too small to generate a unique slug with separator {separator:?}: \
-         need at least {min_unique_len} bytes for the separator plus one counter digit"
+         need at least {min_unique_len} bytes for one character of the slug, the separator \
+         and the counter"
     )]
     UniqueSlugMaxLengthTooSmall {
         /// The configured `max_length`.

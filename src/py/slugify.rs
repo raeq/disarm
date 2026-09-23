@@ -11,8 +11,9 @@ use std::collections::{HashMap, HashSet};
 use pyo3::prelude::*;
 
 use crate::limits::MAX_UNIQUE_ATTEMPTS;
-use crate::slugify::{slugify_impl, slugify_impl_with_stopset, SlugConfig};
-use crate::utils::floor_char_boundary;
+use crate::slugify::{
+    build_stopset, slugify_impl, slugify_impl_with_stopset, unique_slug_candidate, SlugConfig,
+};
 
 /// Generate a URL-safe slug from Unicode text.
 #[pyfunction]
@@ -143,7 +144,7 @@ pub fn _slugify_batch(
 
     // Pre-build the stopword set once for the entire batch instead of
     // reconstructing it on every call to slugify_impl.
-    let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
+    let stopset: HashSet<String> = build_stopset(&config.stopwords);
 
     // #239: extract Rust `String` copies from the snapshot and slugify in chunks,
     // so peak Rust-side string residency is one chunk rather than a full copy of
@@ -244,7 +245,7 @@ impl _Slugifier {
         .map_err(pyo3::PyErr::from)?;
         // #230: safe_chars is native to the core now (no Python marker logic).
         safe_chars.clone_into(&mut config.safe_chars);
-        let stopset: HashSet<String> = config.stopwords.iter().cloned().collect();
+        let stopset: HashSet<String> = build_stopset(&config.stopwords);
         Ok(Self { config, stopset })
     }
 
@@ -279,51 +280,6 @@ pub struct _UniqueSlugifier {
     /// the hint would unsafely skip — there we keep the full walk so output is
     /// byte-identical.
     next_counter: HashMap<String, u64>,
-}
-
-/// Build the `counter`-th unique-slug candidate for `base`: counter 0 is the
-/// bare base; counter k ≥ 1 is `base{sep}k`, truncated on a char boundary to
-/// `max_length` if set (#102/#242 item 3 — extracted so the dedup loop can build
-/// a candidate for any counter, including a cached starting hint).
-///
-/// Returns `(candidate, lossy)` where `lossy` is true when the `max_length`
-/// truncation dropped suffix *digits* — a lossy candidate no longer faithfully
-/// encodes `counter`, so distinct counters can alias to one string (e.g. with
-/// `max_length == sep_len + 1`, counters 1 and 10 both truncate to `{sep}1`).
-/// The dedup loop uses the flag to report `UniqueSlugMaxLengthTooSmall` rather
-/// than the generic attempts-exceeded error (M1).
-fn build_unique_candidate(base: &str, counter: u64, config: &SlugConfig) -> (String, bool) {
-    if counter == 0 {
-        return (base.to_owned(), false);
-    }
-    let sep = &config.separator;
-    let mut candidate = format!("{base}{sep}{counter}");
-    let mut lossy = false;
-    if config.max_length > 0 && candidate.len() > config.max_length {
-        let suffix = format!("{sep}{counter}");
-        if suffix.len() >= config.max_length {
-            // Suffix alone exceeds max_length — use the suffix truncated on a
-            // char boundary (the separator may be multibyte). Cutting inside the
-            // digits is the aliasing case, so flag it lossy.
-            let boundary = floor_char_boundary(&suffix, config.max_length);
-            lossy = boundary < suffix.len();
-            // `floor_char_boundary` returns a valid char boundary <= len, so this
-            // slice cannot panic — a justified exception to the FFI no-panic gate.
-            #[allow(clippy::string_slice)]
-            suffix[..boundary].clone_into(&mut candidate);
-        } else {
-            // Only the base is truncated; the full `{sep}{counter}` is preserved,
-            // so the counter stays faithfully encoded (not lossy).
-            let avail = config.max_length - suffix.len();
-            let boundary = floor_char_boundary(base, avail);
-            // `floor_char_boundary` returns a valid char boundary <= len, so this
-            // slice cannot panic — a justified exception to the FFI no-panic gate.
-            #[allow(clippy::string_slice)]
-            let head = &base[..boundary];
-            candidate = format!("{head}{suffix}");
-        }
-    }
-    (candidate, lossy)
 }
 
 #[pymethods]
@@ -393,9 +349,18 @@ impl _UniqueSlugifier {
     /// Generate a unique slug, appending numeric suffixes as needed.
     ///
     /// Bounded to `MAX_UNIQUE_ATTEMPTS` iterations to prevent infinite loops
-    /// when a `check` callback always rejects candidates.
+    /// when a `check` callback always rejects candidates. The candidates are
+    /// built by the core (`crate::slugify::unique_slug_candidate`).
     fn slugify(&mut self, py: Python<'_>, text: &str) -> PyResult<String> {
         let base = self.inner.slugify(text);
+        // An empty slug is `slugify`'s documented result for an input with nothing
+        // sluggable, and it is returned as it is every time: suffixing it gave `-1`,
+        // `-2`, ..., a namespace every such input shared, each with a leading
+        // separator (Finding 9 of `formal/lean/Sanitizers`). It is not recorded, so
+        // it never displaces a real slug, and `check` is not consulted for it.
+        if base.is_empty() {
+            return Ok(base);
+        }
         // #242 item 3: when there's no external `check`, start the suffix counter
         // from the cached per-base hint so the k-th duplicate of `base` doesn't
         // re-walk 1..k (amortized O(1) vs O(k)). Counter 0 is the bare base; each
@@ -409,27 +374,12 @@ impl _UniqueSlugifier {
         };
 
         let config = &self.inner.config;
-        // M1: once truncation starts dropping suffix digits, distinct counters
-        // alias to the same string and the loop can never find a free candidate.
-        // Track it so exhaustion is reported as the (accurate) max-length error.
-        let mut saw_lossy = false;
+        // A candidate never cuts into the suffix digits (the base is cut instead,
+        // and a budget with no room for one base character is an error below), so
+        // distinct counters never alias, and the former M1 `lossy` tracking has
+        // nothing left to detect.
         loop {
             if counter > MAX_UNIQUE_ATTEMPTS {
-                if saw_lossy {
-                    // The `max_length` is too small to encode this many distinct
-                    // suffixes — the truncated forms aliased (M1/M4).
-                    tl_warn!(
-                        "unique_slug_max_length_too_small: max_length={} sep_len={}",
-                        config.max_length,
-                        config.separator.len()
-                    );
-                    return Err(crate::ErrorRepr::UniqueSlugMaxLengthTooSmall {
-                        max_length: config.max_length,
-                        separator: config.separator.clone(),
-                        min_unique_len: config.separator.len() + 1,
-                    }
-                    .into());
-                }
                 tl_warn!("unique_slug_attempts_exceeded: max={MAX_UNIQUE_ATTEMPTS}");
                 return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
                     max: MAX_UNIQUE_ATTEMPTS,
@@ -437,28 +387,27 @@ impl _UniqueSlugifier {
                 }
                 .into());
             }
-            // Fail fast on an impossible constraint (#102 review): a suffixed slug
-            // (counter ≥ 1) needs room for the separator plus at least one digit.
-            // If max_length is smaller, every suffix truncates to a constant that
-            // collides forever — error clearly instead of looping to MAX.
-            if counter >= 1 {
-                let min_unique_len = config.separator.len() + 1;
-                if config.max_length > 0 && config.max_length < min_unique_len {
+            // No candidate: the suffix leaves no room for one character (one
+            // cluster under `allow_unicode`) of the base. This is the fail-fast
+            // check of #102 as well: it fires on the first suffixed counter when
+            // `max_length` cannot hold a character, the separator and a digit. The
+            // suffix only grows with the counter, so no later one fits either.
+            let candidate = match unique_slug_candidate(&base, counter, config) {
+                Ok(candidate) => candidate,
+                Err(too_short) => {
                     tl_warn!(
-                        "unique_slug_max_length_too_small: max_length={} min_unique_len={min_unique_len}",
-                        config.max_length
+                        "unique_slug_max_length_too_small: max_length={} min_unique_len={}",
+                        config.max_length,
+                        too_short.min_unique_len
                     );
                     return Err(crate::ErrorRepr::UniqueSlugMaxLengthTooSmall {
                         max_length: config.max_length,
                         separator: config.separator.clone(),
-                        min_unique_len,
+                        min_unique_len: too_short.min_unique_len,
                     }
                     .into());
                 }
-            }
-
-            let (candidate, lossy) = build_unique_candidate(&base, counter, config);
-            saw_lossy |= lossy;
+            };
             if !self.seen.contains(&candidate) {
                 let free = match self.check.as_ref() {
                     Some(check_fn) => !check_fn.call1(py, (&candidate,))?.extract::<bool>(py)?,

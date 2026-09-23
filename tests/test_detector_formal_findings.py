@@ -7,6 +7,8 @@ Each class below is one finding, reproduced on the library before it was fixed:
   characters ``U+FFF9``-``U+FFFB`` from inside a word while the detector reported clean.
   The set lived only in the bidi strip. Its secondary finding is the 66 noncharacters,
   which ``canonicalize`` deletes and nothing reported.
+* **Finding 2**: the #741 number-run rule tested only the first ``RLM``/``ALM`` in the
+  token, so a doubled mark defeated it.
 
 Every assertion marked as a regression fails on the ``main`` these fixes were written
 against. Escapes throughout, per #802: most of these characters render as nothing.
@@ -103,3 +105,25 @@ def test_what_canonicalize_deletes_from_a_word_is_reported_or_a_documented_spare
         and not has_anomalies(f"pay{chr(cp)}pal")
     ]
     assert missed == []
+
+
+class TestFinding2DoubledRtlMark:
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Transfer \u200f\u200f100 200 300 to Bob",
+            "acct \u061c\u061c4321-9876",
+            "acct \u200f\u061c4321-9876",
+            "acct a\u200f,\u200f4321-9876",
+        ],
+    )
+    def test_every_mark_is_tested(self, text: str) -> None:
+        """Regression: clean on ``main``, which tested only the first mark."""
+        assert disarm.inspect_anomalies(text).kinds == ["bidi"]
+
+    def test_the_single_mark_still_fires(self) -> None:
+        assert disarm.inspect_anomalies("Transfer \u200f100 200 300 to Bob").kinds == ["bidi"]
+
+    @pytest.mark.parametrize("text", ["hello\u200f\u200fworld", "acct \u200f\u200fa4321"])
+    def test_marks_not_before_a_number_run_are_still_spared(self, text: str) -> None:
+        assert not disarm.has_anomalies(text)

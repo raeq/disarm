@@ -1278,10 +1278,19 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // The carrier is always a number run: an account number, an amount, a date.
             // Each group keeps its internal digits and the groups swap places, which is
             // what makes the rendering stay plausible.
-            if let Some(i) = chars.iter().position(|c| BIDI_RTL_MARKS.contains(c)) {
-                if chars.get(i + 1).is_some_and(char::is_ascii_digit) {
-                    return Some(mk(AnomalyKind::Bidi, codepoint(chars[i])));
-                }
+            //
+            // EVERY mark, not the first. `position` found the first mark and tested only
+            // that one, so a second mark in front of the first defeated the rule:
+            // `Transfer <RLM><RLM>100 200 300 to Bob` still renders reversed, since the
+            // second mark is one more strong R beside the first and changes no resolved
+            // level, and it screened clean (Finding 2 of the Lean model in
+            // `formal/lean/Detection`, whose `anyRlmBeforeDigit_iff` proves this form is
+            // exactly the documented rule).
+            if let Some(w) = chars
+                .windows(2)
+                .find(|w| BIDI_RTL_MARKS.contains(&w[0]) && w[1].is_ascii_digit())
+            {
+                return Some(mk(AnomalyKind::Bidi, codepoint(w[0])));
             }
         }
         // #724: checked BEFORE the count-based zalgo rule, because it is a different fact
@@ -2241,6 +2250,25 @@ mod tests {
         // U+FFFD, the replacement character beside the plane-0 pair, renders and is not
         // one of them.
         assert!(!has_anomalies("pay\u{FFFD}pal", &l));
+    }
+
+    /// Finding 2: every RTL mark is tested, not only the first one in the token.
+    #[test]
+    fn a_second_rtl_mark_does_not_hide_the_number_run() {
+        let l = lex(&[]);
+        for text in [
+            "Transfer \u{200F}\u{200F}100 200 300 to Bob",
+            "acct \u{061C}\u{061C}4321-9876",
+            "acct \u{200F}\u{061C}4321-9876",
+            // A decoy mark first, with the real one in front of the digits.
+            "acct a\u{200F},\u{200F}4321-9876",
+        ] {
+            let r = inspect_anomalies(text, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Bidi], "{text:?}");
+        }
+        // Still spared anywhere other than in front of a number run.
+        assert!(!has_anomalies("hello\u{200F}\u{200F}world", &l));
+        assert!(!has_anomalies("acct \u{200F}\u{200F}a4321", &l));
     }
 
 }

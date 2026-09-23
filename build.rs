@@ -691,6 +691,14 @@ fn main() {
         &out_dir.join("assigned_ranges.rs"),
         "ASSIGNED_RANGES",
     );
+    // Finding 5 of the Lean detection model: the code points the block-range script
+    // table would give a script and the UCD gives `Script=Common`. Generated from the
+    // vendored `data/Scripts.txt` by `scripts/gen_script_common_carveouts.py`.
+    generate_range_set(
+        &data_dir.join("script_common_carveouts.tsv"),
+        &out_dir.join("script_common_carveouts.rs"),
+        "SCRIPT_COMMON_CARVEOUTS",
+    );
     // #963: the per-script confusable denominator, so a script with no bundled table
     // reports `0 of N` rather than a number determined by that table's absence.
     generate_prototype_census(

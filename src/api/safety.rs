@@ -511,6 +511,18 @@ pub fn reverse_langs() -> Vec<String> {
 
 /// Unicode scripts present in `text`, in order of first appearance (Common /
 /// Inherited excluded). Names are stable UCD script identifiers (e.g. `"Latin"`).
+///
+/// The script is the UCD `Script` property (UAX #24), within the curated set of scripts
+/// the crate resolves. A code point the UCD calls Common is Common here even when it sits
+/// in a script's block: the byte order mark `U+FEFF`, the Arabic comma `U+060C`, the
+/// Devanagari danda `U+0964` and `U+00D7` MULTIPLICATION SIGN are not reported.
+///
+/// ```
+/// use disarm::api::detect_scripts;
+///
+/// assert_eq!(detect_scripts("\u{FEFF}hello"), vec!["Latin"]);
+/// assert_eq!(detect_scripts("\u{3105}"), vec!["Bopomofo"]);
+/// ```
 #[must_use]
 pub fn detect_scripts(text: &str) -> Vec<&'static str> {
     crate::scripts::detect_scripts(text)
@@ -518,6 +530,27 @@ pub fn detect_scripts(text: &str) -> Vec<&'static str> {
 
 /// True if `text` mixes characters from more than one script (excluding Common /
 /// Inherited) — a homoglyph-spoofing signal.
+///
+/// Scripts resolve through the UTS #39 section 5.1 augmented sets, so Han beside Kana is
+/// Japanese, Han beside Hangul Korean and Han beside Bopomofo Chinese. Each character's
+/// script is its UCD `Script` (see [`detect_scripts`]), so a byte order mark or a danda
+/// does not make text mixed.
+///
+/// ```
+/// use disarm::api::is_mixed_script;
+///
+/// assert!(!is_mixed_script("\u{FEFF}hello"));
+/// assert!(!is_mixed_script("\u{09AC}\u{09BE}\u{0982}\u{09B2}\u{09BE}\u{0964}")); // Bengali + danda
+/// assert!(is_mixed_script("a\u{3105}")); // Latin + Bopomofo
+/// ```
+///
+/// # `Script`, not `Script_Extensions`
+///
+/// UTS #39 section 5.1 reads `Script_Extensions`, which the crate does not bundle. So a
+/// Common character is compatible with every script, including those its extensions
+/// exclude (`a` + the Arabic comma `U+060C` is not mixed), and a character whose
+/// extensions name several scripts resolves to its one `Script` (Arabic-Indic digits
+/// beside Thaana are mixed). `docs/limitations.md` lists what that moves.
 ///
 /// # This is a string-level question, and callers compose it into a different one
 ///
@@ -1314,6 +1347,15 @@ pub use crate::anomalies::{
 /// A run of arbitrary selectors is reported as a payload of *n* bytes with no decoded
 /// string rather than as a bogus one — reporting a garbage decode would undo the reason a
 /// decode is trustworthy.
+///
+/// A carrier of the same scheme beside a payload is not read into it. A presentation
+/// selector (`U+FE0E` or `U+FE0F`) attached to the character before it, such as the `VS16`
+/// that ends a fully qualified emoji, is left out of a variation run whenever the rest of
+/// the run decodes as text. A zero-width run whose bit count is not a multiple of 8 has
+/// two candidate frames, stray bits dropped from the end or from the start: `text` is set
+/// only when exactly one frame is printable, and otherwise the head-aligned bytes are
+/// reported with no text. When both frames are printable the anomaly detector still
+/// reports the run as `smuggled`, with both readings as the token (`"44 | hi"`).
 ///
 /// A well-formed emoji subdivision flag is not a payload: `U+1F3F4` + tag letters +
 /// `U+E007F` spelling one of the three RGI values is the Scotland flag, and the allowlist

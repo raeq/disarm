@@ -2121,6 +2121,12 @@ _SCRIPT_BY_NAME: dict[str, Script] = {s.value: s for s in Script}
 def detect_scripts(text: str) -> list[Script]:
     """Return the set of Unicode scripts present in text, in order of first appearance.
 
+    The script is the UCD ``Script`` property (UAX #24), within the scripts disarm
+    resolves. A code point the UCD calls Common or Inherited is not reported, even when
+    it sits in a script's block: the byte order mark ``U+FEFF``, the Arabic comma
+    ``U+060C``, the Devanagari danda ``U+0964`` and ``U+00D7`` MULTIPLICATION SIGN are
+    all Common.
+
     Args:
         text: Input string.
 
@@ -2191,11 +2197,25 @@ def is_mixed_script(text: str, *, per_word: bool = False) -> bool:
     writing system in common is still mixed, including a CJK script beside a non-CJK
     one — ``例えa`` is Japanese *and* Latin, and that is the case this check exists for.
 
+    Each character's script is the UCD ``Script`` property, as `detect_scripts`
+    reports it, so a byte order mark or a danda does not make text mixed:
+    ``is_mixed_script("\\ufeffhello")`` is False, and so is a Bengali word ending in
+    ``U+0964``.
+
     Note:
         `inspect_anomalies` is deliberately more permissive: it also exempts CJK beside
         Latin, because it runs over prose where a Japanese sentence carrying a product
         name in Latin is ordinary text. A *label* doing the same is not, which is why
         this function and the hostname screen both flag it.
+
+    Note:
+        UTS #39 section 5.1 resolves through ``Script_Extensions``, which disarm does
+        not bundle; this is section 5.1 over ``Script``. A Common character is
+        therefore compatible with every script, including those its extensions
+        exclude (``a`` beside the Arabic comma ``U+060C`` is not mixed), and a
+        character whose extensions name several scripts resolves to its one
+        ``Script`` (Arabic-Indic digits beside Thaana are mixed). See the
+        limitations page.
 
     Args:
         text: Input string.
@@ -2450,7 +2470,7 @@ def unmapped_confusables(*, target_script: str | Script = "latin") -> frozenset[
             ``Script("Arabic")`` converts a name from `list_scripts`:
             ``unmapped_confusables(target_script=Script(name))``.
 
-            **Four tables, 61 known scripts.** `list_scripts` answers "which scripts can
+            **Four tables, 62 known scripts.** `list_scripts` answers "which scripts can
             disarm identify"; this parameter answers "which scripts can disarm fold
             *toward*", and those are different questions. A script with no bundled table
             is refused rather than answered with a count, because a number determined
@@ -2507,9 +2527,9 @@ def confusable_coverage(script: str | Script) -> ConfusableCoverage:
 
         The grouping uses the UCD's script property, but the census is keyed in disarm's
         namespace — the UCD name with underscores removed, which is the spelling
-        `list_scripts` returns for every script the two tables share. So 19 scripts appear
+        `list_scripts` returns for every script the two tables share. So 18 scripts appear
         that disarm's own enum does not name (``"Yi"``, ``"Siddham"``, ``"PauCinHau"`` and
-        16 others, 72 sources between them), spelled the same way as the rest. A script
+        15 others, 69 sources between them), spelled the same way as the rest. A script
         disarm knows that TR39 never uses as a prototype returns ``0`` of ``0``.
 
     Examples:
@@ -2647,6 +2667,16 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     renders as nothing, so it comes back as bytes with ``text=None``, as does a run
     of arbitrary selectors. Reporting garbage would undo the reason a decode is
     trustworthy.
+
+    A carrier of the same scheme beside a payload is not read into it. A
+    presentation selector (``U+FE0E`` or ``U+FE0F``) attached to the character before
+    it, such as the ``VS16`` that ends a fully qualified emoji, is left out of a
+    variation run whenever the rest of the run decodes as text. A zero-width run whose
+    bit count is not a multiple of 8 has two candidate frames, stray bits dropped from
+    the end or from the start: ``text`` is set only when exactly one frame is
+    printable, and otherwise the head-aligned bytes come back with ``text=None``.
+    When both frames are printable, `inspect_anomalies` still reports the run as
+    ``smuggled``, with both readings as the token (``"44 | hi"``).
 
     ``units`` counts the characters the run **consumed**, which is not the same as
     the carriers that carried a byte: the zero-width scheme counts its

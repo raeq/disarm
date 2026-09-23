@@ -151,6 +151,7 @@ SCRIPT_SAMPLES: dict[Script, str] = {
     Script.HIRAGANA: "ひらがな",
     Script.KATAKANA: "カタカナ",
     Script.HANGUL: "한국어",
+    Script.BOPOMOFO: "\u3105\u3106\u3107",  # BOPOMOFO LETTER B, P, M
     Script.LISU: "\ua4d0\ua4d1\ua4d2",  # ꓐꓑꓒ
     # Southeast Asian scripts
     Script.THAI: "ภาษาไทย",

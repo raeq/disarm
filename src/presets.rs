@@ -1572,10 +1572,15 @@ fn transliterate_preserving_latin_into(text: &str, lang: Option<&str>, out: &mut
         // P-3: every ASCII code point is Latin or Common (asserted by
         // `ascii_is_always_kept_verbatim`), so skip the per-char script binary
         // search on the hot ASCII path and keep it verbatim directly.
+        //
+        // The *block* script, not `detect_char_script`: a run is "the text one script's
+        // transliteration owns", and the katakana prolonged sound mark is Common to the
+        // UCD but has to stay in the katakana run it lengthens. Bopomofo is kept verbatim
+        // as it was while it resolved to no script: nothing romanizes it.
         if ch.is_ascii()
             || matches!(
-                crate::scripts::detect_char_script(ch),
-                "Latin" | "Common" | "Inherited"
+                crate::scripts::block_script(ch),
+                "Latin" | "Common" | "Inherited" | "Bopomofo"
             )
         {
             flush(&mut run, out);
@@ -2568,12 +2573,30 @@ mod tests {
     #[test]
     fn ascii_is_always_kept_verbatim() {
         for b in 0u8..128 {
-            let script = crate::scripts::detect_char_script(b as char);
+            let script = crate::scripts::block_script(b as char);
             assert!(
                 matches!(script, "Latin" | "Common" | "Inherited"),
                 "ASCII U+{b:02X} has script {script:?} — the P-3 ASCII fast path would mis-handle it"
             );
         }
+    }
+
+    /// Runs are grouped by the *block* script, not by `Script` (Finding 5 of the Lean
+    /// detection model). The katakana prolonged sound mark is Common to the UCD, and
+    /// splitting the run at it would keep it verbatim in a key instead of lengthening
+    /// the vowel before it: `U+30B3 U+30FC` is `ko-`, not `ko` + `U+30FC`. Bopomofo,
+    /// which nothing romanizes, stays verbatim as it did while it resolved to no script.
+    #[test]
+    fn a_common_mark_in_a_script_block_stays_in_its_run() {
+        let mut out = String::new();
+        super::transliterate_preserving_latin_into(
+            "\u{30B3}\u{30FC}\u{30D2}\u{30FC}",
+            None,
+            &mut out,
+        );
+        assert_eq!(out, "ko-hi-");
+        super::transliterate_preserving_latin_into("\u{3105}\u{3106}", None, &mut out);
+        assert_eq!(out, "\u{3105}\u{3106}");
     }
 
     /// `is_demojizable` must still cover everything `demojize` rewrites (#990).

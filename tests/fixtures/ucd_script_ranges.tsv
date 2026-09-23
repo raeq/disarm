@@ -11,6 +11,7 @@
 00D8	00F6	Latin
 00F8	02B8	Latin
 02E0	02E4	Latin
+02EA	02EB	Bopomofo
 0300	036F	Inherited
 0370	0373	Greek
 0375	0377	Greek
@@ -333,7 +334,9 @@
 309D	309F	Hiragana
 30A1	30FA	Katakana
 30FD	30FF	Katakana
+3105	312F	Bopomofo
 3131	318E	Hangul
+31A0	31BF	Bopomofo
 31F0	31FF	Katakana
 3200	321E	Hangul
 3260	327E	Hangul

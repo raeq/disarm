@@ -389,9 +389,9 @@ pub fn script_info(name: &str) -> Result<ScriptMeta, Error> {
 ///
 /// The script property behind the grouping is the UCD's, from `Scripts.txt`, but the
 /// census is keyed in disarm's namespace: the UCD's name with underscores removed, which
-/// is the spelling [`list_scripts`] returns for every script the two tables share. So 19
+/// is the spelling [`list_scripts`] returns for every script the two tables share. So 18
 /// scripts appear here that disarm's own enum does not name — `Yi`, `Siddham`,
-/// `PauCinHau` and 16 others, 72 sources between them — spelled the same way as the rest.
+/// `PauCinHau` and 15 others, 69 sources between them — spelled the same way as the rest.
 /// A script disarm knows but TR39 never uses as a prototype returns `0` of `0`, which is
 /// the truth about it.
 ///
@@ -513,7 +513,7 @@ mod tests {
     }
 
     /// The census groups by the UCD's script property, which names scripts disarm's own
-    /// enum does not. Dropping them would lose 72 sources without any total moving.
+    /// enum does not. Dropping them would lose 69 sources without any total moving.
     #[test]
     fn confusable_coverage_reaches_scripts_the_metadata_table_lacks() {
         assert_eq!(confusable_coverage("Yi").unwrap().sources, 12);

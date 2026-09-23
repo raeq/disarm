@@ -484,6 +484,34 @@ See [The fold is not order-independent](user-guide/confusables.md#the-fold-is-no
 `is_mixed_script()` reports whether multiple scripts are present in a string. It does not assess whether the mixing is benign (e.g., Latin punctuation in Arabic text, which is universal) or malicious (Cyrillic spoofing Latin). The `is_suspicious_hostname()` function applies stricter heuristics, but a not-suspicious result is a best-effort judgment, not a safety guarantee — it cannot certify the absence of all spoofing (whole-script spoofs and out-of-table confusables are out of scope — the out-of-table
 set is enumerable via `unmapped_confusables()`, see above).
 
+### Scripts are resolved through `Script`, not `Script_Extensions`
+
+`detect_scripts` and `is_mixed_script` read the UCD `Script` property (UAX #24). A code
+point the UCD calls Common is Common even when it sits in a script's block, so the byte
+order mark `U+FEFF`, the Arabic comma `U+060C` and the Devanagari dandas `U+0964` and
+`U+0965` do not make text mixed. Those carve-outs are generated from the bundled
+`data/Scripts.txt`.
+
+UTS #39 section 5.1 computes each character's augmented script set from
+`Script_Extensions` instead, and disarm does not bundle `ScriptExtensions.txt`. What
+`is_mixed_script` computes is section 5.1 over `Script`, and the two differ at the edges,
+in both directions:
+
+- **A Common character is compatible with every script**, including the scripts its
+  extensions exclude. `a` beside the Arabic comma `U+060C`, the danda `U+0964` or the
+  katakana prolonged sound mark `U+30FC` is not mixed, where UTS #39 says it is. None of
+  these is a letter, and the confusable checks see them independently.
+- **A character whose extensions name several scripts resolves to its one `Script`.**
+  The Arabic-Indic digits `U+0660`-`U+0669` beside Thaana, the Myanmar digits
+  `U+1040`-`U+1049` beside Tai Le, and the Armenian full stop `U+0589` beside Georgian are
+  mixed, where UTS #39 says they are not.
+- **A combining mark the UCD calls Inherited keeps the script of the block it sits in.**
+  Its extensions name specific scripts too: the Arabic harakat `U+064B`-`U+0655` are
+  Arabic and Syriac, so beside Syriac they read as mixed. Resolving them to Inherited
+  instead would make an Arabic shadda on a Latin letter single-script, and that is the
+  CVE-2017-7833 hostname spoof, which `canonicalize_strict` removes because the shadda
+  reads as Arabic.
+
 ### Five surfaces rewrite printable ASCII (#725)
 
 Exactly three printable ASCII characters are TR39 confusable *sources*, so the fold

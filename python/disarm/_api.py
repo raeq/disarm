@@ -7,6 +7,7 @@ pipeline presets live in ``disarm._presets``.
 
 from __future__ import annotations
 
+import threading
 import warnings as _warnings
 from collections.abc import Iterable
 from functools import lru_cache
@@ -3065,6 +3066,10 @@ class UniqueSlugifier:
     Appends incrementing suffixes for uniqueness.
     Optional check callback for external uniqueness (e.g. database lookup).
 
+    One instance can be shared between threads: calls are serialised, so each
+    waits for the one in progress, ``check`` included. ``check`` must not call
+    the same instance; that raises ``RuntimeError``.
+
     Examples:
         >>> u = UniqueSlugifier()
         >>> u("My Post")
@@ -3127,17 +3132,26 @@ class UniqueSlugifier:
         self._probe: Slugifier | None = (
             Slugifier(**_cfg) if default is not None else None  # type: ignore[arg-type]
         )
+        # The inner object holds PyO3's exclusive borrow while it calls `check`, and a
+        # `check` doing I/O gives up the GIL, so a second thread found it borrowed and
+        # raised `RuntimeError: Already borrowed` (F6 of the TLA+ model in
+        # formal/tla/Concurrency). Calls are serialised here instead, which uniqueness
+        # needs anyway. Reentrant so that a `check` calling back in still gets that
+        # RuntimeError rather than deadlocking on this lock.
+        self._lock = threading.RLock()
 
     @_surrogate_safe
     def __call__(self, text: str) -> str:
-        probe = self._probe
-        if probe is not None and self._default is not None and not probe(text):
-            return self._inner.slugify(self._default)
-        return self._inner.slugify(text)
+        with self._lock:
+            probe = self._probe
+            if probe is not None and self._default is not None and not probe(text):
+                return self._inner.slugify(self._default)
+            return self._inner.slugify(text)
 
     def reset(self) -> None:
         """Clear the internal set of seen slugs."""
-        self._inner.reset()
+        with self._lock:
+            self._inner.reset()
 
     def __repr__(self) -> str:
         return "UniqueSlugifier()"
@@ -3449,6 +3463,12 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         it would silently alter every other caller's output. Call
         `seal_registrations` after startup to make further changes raise.
 
+        A call already running when this one returns is not guaranteed a single
+        table: a batch ``transliterate(list)`` releases the GIL and reads the
+        table per character, so its items, and even one long string, can mix
+        the old mappings with the new. Calls that start afterwards see only the
+        new ones.
+
     Note:
         Mappings keyed on **ASCII** characters do not apply to pure-ASCII input.
         The core takes a fast path that returns all-ASCII text unchanged before
@@ -3491,7 +3511,9 @@ def register_replacements(replacements: dict[str, str]) -> None:
     Warning:
         Like `register_lang`, this mutates **process-global** state shared
         by every caller. Treat it as startup-only / single-writer configuration
-        and call `seal_registrations` afterwards in multi-tenant processes.
+        and call `seal_registrations` afterwards in multi-tenant processes. As
+        there, a batch call already in progress can apply the old table to some
+        items and the new one to others.
 
     Args:
         replacements: Dict of source→replacement string mappings, applied

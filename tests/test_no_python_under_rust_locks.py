@@ -59,21 +59,25 @@ import threading, time
 import disarm
 
 stop = threading.Event()
+running = threading.Event()
 
 class Old:
     def lookup(self, seq):
         return None
     def __del__(self):
-        time.sleep(0.05)  # anything that gives up the GIL: closing a file, a socket
+        time.sleep(0.2)  # anything that gives up the GIL: closing a file, a socket
 
 def reader():
     while not stop.is_set():
         disarm.demojize("plain text, no emoji")
+        running.set()
 
 disarm.set_emoji_provider(Old())
 t = threading.Thread(target=reader, daemon=True)
 t.start()
-time.sleep(0.1)
+# Swap only once the reader is demonstrably calling demojize, so the __del__
+# window always overlaps its calls rather than depending on scheduling.
+assert running.wait(10), "reader never ran"
 disarm.set_emoji_provider(None)
 stop.set()
 t.join()

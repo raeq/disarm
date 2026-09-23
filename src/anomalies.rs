@@ -624,7 +624,7 @@ fn erased_by_deletion(token: &str) -> Option<char> {
 /// for `LF` reported all five as `deletion` (caught in review on #934). `TAB` is
 /// deliberately absent: it is in `is_fold_whitespace` with these, but it moves the cursor
 /// along a line rather than starting one.
-fn is_line_break(c: char) -> bool {
+pub(crate) fn is_line_break(c: char) -> bool {
     matches!(
         c,
         '\n' | '\u{B}' | '\u{C}' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}'

@@ -240,7 +240,9 @@ def test_it_is_a_fixed_point_over_the_classes_that_failed(policy: str) -> None:
     failures = []
     for base in _BASES:
         probes = (
-            [base] + [base + mark for mark in _MARKS] + [base + "\x01" + mark for mark in _MARKS]
+            [base]
+            + [base + mark for mark in _MARKS]
+            + [base + between + mark for mark in _MARKS for between in _BETWEEN]
         )
         for probe in probes:
             once = sk(probe, digit_policy=policy)

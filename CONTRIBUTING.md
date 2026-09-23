@@ -69,7 +69,9 @@ CI runs these as a gate; run them locally first.
 ```bash
 # Rust
 cargo fmt --all -- --check
-cargo clippy --no-default-features -- -D warnings
+cargo clippy --all-targets -- -D warnings                              # pure core
+cargo clippy --all-targets --features extension-module -- -D warnings  # bindings
+bash scripts/perf_lint.sh                                              # allocation lints
 
 # Python
 ruff check .

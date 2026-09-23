@@ -1752,8 +1752,8 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
     result still is not a claim about *unmapped* confusables — see
     `find_unmapped_confusables` for that exposure set.
 
-    **A clean result is not a claim of canonicity (#730).** 142,760 assigned code
-    points (5,292 excluding the Private Use Area) are reported clean here and are
+    **A clean result is not a claim of canonicity (#730).** 142,762 assigned code
+    points (5,294 excluding the Private Use Area) are reported clean here and are
     still not their own canonical form — CJK compatibility ideographs, Arabic
     presentation forms, Kangxi radicals, fullwidth and halfwidth forms. That is
     deliberate: ``ＮＨＫ`` is ordinary Japanese text, and a detector that flagged it
@@ -1819,8 +1819,8 @@ def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None)
     invisible, bidi, zalgo, and mixed-script branches still run; only leet and
     segmentation detection requires a lexicon.
 
-    **A clean result is not a claim of canonicity (#730).** 142,760 assigned code
-    points (5,292 excluding the Private Use Area) are reported clean here and are
+    **A clean result is not a claim of canonicity (#730).** 142,762 assigned code
+    points (5,294 excluding the Private Use Area) are reported clean here and are
     still not their own canonical form — CJK compatibility ideographs, Arabic
     presentation forms, Kangxi radicals, fullwidth and halfwidth forms. That is
     deliberate: ``ＮＨＫ`` is ordinary Japanese text, and a detector that flagged it
@@ -2922,7 +2922,7 @@ def is_canonical(text: str, *, preset: str = "canonicalize") -> bool:
     second representation free to keep circulating.
 
     `has_anomalies` is not this predicate, and the gap is not small. Over
-    every assigned code point, 142,760 of them (5,292 excluding the Private Use
+    every assigned code point, 142,762 of them (5,294 excluding the Private Use
     Area) are reported clean by the detector and are *not* their own canonical
     form — CJK compatibility ideographs, Arabic presentation forms, Kangxi
     radicals, fullwidth and halfwidth forms. None go the other way. An accept

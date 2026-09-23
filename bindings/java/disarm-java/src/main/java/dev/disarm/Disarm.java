@@ -307,7 +307,7 @@ public final class Disarm {
      *
      * <p>The verification-path counterpart to the presets: text in, normalized text out is
      * the generation path, and this is the question a caller asks about bytes that arrive
-     * already bound. {@link #hasAnomalies} is not this predicate — 142,760 assigned code
+     * already bound. {@link #hasAnomalies} is not this predicate — 142,762 assigned code
      * points are reported clean by the detector and are not their own canonical form.
      *
      * @throws DisarmInvalidArgumentException if {@code preset} names neither a preset nor a

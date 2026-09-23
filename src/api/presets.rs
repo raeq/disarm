@@ -456,7 +456,7 @@ pub fn skeleton_key(
 /// representation keep circulating and defends only the comparison, not the stored value.
 ///
 /// **[`crate::api::has_anomalies`] is not this predicate**, and the difference is not
-/// small. Measured over every assigned code point, 142,760 of them (5,292 excluding the
+/// small. Measured over every assigned code point, 142,762 of them (5,294 excluding the
 /// Private Use Area) are reported clean by the detector and are *not* their own canonical
 /// form — CJK compatibility ideographs, Arabic presentation forms, Kangxi radicals,
 /// fullwidth and halfwidth forms. Zero go the other way. A caller who writes "reject if `has_anomalies`,

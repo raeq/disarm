@@ -382,6 +382,13 @@ cargo test --no-default-features \
 cargo test --no-default-features --release \
   --test exhaustive_confusables -- --ignored
 
+# The anomaly detector gives NFC and NFD spellings one verdict, over every Unicode scalar
+# alone and in seven contexts (Finding 3 of the Lean model in formal/lean/Detection).
+# PR CI runs the normalization-active subset from the same file. --release keeps it
+# near 20s.
+cargo test --no-default-features --release \
+  --test exhaustive_anomalies -- --ignored
+
 # Lib-level ignored tests: the Layer-1 fold∘compose gate (#522) and the presets
 # non-ASCII fast-path sweep, both unreachable from an integration test.
 cargo test --no-default-features --release --lib -- --ignored

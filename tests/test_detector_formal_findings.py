@@ -9,6 +9,8 @@ Each class below is one finding, reproduced on the library before it was fixed:
   which ``canonicalize`` deletes and nothing reported.
 * **Finding 2**: the #741 number-run rule tested only the first ``RLM``/``ALM`` in the
   token, so a doubled mark defeated it.
+* **Finding 3**: canonically equivalent spellings got different verdicts, and the
+  unreported one was usually NFC.
 * **Finding 4**: ``confusable`` fired on ordinary Latin orthography (``Fran\u00e7ais``)
   that the guide says is spared.
 
@@ -134,6 +136,75 @@ class TestFinding2DoubledRtlMark:
     @pytest.mark.parametrize("text", ["hello\u200f\u200fworld", "acct \u200f\u200fa4321"])
     def test_marks_not_before_a_number_run_are_still_spared(self, text: str) -> None:
         assert not disarm.has_anomalies(text)
+
+
+#: The README's counterexamples, with the kinds both spellings must now report.
+CANONICAL_PAIRS = [
+    ("\u00e9t\u00e9\u2067", ["bidi"]),
+    ("\u00e9\u200d\u00e9", ["invisible"]),
+    ("\u00e0\u00e9\u200f1", ["bidi"]),
+    ("\u00e9\u2067", ["bidi"]),
+    ("Fran\u00e7ais", []),
+    ("ch\u1ec9", []),
+]
+
+
+class TestFinding3CanonicalEquivalence:
+    @pytest.mark.parametrize(("text", "kinds"), CANONICAL_PAIRS)
+    def test_nfc_and_nfd_get_one_verdict(self, text: str, kinds: list[str]) -> None:
+        """Regression: every pair split on ``main``."""
+        nfc = unicodedata.normalize("NFC", text)
+        nfd = unicodedata.normalize("NFD", text)
+        assert nfc != nfd
+        assert disarm.inspect_anomalies(nfc).kinds == kinds
+        assert disarm.inspect_anomalies(nfd).kinds == kinds
+
+    def test_a_canonical_singleton_is_its_target(self) -> None:
+        """``U+212A KELVIN SIGN`` is canonically ``K``: no normal form keeps it, and it
+        is not a disguise of the letter it is equivalent to."""
+        assert unicodedata.normalize("NFD", "\u212aey") == "Key"
+        assert disarm.inspect_anomalies("\u212aey").kinds == []
+
+    def test_a_lexicon_matches_either_spelling(self) -> None:
+        words = {"caf\u00e9"}
+        assert disarm.inspect_anomalies("c4f\u00e9", words).kinds == ["leet"]
+        assert disarm.inspect_anomalies("c4fe\u0301", words).kinds == ["leet"]
+
+    def test_the_normalization_active_scalars_in_the_models_contexts(self) -> None:
+        """The binding path of the Rust sweep in ``tests/exhaustive_anomalies.rs``.
+
+        Every scalar with a canonical decomposition or a nonzero combining class, alone
+        and in the seven contexts of the model's ``scripts/sweep_nf.py``.
+        """
+        contexts = [
+            ("", ""),
+            ("pay", "pal"),
+            ("a", ""),
+            ("\u00e9", "\u00e9"),
+            ("", "\u2066"),
+            ("\u00e9t\u00e9", "\u2067x"),
+            ("\u00e9", "\u200d\u00e9"),
+            ("\u00e0\u00e9", "\u200f1"),
+        ]
+        active = [
+            chr(cp)
+            for cp in range(0x110000)
+            if not 0xD800 <= cp <= 0xDFFF
+            and (
+                unicodedata.decomposition(chr(cp)).split(" ")[0][:1] not in ("", "<")
+                or unicodedata.combining(chr(cp))
+            )
+        ]
+        assert len(active) > 2_000
+        split = []
+        for ch in active:
+            for pre, post in contexts:
+                s = pre + ch + post
+                a = disarm.inspect_anomalies(unicodedata.normalize("NFC", s)).kinds
+                b = disarm.inspect_anomalies(unicodedata.normalize("NFD", s)).kinds
+                if a != b:
+                    split.append((s.encode("unicode_escape"), a, b))
+        assert split == []
 
 
 #: Latin letters with a confusable fold that only drops the accent.

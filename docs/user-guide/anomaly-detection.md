@@ -70,6 +70,22 @@ raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
 strong-direction **letters** and is structurally blind to controls altogether.
 
 
+### One verdict for every canonically equivalent spelling
+
+`\u00e9` is one code point in NFC and two in NFD, and a reader cannot tell them apart. The
+detector gives both spellings the same report: it classifies each token in its composed
+form (NFC), and the tests that ask for an ASCII letter read a letter through its
+canonical decomposition, so `\u00e9` counts as the `e` it is. Before this, `\u00e9t\u00e9`
+followed by an isolate was clean in NFC and `bidi` in NFD, and the NFC spelling, the one
+nearly all text arrives in, was the unreported one (found by the Lean model in
+`formal/lean/Detection`, Finding 3). `tests/exhaustive_anomalies.rs` checks the property
+over every Unicode scalar.
+
+That includes the canonical singletons, which no normal form keeps: `U+212A KELVIN SIGN`
+is canonically `K`, so `\u212Aey` reports what `Key` reports, which is nothing. A caller
+who must refuse bytes that are not already normalized wants `is_normalized` or
+`is_canonical`, not this detector.
+
 !!! note "`canonicalize` preserves enclosing marks; `strip_obfuscation` removes them"
 
     That asymmetry is deliberate and is the same one the accent-preserving decision

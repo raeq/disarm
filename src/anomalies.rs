@@ -742,15 +742,53 @@ fn leet_demangle(s: &str) -> Option<String> {
     Some(out)
 }
 
+/// Whether `c` is an ASCII letter once it is read through its canonical decomposition:
+/// `e`, and also `\u{e9}`, whose NFD is `e` + `U+0301`.
+///
+/// The four tests in [`classify`] that ask "is there an ASCII letter here" used to ask it
+/// of the code points as spelled, so `\u{e9}t\u{e9}` was not "majority Latin" and
+/// `e\u{301}te\u{301}` was: one word, two verdicts, and the unreported one was NFC, the
+/// form nearly all text arrives in (Finding 3 of the Lean model in `formal/lean/Detection`).
+/// Reading the base letter is what `duplicate_stacking_mark` already did by running over
+/// NFD.
+///
+/// Per character rather than over the NFD string, so a Hangul syllable stays one letter
+/// instead of becoming its two or three jamo: the classifier counts letters, and a
+/// decomposition that multiplies them would move `is_majority_latin` on Korean.
+fn is_ascii_letter_base(c: char) -> bool {
+    c.is_ascii_alphabetic()
+        || (!c.is_ascii() && c.nfd().next().is_some_and(|b| b.is_ascii_alphabetic()))
+}
+
+/// The token in NFC, borrowed when it already is.
+///
+/// [`classify`] reads this rather than the token as spelled, so every test it runs is a
+/// function of the canonical-equivalence class and `has_anomalies` gives NFC and NFD
+/// spellings of one text the same verdict by construction rather than branch by branch.
+/// Composed rather than decomposed because the tables it consults are keyed on composed
+/// characters, as the confusable fold is (`fold_and_detect_are_form_invariant`, #475), and
+/// because a caller's lexicon is almost always NFC. The letter tests still see through a
+/// precomposed character, via [`is_ascii_letter_base`].
+fn composed(tok: &str) -> std::borrow::Cow<'_, str> {
+    use unicode_normalization::{is_nfc_quick, IsNormalized};
+    if tok.is_ascii() || is_nfc_quick(tok.chars()) == IsNormalized::Yes {
+        std::borrow::Cow::Borrowed(tok)
+    } else {
+        std::borrow::Cow::Owned(tok.nfc().collect())
+    }
+}
+
 fn is_majority_latin(tok: &str) -> bool {
     // Single pass with two integer counters (no Vec allocation): count alphabetic
-    // letters and how many of them are ASCII (Latin).
+    // letters and how many of them are Latin: an ASCII letter, or one read through its
+    // decomposition (`\u{e9}` is `e`), which is what makes the count the same for NFC
+    // and NFD spellings (Finding 3 of the Lean model in `formal/lean/Detection`).
     let mut letters = 0usize;
     let mut ascii = 0usize;
     for c in tok.chars() {
         if c.is_alphabetic() {
             letters += 1;
-            if c.is_ascii() {
+            if is_ascii_letter_base(c) {
                 ascii += 1;
             }
         }
@@ -1169,15 +1207,20 @@ fn carrier_run(chars: &[char]) -> Option<(char, usize)> {
     best
 }
 
-fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Finding> {
-    let end = start + tok.len();
+fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Finding> {
+    let end = start + raw.len();
     let mk = |kind: AnomalyKind, detail: String| Finding {
         kind,
-        token: tok.to_string(),
+        token: raw.to_string(),
         start,
         end,
         detail,
     };
+    // Every test below reads the token's NFC, not its spelling, so canonically equivalent
+    // tokens get one verdict (Finding 3 of the Lean model in `formal/lean/Detection`). The
+    // finding still reports the token and span as they appear in the input.
+    let composed = composed(raw);
+    let tok: &str = &composed;
 
     // `core` (token with wrapping punctuation trimmed) is needed by both the mixed-script
     // branch and the leet/segmentation branches; compute it once.
@@ -1240,7 +1283,9 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             let joiner = c == '\u{200C}' || c == '\u{200D}';
             let letter = |slice: &[char]| {
                 if joiner {
-                    slice.iter().any(char::is_ascii_alphabetic)
+                    // Read through the decomposition, so `\u{e9}` counts as the `e` it
+                    // is: `\u{e9}` ZWJ `\u{e9}` and its NFD spelling were split verdicts.
+                    slice.iter().copied().any(is_ascii_letter_base)
                 } else {
                     slice.iter().copied().any(char::is_alphabetic)
                 }
@@ -1428,7 +1473,8 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // `detail` stays the whole token's NFKC fold (#722 §4), so a caller still sees
         // `paypal` rather than a fragment.
         for part in word_parts(tok) {
-            let has_ascii_letter = part.chars().any(|c| c.is_ascii_alphabetic());
+            // Read through the decomposition, as `is_majority_latin` is (Finding 3).
+            let has_ascii_letter = part.chars().any(is_ascii_letter_base);
             let compat: Vec<char> = part
                 .chars()
                 .filter(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
@@ -1537,7 +1583,9 @@ fn classify(tok: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // #815: no ASCII letter is not automatically clean. A token where EVERY
             // character imitates a Latin letter is the finished form of the attack this
             // branch exists to catch, and #633's gate went quiet on exactly that.
-            if !part.chars().any(|c| c.is_ascii_alphabetic()) && !is_wholly_confusable_word(part) {
+            // An ASCII letter read through its decomposition, as `is_majority_latin` is
+            // (Finding 3).
+            if !part.chars().any(is_ascii_letter_base) && !is_wholly_confusable_word(part) {
                 continue;
             }
             // The same `UNITS` exemption the mixed-script branch takes. `µF` folds to
@@ -2282,6 +2330,67 @@ mod tests {
         // Still spared anywhere other than in front of a number run.
         assert!(!has_anomalies("hello\u{200F}\u{200F}world", &l));
         assert!(!has_anomalies("acct \u{200F}\u{200F}a4321", &l));
+    }
+
+    /// Finding 3: the README's counterexamples, each in its NFC and NFD spelling. The
+    /// NFC spelling of the first three used to be the unreported one.
+    #[test]
+    fn canonically_equivalent_tokens_get_one_verdict() {
+        use unicode_normalization::UnicodeNormalization;
+        let l = lex(&[]);
+        for (nfc, nfd, kinds) in [
+            (
+                "\u{e9}t\u{e9}\u{2067}",
+                "e\u{301}te\u{301}\u{2067}",
+                vec![AnomalyKind::Bidi],
+            ),
+            (
+                "\u{e9}\u{200D}\u{e9}",
+                "e\u{301}\u{200D}e\u{301}",
+                vec![AnomalyKind::Invisible],
+            ),
+            (
+                "\u{e0}\u{e9}\u{200F}1",
+                "a\u{300}e\u{301}\u{200F}1",
+                vec![AnomalyKind::Bidi],
+            ),
+            // The model's minimal counterexample, `[p, rli]`.
+            (
+                "\u{e9}\u{2067}",
+                "e\u{301}\u{2067}",
+                vec![AnomalyKind::Bidi],
+            ),
+            ("Fran\u{e7}ais", "Franc\u{327}ais", vec![]),
+            ("ch\u{1ec9}", "chi\u{309}", vec![]),
+        ] {
+            assert_eq!(nfc.nfc().collect::<String>(), nfc, "{nfc:?} is not NFC");
+            assert_eq!(nfd.nfd().collect::<String>(), nfd, "{nfd:?} is not NFD");
+            assert_eq!(inspect_anomalies(nfc, &l).kinds, kinds, "{nfc:?}");
+            assert_eq!(inspect_anomalies(nfd, &l).kinds, kinds, "{nfd:?}");
+        }
+        // The Kelvin sign is canonically `K` (a singleton decomposition, so neither NFC
+        // nor NFD keeps it), and it cannot be a disguise of the letter it is equivalent to.
+        assert!(!has_anomalies("\u{212A}ey", &l));
+        // With a lexicon too: the leet decode reads the composed word, so a lexicon
+        // written in NFC matches either spelling.
+        let words = lex(&["caf\u{e9}"]);
+        assert!(has_anomalies("c4f\u{e9}", &words));
+        assert!(has_anomalies("c4fe\u{301}", &words));
+    }
+
+    /// The four ASCII-letter tests read a letter through its decomposition, per
+    /// character: a Hangul syllable is one letter, not its jamo.
+    #[test]
+    fn a_letter_is_read_through_its_decomposition() {
+        assert!(is_ascii_letter_base('e'));
+        assert!(is_ascii_letter_base('\u{e9}'));
+        assert!(is_ascii_letter_base('\u{1ec9}'));
+        assert!(!is_ascii_letter_base('\u{f8}')); // no decomposition
+        assert!(!is_ascii_letter_base('\u{3ac}')); // Greek, decomposes to Greek
+        assert!(!is_ascii_letter_base('1'));
+        assert!(is_majority_latin("\u{e9}t\u{e9}"));
+        // Two ASCII letters and one syllable: majority Latin, as before.
+        assert!(is_majority_latin("ab\u{D55C}"));
     }
 
     /// Finding 4: an accented Latin letter whose fold only drops the accent is spared;

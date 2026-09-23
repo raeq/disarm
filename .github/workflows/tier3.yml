@@ -56,6 +56,14 @@ jobs:
         # confusable.
         run: cargo test --no-default-features --release --test exhaustive_confusables -- --ignored
 
+      - name: Rust exhaustive anomaly canonical-equivalence sweep (Tier 3)
+        # Every Unicode scalar, alone and in seven contexts, in NFC and in NFD: the
+        # detector must report the same kinds for both. Finding 3 of the Lean model in
+        # formal/lean/Detection found 2,328,179 split verdicts before the fix. PR CI runs
+        # the normalization-active subset from the same file; --release keeps the whole
+        # range near 20s.
+        run: cargo test --no-default-features --release --test exhaustive_anomalies -- --ignored
+
       - name: Rust exhaustive lib-level domain tests (Tier 3)
         # Ignored *lib* unit tests need internal (`pub(crate)`) table access, so they
         # can't move to a `tests/exhaustive_*.rs` integration file. --release keeps the

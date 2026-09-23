@@ -99,8 +99,13 @@ def test_the_holes_774_found_have_no_script() -> None:
 
 def test_a_noncharacter_is_not_a_bidi_conflict() -> None:
     """The consequence #774 leads with. A phantom Arabic character is strong-RTL, so a
-    noncharacter beside Latin text made a bidi conflict out of nothing."""
-    assert disarm.inspect_anomalies("hello" + chr(0xFDD0)).kinds == []
+    noncharacter beside Latin text made a bidi conflict out of nothing.
+
+    It is reported now, as what it is: an ``invisible`` carrier that ``canonicalize``
+    deletes (Finding 1 of the Lean model in ``formal/lean/Detection``). The #774 point is
+    that it is not ``bidi_mixed``, and that holds.
+    """
+    assert disarm.inspect_anomalies("hello" + chr(0xFDD0)).kinds == ["invisible"]
     # The real signal still fires.
     assert disarm.has_bidi_conflict("hello שלום")
 

@@ -52,6 +52,12 @@ fn is_invisible_in_word(c: char) -> bool {
         // which is the inconsistency that makes it a defect rather than a coverage gap —
         // the argument #643 made for the fillers on the line above.
         || crate::invisibles::is_default_ignorable_format(c)
+        // The deprecated format controls and the interlinear annotation characters, which
+        // `strip_bidi`, `strip_format` and `canonicalize` all delete. They were defined
+        // only inside the bidi strip, so the detector never saw them and `pay` + `U+206A`
+        // + `pal` screened clean while every comparison preset returned `paypal` (Finding
+        // 1 of the Lean model in `formal/lean/Detection`).
+        || crate::invisibles::is_deprecated_or_annotation_format(c)
 }
 
 /// Soft hyphen — legitimate hyphenation between letters, so it is a run-rule carrier only.
@@ -82,10 +88,21 @@ const CGJ: char = '\u{034F}';
 /// above one, unlike the tag block where nothing legitimate emits even one. Four is the
 /// shortest run that no icon font produces and that still catches the shape
 /// `canonicalize` was already deleting silently.
+///
+/// Noncharacters take one, for the tag block's reason. `U+FDD0`-`U+FDEF` and the last two
+/// code points of every plane are permanently reserved for a process's internal use
+/// (Core Spec section 23.7), so none belongs in text a guardrail is screening, and one is
+/// already the anomaly: `canonicalize` deletes it, and `pay` + `U+FDD0` + `pal` became
+/// `paypal` while the detector reported clean. The library already classes them as
+/// invisible in both its other readers: `is_invisible_in_hostname` and the smuggled-payload
+/// decoder's `is_visible`. Not a neighbour rule, because a letter beside one adds nothing
+/// to the evidence, and a byte-swapped BOM (`U+FFFE`) standing alone at the start of a text
+/// is exactly the input a neighbour rule cannot see.
 const RUN_THRESHOLD_TAG: usize = 1;
 const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
 const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
 const RUN_THRESHOLD_PRIVATE_USE: usize = 4;
+const RUN_THRESHOLD_NONCHARACTER: usize = 1;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,6 +114,9 @@ enum Carrier {
     /// a guardrail screening with `has_anomalies` passed exactly what the comparison
     /// presets had decided was not text.
     PrivateUse,
+    /// The 66 noncharacters, which `canonicalize` deletes and nothing reported (the
+    /// secondary finding under Finding 1 of the Lean model in `formal/lean/Detection`).
+    Noncharacter,
 }
 
 impl Carrier {
@@ -109,6 +129,8 @@ impl Carrier {
             Some(Self::ZeroWidth)
         } else if crate::invisibles::is_pua(c) {
             Some(Self::PrivateUse)
+        } else if crate::invisibles::is_noncharacter(c) {
+            Some(Self::Noncharacter)
         } else {
             None
         }
@@ -120,6 +142,7 @@ impl Carrier {
             Self::VariationSelector => RUN_THRESHOLD_VARIATION_SELECTOR,
             Self::ZeroWidth => RUN_THRESHOLD_ZERO_WIDTH,
             Self::PrivateUse => RUN_THRESHOLD_PRIVATE_USE,
+            Self::Noncharacter => RUN_THRESHOLD_NONCHARACTER,
         }
     }
 }
@@ -2158,4 +2181,66 @@ mod tests {
         assert_eq!(r.findings[0].token, "44 | hi");
         assert!(r.kinds.contains(&AnomalyKind::Invisible));
     }
+
+    // -- Findings of the Lean model in `formal/lean/Detection` ------------------
+
+    /// Finding 1: the deprecated format controls and the interlinear annotation
+    /// characters are deleted by `strip_bidi` and must be reported inside a word.
+    #[test]
+    fn deprecated_format_and_annotation_controls_are_reported_in_a_word() {
+        let l = lex(&[]);
+        for cp in (0x206A..=0x206F).chain(0xFFF9..=0xFFFB) {
+            let c = char::from_u32(cp).unwrap();
+            let split = format!("pay{c}pal");
+            assert_eq!(crate::presets::strip_bidi(&split), "paypal", "U+{cp:04X}");
+            let r = inspect_anomalies(&split, &l);
+            assert_eq!(r.kinds, vec![AnomalyKind::Invisible], "U+{cp:04X}");
+            assert_eq!(r.findings[0].detail, codepoint(c));
+        }
+    }
+
+    /// Finding 1, stated as the property rather than the list: whatever the bidi strip
+    /// deletes from inside a word, the detector reports, except the soft hyphen, which
+    /// is a documented spare, and the bidi controls, which the `bidi` kind judges by its
+    /// own rules. A second copy of the set in either reader fails this.
+    #[test]
+    fn what_strip_bidi_deletes_from_a_word_is_reported() {
+        let l = lex(&[]);
+        let missed: Vec<String> = (0u32..=0x0010_FFFF)
+            .filter_map(char::from_u32)
+            .filter(|&c| !crate::scripts::is_bidi_control(c) && c != SOFT_HYPHEN)
+            .filter(|&c| crate::presets::strip_bidi(&format!("a{c}b")) == "ab")
+            .filter(|&c| !has_anomalies(&format!("pay{c}pal"), &l))
+            .map(codepoint)
+            .collect();
+        assert!(
+            missed.is_empty(),
+            "deleted by strip_bidi, not reported: {missed:?}"
+        );
+    }
+
+    /// The secondary finding under Finding 1: a noncharacter is deleted by `canonicalize`
+    /// and was reported by nothing. One is enough, alone or inside a word.
+    #[test]
+    fn a_noncharacter_is_reported_alone_and_in_a_word() {
+        let l = lex(&[]);
+        let nonchars = (0xFDD0..=0xFDEF)
+            .chain((0..=0x10).flat_map(|plane| [plane << 16 | 0xFFFE, plane << 16 | 0xFFFF]));
+        let mut n = 0;
+        for cp in nonchars {
+            let c = char::from_u32(cp).unwrap();
+            assert!(crate::invisibles::is_noncharacter(c));
+            for text in [format!("pay{c}pal"), c.to_string(), format!("12{c}34")] {
+                let r = inspect_anomalies(&text, &l);
+                assert_eq!(r.kinds, vec![AnomalyKind::Invisible], "{text:?}");
+                assert_eq!(r.findings[0].detail, format!("{} \u{d7}1", codepoint(c)));
+            }
+            n += 1;
+        }
+        assert_eq!(n, 66);
+        // U+FFFD, the replacement character beside the plane-0 pair, renders and is not
+        // one of them.
+        assert!(!has_anomalies("pay\u{FFFD}pal", &l));
+    }
+
 }

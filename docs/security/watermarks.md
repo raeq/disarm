@@ -29,12 +29,12 @@ between two letters:
 
 | | count |
 |---|---:|
-| `canonicalize` removes it **and** `inspect_anomalies` reports it | 129 |
-| `canonicalize` removes it, nothing reports it | 266 |
+| `canonicalize` removes it **and** `inspect_anomalies` reports it | 135 |
+| `canonicalize` removes it, nothing reports it | 260 |
 | reported but **not** removed | 10 |
 | neither | 0 |
 
-The 266 is the number to understand. Variation selectors and the Tags block are stripped
+The 260 is the number to understand. Variation selectors and the Tags block are stripped
 without a finding, because in ordinary text they are not anomalous — a variation selector
 after an emoji base is correct usage. So a pipeline that only *reports* will miss most of
 this class, and one that only *transforms* will clean text without telling you it was

@@ -25,11 +25,11 @@ pub(crate) const KEYCAP: char = '\u{20E3}';
 // (`tables::match_emoji_sequence`), so the hex-key encoder is retained
 // **test-only** as the reference oracle (`match_emoji_at_reference`).
 #[cfg(test)]
-const KEY_BUF_CAP: usize = 64; // MAX_EMOJI_SEQ_LEN(9) × 5 hex + 8 '_' = 53 bytes; 64 is safe
-                               // P9: tie the test buffer to the real window size (`MAX_WINDOW`, derived from the
-                               // build-generated MAX_EMOJI_SEQ_LEN) so it can never silently under-size if the
-                               // CLDR data grows. Worst case: every code point emits up to 5 hex digits, with a
-                               // `_` separator between the MAX_WINDOW code points → MAX_WINDOW*5 + (MAX_WINDOW-1).
+const KEY_BUF_CAP: usize = 128; // MAX_WINDOW(18) × 5 hex + 17 '_' = 107 bytes; 128 is safe
+                                // P9: tie the test buffer to the real window size (`MAX_WINDOW`, derived from the
+                                // build-generated MAX_EMOJI_SEQ_LEN) so it can never silently under-size if the
+                                // CLDR data grows. Worst case: every code point emits up to 5 hex digits, with a
+                                // `_` separator between the MAX_WINDOW code points → MAX_WINDOW*5 + (MAX_WINDOW-1).
 #[cfg(test)]
 const _: () = assert!(KEY_BUF_CAP >= MAX_WINDOW * 6 - 1);
 
@@ -108,7 +108,10 @@ pub(crate) fn match_emoji_at(window: &[char]) -> Option<(&'static str, usize)> {
     // actually type: `demojize("x1\u{FE0F}\u{20E3}y")` returned `x1\u{20E3}y`, dropping
     // the selector and leaving the combining keycap on the digit. Retry without the
     // selector and report all three code points consumed.
-    if window.len() >= 3 && window[1] == VS16 && window[2] == KEYCAP {
+    // A text-style keycap, `1\u{FE0E}\u{20E3}`, is the same keycap asking for text
+    // presentation, and CLDR names it the same way. Without this arm the scanner skipped
+    // the VS15 and left `1\u{20E3}`, which the next pass named (Lean model).
+    if window.len() >= 3 && (window[1] == VS16 || window[1] == VS15) && window[2] == KEYCAP {
         if let Some((name, _)) = tables::match_emoji_sequence(&[ch, KEYCAP]) {
             return Some((name, 3));
         }
@@ -214,7 +217,13 @@ pub(crate) struct CharWindow<'a> {
 /// duplicated literal, so the two cannot drift when the CLDR data updates
 /// (#199 review). This also caps the look-ahead a custom Python emoji provider
 /// can match; see the provider call site and `set_emoji_provider`.
-const MAX_WINDOW: usize = tables::max_emoji_seq_len();
+///
+/// Twice the longest key, not the key itself: the table stores sequences unqualified, and
+/// the trie walk accepts a U+FE0F after any component, so a fully qualified sequence is
+/// longer than its key — the RGI kiss with skin tones is ten code points to its key's
+/// nine. Doubling covers a selector after every component; `a_fully_qualified_key_fits`
+/// holds every table key to it.
+const MAX_WINDOW: usize = 2 * tables::max_emoji_seq_len();
 
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.
@@ -724,19 +733,34 @@ pub fn demojize_rust_replace_into(text: &str, replacement: &str, result: &mut St
 /// that would **form** an emoji with the last character written goes; one that joins
 /// nothing is still text, so `replace_emoji("1\u{1F600}\u{20E3}", " ")` keeps it.
 pub(crate) fn drop_marks_the_seam_would_bind(win: &mut CharWindow<'_>, result: &str) {
-    let Some(before) = result.chars().next_back() else {
-        return;
-    };
+    // The deepest head is base, selector, keycap: three chars, `HEAD_LOOKAHEAD`. So the
+    // seam reaches back up to two characters of output, not one: a keycap left by a
+    // removal can bind across `1\u{FE0F}` as well as `1` — `replace_emoji` on
+    // `1\u{FE0F}😀\u{20E3}` built the keycap `1\u{FE0F}\u{20E3}` when it looked back at
+    // the selector alone (Lean model, `formal/lean/Emoji`).
+    let mut tail = ['\0'; HEAD_LOOKAHEAD - 1];
+    let mut kept = 0;
+    for c in result.chars().rev().take(HEAD_LOOKAHEAD - 1) {
+        kept += 1;
+        tail[HEAD_LOOKAHEAD - 1 - kept] = c;
+    }
+    let tail = &tail[HEAD_LOOKAHEAD - 1 - kept..];
     while let Some(mark) = win.current() {
         if !matches!(mark, VS15 | VS16 | KEYCAP) {
             return;
         }
-        // The deepest head is base, selector, keycap: three chars, `HEAD_LOOKAHEAD`.
-        let mut seam = [before; HEAD_LOOKAHEAD];
         let ahead = win.as_slice();
-        let n = ahead.len().min(HEAD_LOOKAHEAD - 1);
-        seam[1..=n].copy_from_slice(&ahead[..n]);
-        if head_len_at(&seam[..=n]).is_none_or(|len| len < 2) {
+        // A mark binds if a head starting `back` characters into the output reaches
+        // past the output and into it.
+        let binds = (1..=tail.len()).rev().any(|back| {
+            let mut seam = ['\0'; HEAD_LOOKAHEAD];
+            let from_tail = &tail[tail.len() - back..];
+            let n = ahead.len().min(HEAD_LOOKAHEAD - back);
+            seam[..back].copy_from_slice(from_tail);
+            seam[back..back + n].copy_from_slice(&ahead[..n]);
+            head_len_at(&seam[..back + n]).is_some_and(|len| len > back)
+        });
+        if !binds {
             return;
         }
         win.advance(1);
@@ -854,6 +878,9 @@ pub fn demojize_rust_into(
     while let Some(ch) = win.current() {
         if ch == VS16 || ch == VS15 || ch == ZWJ {
             win.advance(1);
+            // Skipping is a removal, and what follows now meets what came before: a
+            // keycap after `1\u{200D}` bound to the `1` (Lean model).
+            drop_marks_the_seam_would_bind(&mut win, result);
             continue;
         }
 
@@ -884,7 +911,10 @@ pub fn demojize_rust_into(
         // no emoji property were dropped as emoji the library lacked data for.
         if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
             win.advance(consumed);
-            last_was_emoji = false;
+            // Nothing is written, so `last_was_emoji` keeps its value: a name written
+            // before the dropped emoji still needs its separator. Resetting it glued the
+            // next word on — `😀🇦x` gave `grinning facex` (Lean model).
+            //
             // Dropped, so what follows meets what came before: the seam
             // `replace_emoji` closes (#995 follow-up) is open here too.
             drop_marks_the_seam_would_bind(&mut win, result);
@@ -1113,13 +1143,20 @@ mod tests {
                     out.push_str(replacement);
                     i += n;
                     // The seam rule, stated over the whole input rather than the window.
-                    while let (Some(before), Some(&mark)) = (out.chars().last(), chars.get(i)) {
-                        let binds = matches!(mark, VS15 | VS16 | KEYCAP) && {
-                            let seam: Vec<char> = std::iter::once(before)
-                                .chain(chars[i..].iter().copied().take(2))
-                                .collect();
-                            head_len_at(&seam).is_some_and(|len| len >= 2)
-                        };
+                    // A mark binds if a head starting one or two characters back in the
+                    // output reaches past it.
+                    while let Some(&mark) = chars.get(i) {
+                        let tail: Vec<char> = out.chars().rev().take(2).collect();
+                        let binds = matches!(mark, VS15 | VS16 | KEYCAP)
+                            && (1..=tail.len()).any(|back| {
+                                let seam: Vec<char> = tail[..back]
+                                    .iter()
+                                    .rev()
+                                    .copied()
+                                    .chain(chars[i..].iter().copied().take(3 - back))
+                                    .collect();
+                                head_len_at(&seam).is_some_and(|len| len > back)
+                            });
                         if !binds {
                             break;
                         }
@@ -1448,6 +1485,34 @@ mod tests {
         // What the branch is for still reaches it.
         assert_eq!(unnamed_emoji_len_at(&['\u{1F1E6}']), Some(1));
         assert_eq!(unnamed_emoji_len_at(&['\u{E0061}']), Some(1));
+    }
+
+    /// The window holds the fully qualified form of every key: a U+FE0F after every
+    /// component that is not a joiner, a skin tone, a tag or a keycap mark. The table
+    /// stores keys unqualified, and a sequence cut at the window edge is named in pieces.
+    #[test]
+    fn a_fully_qualified_key_fits() {
+        let longest = include_str!("tables/data/emoji_multi.tsv")
+            .lines()
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(|l| {
+                let key = l.split('\t').next().unwrap_or_default();
+                key.split('_').count() * 2
+            })
+            .max()
+            .unwrap_or_default();
+        assert!(longest <= MAX_WINDOW, "{longest} > {MAX_WINDOW}");
+        // And the named case the model found, whole, from the fully qualified form.
+        let kiss =
+            "\u{1F468}\u{1F3FB}\u{200D}\u{2764}\u{FE0F}\u{200D}\u{1F48B}\u{200D}\u{1F468}\u{1F3FB}";
+        assert_eq!(
+            demojize_rust(kiss, false),
+            demojize_rust(&kiss.replace('\u{FE0F}', ""), false)
+        );
+        assert_eq!(
+            demojize_rust("\u{2764}\u{FE0F}\u{200D}\u{1F525}", false),
+            "heart on fire"
+        );
     }
 
     #[test]

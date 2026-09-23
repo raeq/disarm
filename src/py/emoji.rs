@@ -129,6 +129,8 @@ fn demojize_impl(
         // Skip orphaned variation selectors and ZWJ characters
         if ch == VS16 || ch == VS15 || ch == ZWJ {
             win.advance(1);
+            // A removal: close the seam, as the pure-Rust scanner does.
+            drop_marks_the_seam_would_bind(&mut win, &result);
             continue;
         }
 
@@ -195,22 +197,25 @@ fn demojize_impl(
                 }
             }
             win.advance(consumed);
-            // Parity with the recognized-emoji path (#200): flag the position so
-            // a following alphanumeric is separated by a space — but only when a
-            // *visible* token was actually emitted, otherwise we inject a
-            // spurious leading space. Preserve always writes the raw mark;
-            // Replace writes `replace_with`, which may be empty ("drop it");
-            // Ignore writes nothing.
-            last_was_emoji = match error_mode {
+            // Parity with the recognized-emoji path (#200): a visible token flags the
+            // position so a following alphanumeric is separated. Preserve always writes
+            // the raw mark; Replace writes `replace_with`, which may be empty; Ignore
+            // writes nothing. When nothing is written both flags keep their values, so a
+            // name written *before* the dropped emoji is still separated from what
+            // follows: resetting them glued it on, `😀🇦x` giving `grinning facex` (Lean
+            // model, `formal/lean/Emoji`).
+            let wrote = match error_mode {
                 ErrorMode::Preserve => true,
                 ErrorMode::Replace => !replace_with.is_empty(),
                 ErrorMode::Ignore => false,
             };
-            last_was_raw = matches!(error_mode, ErrorMode::Preserve);
-            // Nothing visible written: what follows now meets what came before, and a
-            // keycap or selector that binds to it would be an emoji the input never had
-            // (the seam `replace_emoji` closes, #995 follow-up).
-            if !last_was_emoji {
+            if wrote {
+                last_was_emoji = true;
+                last_was_raw = matches!(error_mode, ErrorMode::Preserve);
+            } else {
+                // Nothing visible written: what follows now meets what came before, and a
+                // keycap or selector that binds to it would be an emoji the input never
+                // had (the seam `replace_emoji` closes, #995 follow-up).
                 drop_marks_the_seam_would_bind(&mut win, &result);
             }
             continue;

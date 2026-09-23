@@ -1,0 +1,27 @@
+- **Four emoji-scanner defects found by a Lean model of the scanners
+  (`formal/lean/Emoji`).** The model mirrors `src/emoji.rs` and `src/py/emoji.rs` branch
+  by branch, agrees with the library on 680,172 differential inputs, and checks the
+  documented properties over every string up to length five.
+
+  - **A fully qualified ZWJ sequence was named piece by piece.** CLDR keys these
+    sequences without their presentation selectors, and people type them with:
+    `demojize("\u2764\ufe0f\u200d\U0001f525")` gave `red heart fire`, the rainbow
+    flag `white flag rainbow`; 306 of the 1,021 fully qualified sequences were misnamed.
+    A selector with no table edge is now consumed and the walk goes on, and the scanner
+    window holds the longest fully qualified form (ten code points).
+  - **Dropping an emoji glued the next word to the name before it.** An emoji with no
+    name dropped under `errors="ignore"`, `replace_with=""` or the pipeline reset the
+    separator flag, so `demojize("\U0001f600\U0001f1e6x", errors="ignore")` gave
+    `grinning facex`, and a combining mark landed on the name. Nothing written now means
+    nothing changed.
+  - **A removal could still build a keycap.** The seam check from #1005 looked back one
+    output character and a keycap is three: `replace_emoji("1\ufe0f\U0001f600\u20e3", "")`
+    built `1\ufe0f\u20e3`. It now looks back two.
+  - **Skipping a selector or joiner opened the same seam.** `demojize` drops a stray
+    VS15, VS16 or ZWJ, and the keycap after it then bound to the digit before:
+    `1\u200d\u20e3` came back as a keycap for the next pass to name. The skip now
+    closes the seam, and a text-style keycap, `1\ufe0e\u20e3`, is named as the keycap
+    it is.
+
+  `ml_normalize` output moves for the first two; `KEY_SCHEMA_VERSION` 10 is unreleased
+  and records it.

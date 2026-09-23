@@ -237,6 +237,12 @@ pub fn unicode_version() -> &'static str {
 /// the same reason as the four before it: of the moved class its corpus held exactly one
 /// code point, `U+2764`, which CLDR names and which therefore never reached the branch.
 /// Rows covering the class were added with this.
+///
+/// And `ml_normalize`, the key surface that demojizes, moves for two emoji fixes from
+/// the Lean model in `formal/lean/Emoji`: a fully qualified ZWJ sequence is named whole
+/// (`❤\u{FE0F}\u{200D}🔥` is `heart on fire`, not `red heart fire`; 306 of 1,021 such
+/// sequences), and an emoji dropped for want of a name no longer glues the next word to
+/// the name before it (`I 😀🇦x ok` is `i grinning face x ok`, not `…facex ok`).
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).

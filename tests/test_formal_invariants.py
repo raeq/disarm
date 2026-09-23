@@ -10,8 +10,8 @@ I2: ASCII Output        — ErrorMode 'ignore' produces ASCII-only output.
 I3: Idempotence         — Applying transliterate twice yields the same as once.
 I4: No Exceptions       — No valid Unicode input causes an exception.
 I5: Deterministic       — Same input always produces the same output.
-I6: Input Size Bounded  — Inputs > 10 MiB are rejected with DisarmError.
-I7: Output Length Bound — len(output) ≤ len(input) * 4 + char_count.
+I6: No Input Size Cap   — Input of any length is accepted (#80 removed the cap).
+I7: Output Length Bound — len(output) ≤ 5 × utf8_bytes(input) + chars(input).
 """
 
 import string
@@ -183,18 +183,41 @@ class TestI6NoInputSizeCap:
 
 
 class TestI7OutputLengthBound:
-    """I7: For ErrorMode::Ignore, len(output) ≤ len(input) * 4 + char_count.
+    """I7: For ErrorMode::Ignore, len(output) ≤ 5 × utf8_bytes(input) + chars(input).
 
     This bound arises because:
-    - Each input byte maps to at most ~4 output ASCII bytes (CJK pinyin is longest)
+    - Each input byte maps to at most 5 output ASCII bytes. The worst case is one code
+      point, U+337F SQUARE CORPORATION: three bytes, recovered through NFKC as four
+      ideographs, `zhu shi hui she`. The bound used to be 4, from "CJK pinyin is
+      longest", and U+337F broke it (found by the Lean audit in
+      formal/lean/Transliterate). A random draw essentially never picks it, so it is
+      pinned below, and the whole scalar range is swept once.
     - Spacing between CJK characters adds at most char_count spaces
     """
+
+    @staticmethod
+    def _bound(text: str) -> int:
+        return len(text.encode("utf-8")) * 5 + len(text)
+
+    def test_the_worst_code_point(self):
+        result = disarm.transliterate("\u337f", errors="ignore")
+        assert result == "zhu shi hui she"
+        assert len(result) == self._bound("\u337f") - 1
+
+    def test_every_scalar_is_within_the_bound(self):
+        over = [
+            f"U+{cp:04X}"
+            for cp in range(0x80, 0x110000)
+            if not 0xD800 <= cp <= 0xDFFF
+            and len(disarm.transliterate(chr(cp), errors="ignore")) > self._bound(chr(cp))
+        ]
+        assert over == []
 
     @given(st.text(min_size=1, max_size=500))
     @settings(max_examples=1000, suppress_health_check=[HealthCheck.too_slow])
     def test_hypothesis_output_bound(self, text):
         result = disarm.transliterate(text, errors="ignore")
-        bound = len(text.encode("utf-8")) * 4 + len(text)
+        bound = self._bound(text)
         assert len(result) <= bound, (
             f"Output length {len(result)} exceeds bound {bound} "
             f"for input of {len(text)} chars / {len(text.encode('utf-8'))} bytes"

@@ -1,0 +1,92 @@
+name: Formal models
+
+# Re-checks the Lean and TLA+ models under formal/ whenever they change.
+#
+# The models are how #1008-#1014 were found: each one was validated against the
+# library before a proof or a counterexample counted, and each finding became a fix
+# with a regression test in the ordinary suites. Those tests are what keep the fixes
+# fixed. This workflow keeps the models themselves honest: every Lean proof still
+# checks, and every TLC configuration still gives the verdict formal/tla/*/expected.tsv
+# records, including the configurations that model the code as it was and must keep
+# failing. A model edit that made one of those pass would have lost its bug.
+#
+# Path-filtered and not part of the "All checks passed" roll-up: nothing outside
+# formal/ can change a model's verdict. Both toolchains are pinned: Lean by each
+# project's lean-toolchain file, TLC by version and SHA-256.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  pull_request:
+    paths:
+      - "formal/**"
+      - ".github/workflows/formal.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lean:
+    name: Lean (${{ matrix.model }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [Deletions, Emoji, Transliterate]
+    defaults:
+      run:
+        working-directory: formal/lean/${{ matrix.model }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install the pinned Lean toolchain
+        # A release tarball rather than elan, so nothing resolves a version at run time:
+        # the version is the one lean-toolchain names, and core Lean has no other
+        # dependency (no Mathlib).
+        run: |
+          version="$(sed -n 's|^leanprover/lean4:v||p' lean-toolchain)"
+          test -n "$version"
+          curl -sSfL "https://github.com/leanprover/lean4/releases/download/v${version}/lean-${version}-linux.tar.zst" \
+            | tar --zstd -x -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/lean-${version}-linux/bin" >> "$GITHUB_PATH"
+
+      - name: Check every proof
+        run: lake build
+
+  tla:
+    name: TLA+ (TLC)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TLA2TOOLS_VERSION: "1.7.4"
+      TLA2TOOLS_SHA256: "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Fetch the pinned TLC
+        # v1.7.4 is a fixed release. The v1.8.0 asset is rebuilt continuously, so no
+        # hash of it stays valid.
+        run: |
+          jar="$RUNNER_TEMP/tla2tools.jar"
+          curl -sSfL -o "$jar" \
+            "https://github.com/tlaplus/tlaplus/releases/download/v${TLA2TOOLS_VERSION}/tla2tools.jar"
+          echo "${TLA2TOOLS_SHA256}  $jar" | sha256sum -c -
+          echo "TLA2TOOLS=$jar" >> "$GITHUB_ENV"
+
+      - name: Model-check every configuration against its expected verdict
+        run: |
+          status=0
+          for runner in formal/tla/*/run_tlc.sh; do
+            echo "::group::${runner%/run_tlc.sh}"
+            OUT="$RUNNER_TEMP/tlc/$(basename "$(dirname "$runner")")" bash "$runner" || status=1
+            echo "::endgroup::"
+          done
+          exit "$status"

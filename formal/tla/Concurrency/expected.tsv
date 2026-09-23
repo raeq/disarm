@@ -1,0 +1,20 @@
+# config	expected TLC verdict	why
+# "pass" is "No error has been found"; "deadlock" is "Deadlock reached";
+# anything else is the name of the invariant TLC must report violated. The
+# configs that model the code as it was are expected to fail: they are the
+# counterexamples, and a model change that made them pass would have lost the bug.
+CachedTransliterator.cfg	NoStaleAfterRegistration	F5, fixed by #1012
+CachedTransliterator_fixed.cfg	pass	the #1012 fix
+EmojiProvider_fixed.cfg	pass	the #1009 fix
+EmojiProvider_gil.cfg	deadlock	F2, fixed by #1009
+EmojiProvider_gil_readerpref.cfg	deadlock	F2 under a reader-preferring lock
+EmojiProvider_lookup.cfg	pass	re-entrant lookup was always safe
+EmojiProvider_reentrant.cfg	deadlock	F1, fixed by #1009
+Registration_fixed.cfg	pass	the #1014 gate
+Registration_python.cfg	pass	the GIL-held shim was always safe
+Registration_rust.cfg	CapRespected	F8, fixed by #1014
+Registration_rust_seal.cfg	NoMutationAfterSeal	F8, fixed by #1014
+ReplacementTables.cfg	pass	table and automaton never diverge
+ReplacementTables_batch.cfg	BatchSingleVersion	F4, documented by #1014
+ReplacementTables_fixed.cfg	pass	the Arc-snapshot design, if batch atomicity is wanted
+ReplacementTables_poison.cfg	deadlock	F7, latent

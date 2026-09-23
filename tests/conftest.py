@@ -26,7 +26,10 @@ ROOT = Path(__file__).resolve().parent.parent
 #: Skipped by name at any depth, whatever the marker search finds. `.venv` is the
 #: name every tool defaults to, and the environments that carry no `pyvenv.cfg` —
 #: conda's, or one nested deeper than the search below goes — are still found by it.
-ALWAYS_SKIPPED = frozenset({".git", ".venv"})
+#: `.claude` is gitignored and holds agent worktrees, whole other checkouts of this
+#: repository on other branches, so walking it polices files this tree does not have.
+#: `.lake` is Lake's build and package directory under each `formal/lean` model.
+ALWAYS_SKIPPED = frozenset({".git", ".venv", ".claude", ".lake"})
 
 
 @functools.cache

@@ -193,7 +193,7 @@ docstrings, and the Rust unit tests of these modules). All pass.
 
 ## Findings
 
-**Status of the slug findings.** 4, 5, 6, 7, 8, 9, 10, 11 and 13 are fixed by #PR, with
+**Status of the slug findings.** 4, 5, 6, 7, 8, 9, 10, 11 and 13 are fixed by #1028, with
 regression tests in `tests/slugify_formal_findings.rs`, `src/slugify.rs` and
 `tests/test_slugify_formal_findings.py`. `Slug.lean` and `Unique.lean` still model the
 code at `595fbda`, so the differential test now disagrees with the library on those

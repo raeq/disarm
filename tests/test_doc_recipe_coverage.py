@@ -33,8 +33,9 @@ CONFTEST = DOCS / "conftest.py"
 PY_BLOCK = re.compile(r"^```python\s*$", re.MULTILINE)
 
 #: Dated records rather than instructions — the same set the docs-vs-release gate
-#: skips, and for the same reason.
-EXCLUDED_DIRS = frozenset({"reviews", "plans", "__pycache__"})
+#: skips, and for the same reason. ``changelog`` is the archive of old release
+#: sections, moved verbatim out of ``CHANGELOG.md``.
+EXCLUDED_DIRS = frozenset({"reviews", "plans", "changelog", "__pycache__"})
 
 
 def _list(name: str) -> list[str]:
@@ -50,7 +51,9 @@ def _list(name: str) -> list[str]:
 def _pages_with_python_blocks() -> set[str]:
     found: set[str] = set()
     for path in DOCS.rglob("*.md"):
-        if path.is_symlink() or EXCLUDED_DIRS.intersection(path.parts):
+        # Relative to docs/: an absolute path would drop every page of a checkout
+        # that happens to live under a directory called, say, `changelog`.
+        if path.is_symlink() or EXCLUDED_DIRS.intersection(path.relative_to(DOCS).parts):
             continue
         if PY_BLOCK.search(path.read_text(encoding="utf-8")):
             found.add(str(path.relative_to(DOCS)))

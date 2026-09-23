@@ -183,11 +183,13 @@ class TestTheGateIsPointedAtSomething:
     def test_record_directories_are_excluded(self) -> None:
         """``docs/reviews/`` and ``docs/plans/`` are dated snapshots of a past
         state. Correcting their API names would falsify the record, so they are
-        not scanned — and neither is in mkdocs' nav."""
+        not scanned — and neither is in mkdocs' nav. ``docs/changelog/`` is the
+        archived release history: in the nav, but a record all the same."""
+        docs = checker._REPO_ROOT / "docs"
         scanned = checker._markdown_files(["docs"])
         assert scanned, "docs/ produced no files at all"
         for path in scanned:
-            assert not checker._EXCLUDED_DIRS.intersection(path.parts), path
+            assert not checker._EXCLUDED_DIRS.intersection(path.relative_to(docs).parts), path
 
 
 class TestKnownGapsRatchet:

@@ -1,0 +1,12 @@
+[package]
+name = "text-premises"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Checks, on every scalar, the premises formal/lean/Text relies on for fold_case and is_case_fold_stable."
+
+# Its own workspace root, so the repository's manifest does not claim it.
+[workspace]
+
+[dependencies]
+disarm = { path = "../../../../.." }

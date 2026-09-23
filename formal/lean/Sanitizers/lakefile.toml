@@ -1,0 +1,17 @@
+name = "sanitizers"
+version = "0.1.0"
+defaultTargets = ["Sanitizers", "difftest"]
+
+[[lean_lib]]
+name = "Sanitizers"
+# `native_decide` in Bounded.lean evaluates the models millions of times; precompiling
+# makes that native code instead of the IR interpreter.
+precompileModules = true
+
+[[lean_exe]]
+name = "difftest"
+root = "Main"
+
+[[lean_exe]]
+name = "explore"
+root = "Explore"

@@ -1,0 +1,15 @@
+[package]
+name = "disarm-binding-oracle"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Differential-testing oracle: the Rust core's answer for every harness case"
+
+# Standalone: not a member of the repository's workspace.
+[workspace]
+
+[dependencies]
+disarm = { path = "../../..", default-features = false }
+
+[profile.release]
+debug = false

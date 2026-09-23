@@ -1,0 +1,13 @@
+name = "detection"
+version = "0.1.0"
+defaultTargets = ["Detection", "difftest"]
+
+[[lean_lib]]
+name = "Detection"
+# `native_decide` in Bounded.lean evaluates the model millions of times; precompiling the
+# modules makes that native code instead of the IR interpreter.
+precompileModules = true
+
+[[lean_exe]]
+name = "difftest"
+root = "Main"

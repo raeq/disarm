@@ -1,0 +1,10 @@
+# config	expected TLC verdict	why
+# "pass" is "No error has been found"; anything else is the invariant TLC must report
+# violated. The configs that model the code as written are expected to fail.
+CABI_alias.cfg	NoAlias	F3: every empty result is the same read-only sentinel
+CABI_contract.cfg	pass	the code as written is sound for a client that keeps the unwritten rules
+CABI_fixed.cfg	pass	the proposed fix, against every input the header admits
+CABI_null.cfg	NoNullArgUB	F2: NULL for a non-nullable argument
+CABI_truncate.cfg	NoLayoutMismatch	F3: a shortened string is freed with the wrong Layout
+CABI_utf8.cfg	NoInvalidUtf8UB	F1: invalid UTF-8 reaches safe Rust as &str
+CABI_write.cfg	NoWriteToStatic	F3: a store into an empty result faults

@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        model: [Deletions, Emoji, Transliterate]
+        model: [Confusables, Deletions, Detection, Emoji, Presets, Sanitizers, Text, Transliterate]
     defaults:
       run:
         working-directory: formal/lean/${{ matrix.model }}

@@ -2481,19 +2481,20 @@ mod tests {
     /// A scalar NFC replaces with a different one is still reported as spelled. Composing
     /// the token read `\u{212A}ey` as `Key` and `a\u{37E}b` as `a;b` and called both clean,
     /// while `canonicalize` rewrites them: a detector silent on text its cleaner changes.
-    /// The kinds are the ones `origin/main` gave before the canonical-equivalence fix.
+    /// The kinds are the ones `main` gives without the canonical-equivalence fix; since
+    /// #1023 made U+037E, U+0387 and U+0374 Script=Common, none of them is `mixed_script`.
     #[test]
     fn a_character_nfc_replaces_keeps_its_report() {
-        use AnomalyKind::{CompatFold, MixedScript};
+        use AnomalyKind::{CompatFold, Confusable, MixedScript};
         let l = lex(&[]);
         for (c, alone, in_word) in [
             ('\u{212A}', vec![], vec![CompatFold]), // KELVIN SIGN -> K
             ('\u{2126}', vec![], vec![]),           // OHM SIGN -> Greek omega
             ('\u{212B}', vec![], vec![]),           // ANGSTROM SIGN -> A with ring
-            ('\u{37E}', vec![CompatFold], vec![MixedScript]), // GREEK QUESTION MARK -> ;
-            ('\u{387}', vec![], vec![MixedScript]), // GREEK ANO TELEIA -> middle dot
+            ('\u{37E}', vec![CompatFold], vec![CompatFold]), // GREEK QUESTION MARK -> ;
+            ('\u{387}', vec![], vec![]),            // GREEK ANO TELEIA -> middle dot (Common)
             ('\u{1FEF}', vec![CompatFold], vec![MixedScript]), // GREEK VARIA -> `
-            ('\u{374}', vec![], vec![MixedScript]), // GREEK NUMERAL SIGN
+            ('\u{374}', vec![], vec![Confusable]),  // GREEK NUMERAL SIGN
             ('\u{1FFD}', vec![], vec![MixedScript]), // GREEK OXIA -> acute
         ] {
             assert!(nfc_replaces(c), "U+{:04X}", c as u32);

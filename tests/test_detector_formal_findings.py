@@ -165,10 +165,10 @@ class TestFinding3CanonicalEquivalence:
             ("\u212a", [], ["compat_fold"]),  # KELVIN SIGN -> K
             ("\u2126", [], []),  # OHM SIGN -> Greek omega
             ("\u212b", [], []),  # ANGSTROM SIGN -> A with ring
-            ("\u037e", ["compat_fold"], ["mixed_script"]),  # GREEK QUESTION MARK -> ;
-            ("\u0387", [], ["mixed_script"]),  # GREEK ANO TELEIA -> middle dot
+            ("\u037e", ["compat_fold"], ["compat_fold"]),  # GREEK QUESTION MARK -> ;
+            ("\u0387", [], []),  # GREEK ANO TELEIA -> middle dot (Common)
             ("\u1fef", ["compat_fold"], ["mixed_script"]),  # GREEK VARIA -> `
-            ("\u0374", [], ["mixed_script"]),  # GREEK NUMERAL SIGN
+            ("\u0374", [], ["confusable"]),  # GREEK NUMERAL SIGN
             ("\u1ffd", [], ["mixed_script"]),  # GREEK OXIA -> acute
         ],
         ids=lambda v: _cp(v) if isinstance(v, str) and len(v) == 1 else None,

@@ -126,11 +126,12 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
     ASCII letter**, which is #633's gate and what keeps ``Привет`` from firing. A
     delimiter-only string such as ``∶∶∶`` folds to ``:::`` and is not reported.
 
-    Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
-    strip_control → strip_zero_width → collapse_whitespace → cap combining marks
-    (anti-zalgo, #429) → NFC → confusables → NFC (the confusable fold is
-    sandwiched between two NFC passes so TR39 skeletoning is normalization-stable
-    and the preset is idempotent — #416)
+    Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip bidi/format →
+    strip invisible classes (#413) → strip_control → strip_zero_width →
+    collapse_whitespace → drop repeated marks → cap combining marks at 3 (anti-zalgo,
+    #429) → NFC → confusables and NFC to a fixed point → drop repeated marks (the
+    confusable fold is iterated with NFC so TR39 skeletoning is normalization-stable
+    and the preset is idempotent — #416/#434). `PRESETS` lists the steps exactly.
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
     dangerous bidi overrides and soft hyphens, then normalizes whitespace
@@ -247,8 +248,9 @@ def ml_normalize(
 ) -> str:
     """ML/NLP text normalization pipeline.
 
-    Pipeline: NFKC → emoji→text → [transliterate] → strip_accents →
-              [fold_case] → strip_control → strip_zero_width → collapse_whitespace
+    Pipeline: resolve deletions → NFKC → emoji→text → [transliterate] → strip_accents
+              → emoji→text → [fold_case] → strip_control → strip_zero_width →
+              collapse_whitespace → NFC
 
     Produces clean, accent-free text suitable for tokenizers, embeddings, and
     feature extraction. Emoji are expanded to their CLDR short-name descriptions.
@@ -309,8 +311,10 @@ def ml_normalize(
 
     Measured at Unicode 15.0.0, **2,735** single
     characters reduce to ``""`` here (2,735 excluding the Private Use
-    Area), and so does every string built from them. A caller keying a table
-    on this has all of them, plus "no value", competing for one slot.
+    Area), and so do most strings built from them — but not all: each regional
+    indicator reduces to ``""`` alone, and two together name a flag
+    (``U+1F1FA U+1F1F8`` is ``flag: united states``). A caller keying a table on this
+    has all of them, plus "no value", competing for one slot.
 
     There is no ``on_empty`` here: this returns text rather than a key. The
     four key builders take one.
@@ -328,9 +332,9 @@ def catalog_key(
 ) -> str:
     """Library catalog key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
-    confusables → strip_accents →
-              fold_case → collapse_whitespace
+    Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi → strip
+    invisibles → fold_case → (transliterate → confusables → strip_accents, to a fixed
+    point) → fold_case → strip_control → strip_zero_width → collapse_whitespace
 
     Produces a canonical deduplication key for bibliographic titles.
 
@@ -357,9 +361,10 @@ def catalog_key(
         shape happen to agree, which is a coincidence of those letters rather
         than a property of the pipeline.
 
-        Private-use characters survive into the key. This builds a key; screen
-        adversarial input separately, and use ``normalize_confusables`` or
-        ``is_confusable`` if what you need is the *visual* question.
+        Private-use characters are stripped, with the other invisible classes (#805).
+        This builds a key; screen adversarial input separately, and use
+        ``normalize_confusables`` or ``is_confusable`` if what you need is the *visual*
+        question.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -386,13 +391,15 @@ def catalog_key(
         'omega cafe'
 
     Note:
-        **`digit_policy`** folds digit variants on the raw text, before the key is built and
-        before transliteration consumes them (#896). ``"numeric"`` is the default and a
-        genuine no-op; ``"tr39"`` reaches more spoofs but destroys the numeric reading of
-        Arabic, Persian, Indic and Thai digits. ``"preserve"`` keeps a numeral through the
-        fold, and this builder's transliteration then romanizes it anyway — a key that maps
-        every script to Latin cannot keep one. See `canonicalize` for the measurements and
-        the trade (#885).
+        **`digit_policy`** is more than a digit setting on this builder. ``"numeric"`` is
+        the default and a genuine no-op. Under ``"tr39"`` or ``"preserve"`` the **whole
+        confusable table** runs on the raw text, before the key is built and before
+        transliteration consumes what it reads (#896) — not only its digit rows. So a
+        homoglyph the default romanizes is folded first: a Cyrillic spelling of
+        ``paypal`` keys as ``paypal`` rather than ``raural``. ``"tr39"`` also destroys the numeric reading of Arabic, Persian, Indic and Thai
+        digits. ``"preserve"`` keeps a numeral through the fold, and this builder's
+        transliteration then romanizes it anyway — a key that maps every script to Latin
+        cannot keep one. See `canonicalize` for the measurements and the trade (#885).
 
     **The output can be the empty string (#728).**
 
@@ -469,9 +476,9 @@ def search_key(
 ) -> str:
     """Search index key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate →
-    strip_accents → fold_case →
-              collapse_whitespace
+    Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi → strip
+    invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control →
+    strip_zero_width → collapse_whitespace
 
     Produces a case-insensitive, accent-insensitive, script-insensitive
     lookup key.  Like `catalog_key` but without confusable
@@ -479,14 +486,15 @@ def search_key(
 
     Warning:
         **Homoglyph collisions here are a side effect of transliteration, not a
-        confusable fold.** There is no confusables step in this pipeline.
+        confusable fold.** There is no confusables step in this pipeline under the
+        default ``digit_policy`` (see the note on it below).
         Cyrillic ``аpple`` and Greek ``gοogle`` do collide with their Latin
         spellings, because those letters romanize to ``a`` and ``o`` — but a
         lookalike that romanizes to something else does not. Cherokee ``Ꮃ``
         *looks* like ``W`` and romanizes to ``la``, so ``Ꮃorld`` keys as
-        ``laorld`` and never meets ``world``. Private-use characters survive into
-        the key unchanged. This builds a key; screen adversarial input separately
-        with `is_confusable` or `has_anomalies`.
+        ``laorld`` and never meets ``world``. Private-use characters are stripped,
+        with the other invisible classes (#805). This builds a key; screen adversarial
+        input separately with `is_confusable` or `has_anomalies`.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -511,13 +519,19 @@ def search_key(
         'uber allen gipfeln'
 
     Note:
-        **`digit_policy`** folds digit variants on the raw text, before the key is built and
-        before transliteration consumes them (#896). ``"numeric"`` is the default and a
-        genuine no-op; ``"tr39"`` reaches more spoofs but destroys the numeric reading of
-        Arabic, Persian, Indic and Thai digits. ``"preserve"`` keeps a numeral through the
-        fold, and this builder's transliteration then romanizes it anyway — a key that maps
-        every script to Latin cannot keep one. See `canonicalize` for the measurements and
-        the trade (#885).
+        **`digit_policy`** is more than a digit setting on this builder. ``"numeric"`` is
+        the default and a genuine no-op. Under ``"tr39"`` or ``"preserve"`` the **whole
+        confusable table** runs on the raw text, before the key is built and before
+        transliteration consumes what it reads (#896) — not only its digit rows. So a
+        homoglyph the default romanizes is folded first: a Cyrillic spelling of
+        ``paypal`` keys as ``paypal`` rather than ``raural``. The fold also rewrites
+        ``|``, ``"`` and the backtick, which this builder leaves alone by default. The case
+        fold and transliteration then make sources the fold did not see, so under those
+        two policies the builder runs to a fixed point (Finding 2 of the Lean model in
+        ``formal/lean/Presets``); under the default it runs once. ``"tr39"`` also destroys the numeric reading of Arabic, Persian, Indic and Thai
+        digits. ``"preserve"`` keeps a numeral through the fold, and this builder's
+        transliteration then romanizes it anyway — a key that maps every script to Latin
+        cannot keep one. See `canonicalize` for the measurements and the trade (#885).
 
     **The output can be the empty string (#728).**
 
@@ -536,8 +550,8 @@ def search_key(
 def skeleton_key(text: str, *, digit_policy: str = "numeric", on_empty: str | None = None) -> str:
     """A spoof key: the TR39 skeleton plus the prototype classes disarm keeps apart.
 
-    Pipeline: strip_bidi → strip invisibles → strip_control → strip_zero_width →
-    NFKC → confusables → **prototype fold** →
+    Pipeline: resolve deletions → strip_bidi → strip invisibles → strip_control →
+    strip_zero_width → NFKC → confusables → **prototype fold** →
     fixed-point(fold_case → confusables → NFKC) → collapse_whitespace
 
     The confusable fold runs **twice**, and the second pass is not redundant. The
@@ -625,8 +639,9 @@ def sort_key(
 ) -> str:
     """Sort key generation pipeline.
 
-    Pipeline: NFKC → strip_bidi → strip invisibles → fold_case → transliterate-non-Latin →
-    fold_case → collapse_whitespace
+    Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi → strip
+    invisibles → fold_case → transliterate-non-Latin → fold_case → strip_control →
+    strip_zero_width → collapse_whitespace → drop repeated marks → cap marks at 3 → NFC
 
     A case-insensitive collation key that, unlike `search_key`,
     **preserves base accented characters** rather than folding them away.
@@ -650,11 +665,11 @@ def sort_key(
     ``"über"``, whereas ``search_key("Über", lang="de")`` is ``"ueber"``).
 
     Warning:
-        **No confusable fold.** As with `search_key`, any homoglyph
-        collision is a side effect of transliteration: Cherokee ``Ꮃ`` romanizes
-        to ``la`` rather than folding onto the ``W`` it resembles, and
-        private-use characters survive into the key. This produces a collation
-        key, not a screen.
+        **No confusable fold** under the default ``digit_policy``. As with
+        `search_key`, any homoglyph collision is a side effect of transliteration:
+        Cherokee U+13B3 romanizes to ``la`` rather than folding onto the ``W`` it
+        resembles. Private-use characters are stripped, with the other invisible
+        classes (#805). This produces a collation key, not a screen.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -680,13 +695,19 @@ def sort_key(
         'café'
 
     Note:
-        **`digit_policy`** folds digit variants on the raw text, before the key is built and
-        before transliteration consumes them (#896). ``"numeric"`` is the default and a
-        genuine no-op; ``"tr39"`` reaches more spoofs but destroys the numeric reading of
-        Arabic, Persian, Indic and Thai digits. ``"preserve"`` keeps a numeral through the
-        fold, and this builder's transliteration then romanizes it anyway — a key that maps
-        every script to Latin cannot keep one. See `canonicalize` for the measurements and
-        the trade (#885).
+        **`digit_policy`** is more than a digit setting on this builder. ``"numeric"`` is
+        the default and a genuine no-op. Under ``"tr39"`` or ``"preserve"`` the **whole
+        confusable table** runs on the raw text, before the key is built and before
+        transliteration consumes what it reads (#896) — not only its digit rows. So a
+        homoglyph the default romanizes is folded first: a Cyrillic spelling of
+        ``paypal`` keys as ``paypal`` rather than ``raural``. The fold also rewrites
+        ``|``, ``"`` and the backtick, which this builder leaves alone by default. The case
+        fold and transliteration then make sources the fold did not see, so under those
+        two policies the builder runs to a fixed point (Finding 2 of the Lean model in
+        ``formal/lean/Presets``); under the default it runs once. ``"tr39"`` also destroys the numeric reading of Arabic, Persian, Indic and Thai
+        digits. ``"preserve"`` keeps a numeral through the fold, and this builder's
+        transliteration then romanizes it anyway — a key that maps every script to Latin
+        cannot keep one. See `canonicalize` for the measurements and the trade (#885).
 
     **The output can be the empty string (#728).**
 
@@ -853,11 +874,14 @@ def canonicalize_strict(text: str, *, digit_policy: str = "numeric") -> str:
     paragraph above disproves: the confusable fold rewrites individual letters, and
     only the *romanization* step is absent (#907).
 
-    Pipeline: ``NFKC → strip_bidi → strip_zero_width → strip_control → strip
-    invisible classes (#413) → strip_zalgo → confusables → collapse_whitespace →
-    NFC`` (invisibles are stripped before zalgo-capping so they cannot split
-    combining-mark runs, and the terminal NFC recomposes any base+mark left
-    adjacent by a stripped invisible — keeping the output idempotent, #416/#413)
+    Pipeline: ``resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi →
+    strip_zero_width → strip_control → strip invisible classes (#413) → (confusables
+    and NFC, then the cross-script mark strip, to a fixed point) → drop repeated marks
+    → strip_zalgo → collapse_whitespace → NFC`` (invisibles are stripped before
+    zalgo-capping so they cannot split combining-mark runs, the cap follows the
+    cross-script mark strip for the same reason (#862), and the terminal NFC
+    recomposes any base+mark left adjacent by a stripped invisible — keeping the
+    output idempotent, #416/#413)
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -958,10 +982,13 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
     and sentence boundaries are meaningful. Chain with ``fold_case()``
     if lowercasing is also needed.
 
-    Pipeline: ``NFKC → strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width
-    → demojize → confusables → strip_accents → collapse_whitespace``
-    (confusables runs after demojize so typographic punctuation in emoji names is
-    folded too, keeping the output idempotent)
+    Pipeline: ``resolve deletions → [digit-policy pre-fold] → NFKC →
+    strip_zalgo(max_marks=0) → strip_bidi → strip_zero_width → strip invisibles →
+    confusables → strip_accents → strip_control → collapse_whitespace → NFC``. There
+    is no ``demojize`` step (#910): an emoji is left where it stands, because a
+    comparison surface must not write attacker-chosen words into the value being
+    compared. The terminal NFC recomposes two characters a stripped control had kept
+    apart, keeping the output idempotent.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -1070,70 +1097,99 @@ def strip_zalgo(text: str, *, max_marks: int = 3) -> str:
 # are disjoint, so `get_pipeline("canonicalize")` raises and `PRESETS["rag_ingest"]`
 # is a KeyError. Profiles live behind `get_pipeline()` / `list_profiles()` (#600).
 #
-# This dict is a hand-maintained MIRROR of the `const STEPS` arrays in
-# `src/presets.rs`. Nothing executes it — it exists for introspection and docs. It has
-# drifted before (`ml_normalize` was missing `transliterate` and the #498 second
-# `demojize`), so when you change a step list in Rust, change it here in the same
-# commit and check `tests/test_mutant_killers.py::test_preset_steps_exact`.
+# This dict is a MIRROR of the step lists in `src/presets.rs`, one tuple per Rust
+# `Step`, in order. Nothing executes it. It drifted for a long time — it missed
+# `resolve_deletions` (#937), `strip_invisibles` in the three key builders (#805),
+# `drop_repeated_marks` (#835), the cap's move after the fold in `canonicalize_strict`
+# (#862), the removal of `demojize` from `strip_obfuscation` (#910), `sort_key`'s cap
+# (#807), `catalog_key`'s fixed point (#467) and the whole of `skeleton_key` (Finding 5 of
+# the Lean model in `formal/lean/Presets`) — because the test that pinned it compared it
+# with a second hand-written copy. `tests/conftest.py::rust_preset_steps` now reads the
+# Rust lists and `tests/test_mutant_killers.py::test_preset_steps_exact` compares against
+# that, so a step list changed in Rust fails there until this is changed to match.
+#
+# The vocabulary, where it is not a public function's name:
+#
+# * ("policy_pre_fold", "latin") — a no-op under the default `digit_policy`. Under
+#   "tr39" or "preserve" it runs the whole Latin confusable fold on the raw text, before
+#   anything else (#885, #896).
+# * ("fixed_point", "a -> b(p) -> c") — the inner steps, run as a group until the text
+#   stops changing (bounded). The inner list uses the same names, with a parameter in
+#   parentheses.
+# * ("drop_repeated_marks", None) — drop a nonspacing mark that repeats on one base
+#   (UTS #39 section 5.4, #835).
+# * ("strip_cross_script_marks", None) — drop a combining mark whose script differs from
+#   its base's (#615).
+# * ("prototype_fold", None) — `I` to `l`, and under "tr39" `1` to `l` and `0` to `O`
+#   (#650).
+# * ("strip_zalgo", None) caps at the default of 3 marks per base (#788).
+#
+# Two things the lists do not show, because they are about how a list is run rather than
+# what is in it: `search_key` and `sort_key` run their list to a fixed point under a
+# `digit_policy` other than the default (Finding 2 of the Lean model), and every preset
+# raises `ResourceLimitError` if a step leaves the text more than 10 MiB longer than the
+# input (#768).
 
 PRESETS: dict[str, list[tuple[str, str | None]]] = {
     "canonicalize": [
+        # #937: BS and DEL erase the preceding cell, before anything changes what that is.
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
         ("strip_bidi", None),
         # #413: strip Unicode Tags / variation selectors / CGJ / noncharacters /
         # PUA (keeping valid emoji flags). "comparison" = strip PUA, strip all VS.
         ("strip_invisibles", "comparison"),
-        # #433: control/zero-width stripping is now explicit (was fused into
-        # collapse_whitespace); collapse folds whitespace only. Runs before
-        # strip_zalgo so a stripped invisible between marks cannot split a run.
+        # #433: control/zero-width stripping is explicit; collapse folds whitespace only.
+        # Runs before the mark steps so a stripped invisible between marks cannot split a
+        # run and hide the count (#121).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
-        # #429: cap combining marks at 2 per base (anti-zalgo). After the
-        # control/zero-width strip so a stripped invisible between marks cannot
-        # split a mark run and hide the count (#121).
+        # #835 before the cap, so the cap counts distinct marks; the cap is 3 (#788).
+        ("drop_repeated_marks", None),
         ("strip_zalgo", None),
-        # NFC sandwich around confusables (#416): the strips can leave a base next
-        # to a combining mark; the first NFC composes it so the fold sees a
-        # consistent form, the second recomposes the fold's output. TR39
-        # skeletoning is not normalization-stable, so without this the pipeline is
-        # not a fixed point (f(f(x)) != f(x)).
+        # NFC, then the fold and NFC together to a fixed point (#416/#434): TR39
+        # skeletoning is not normalization-stable, and a duplicate mark can re-create a
+        # foldable composed character that one sandwich leaves behind.
         ("normalize", "NFC"),
-        ("confusables", "latin"),
-        ("normalize", "NFC"),
+        ("fixed_point", "confusables(latin) -> normalize(NFC)"),
+        # Again: the fold can manufacture a repeated mark (U+1EF3 + acute).
+        ("drop_repeated_marks", None),
     ],
     "ml_normalize": [
+        ("resolve_deletions", None),
         ("normalize", "NFKC"),
         ("demojize", "cldr"),
         # Only when a `lang` is set, and in Ignore mode: ML pipelines want clean
         # ASCII-ish output, so an unmapped character is dropped, not preserved.
         ("transliterate", None),
         ("strip_accents", None),
-        # #498: a second demojize AFTER strip_accents. A negated-relation symbol
-        # (`≇` U+2247) is not in the CLDR name table, so the first pass leaves it;
-        # strip_accents drops the overlay and exposes the bare base (`≅`), which IS
-        # named. Without this pass that base is only named on the following call —
-        # non-idempotent.
+        # #498: a second demojize AFTER strip_accents, which can expose a named base by
+        # dropping a negation overlay.
         ("demojize", "cldr"),
+        # The one step `fold_case=False` removes.
         ("fold_case", None),
-        # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
+        # Terminal NFC (Finding 4): a control or zero-width character between two
+        # characters that compose (conjoining jamo) left them apart until the next call.
+        ("normalize", "NFC"),
     ],
     "catalog_key": [
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
         ("strip_bidi", None),
-        # #419: fold_case runs BEFORE transliterate so a case pair whose folded
-        # form is in the translit table (Mtavruli Ჱ → Mkhedruli ჱ → "he") is
-        # stable across passes; a second fold after transliterate catches the
-        # uppercase ASCII full transliteration can emit (£ → GBP).
+        ("strip_invisibles", "comparison"),
+        # #419: fold_case BEFORE transliterate so a case pair whose folded form is in the
+        # translit table is stable across passes, and AGAIN after it, for the uppercase
+        # ASCII full transliteration can emit.
         ("fold_case", None),
-        ("transliterate", None),
-        ("confusables", "latin"),
-        ("strip_accents", None),
+        # #467: the romanization core, iterated to a fixed point.
+        ("fixed_point", "transliterate -> confusables(latin) -> strip_accents"),
         ("fold_case", None),
-        # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
@@ -1143,84 +1199,100 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         # #413: rendering policy — keep VS15/VS16 after a base and PRESERVE the PUA
         # (icon fonts); still strip Tags (keeping flags), CGJ, and noncharacters.
         ("strip_invisibles", "rendering"),
-        # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "search_key": [
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
         ("strip_bidi", None),
+        ("strip_invisibles", "comparison"),
         # #419: fold_case BEFORE transliterate (case-pair idempotency) and AGAIN
-        # after (full transliteration can emit uppercase, e.g. £ → GBP).
+        # after (full transliteration can emit uppercase).
         ("fold_case", None),
         ("transliterate", None),
         ("strip_accents", None),
         ("fold_case", None),
-        # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
     ],
     "sort_key": [
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
         ("strip_bidi", None),
-        # #419: fold_case BEFORE transliterate so a case pair whose folded form is
-        # in the translit table is stable across passes.
+        ("strip_invisibles", "comparison"),
         ("fold_case", None),
         # "non_latin": transliterate folds only non-Latin scripts; base accented
         # Latin characters are preserved so the accent can order the key (this is
-        # what distinguishes sort_key from search_key, which strips accents here).
+        # what distinguishes sort_key from search_key, which strips accents).
         ("transliterate", "non_latin"),
-        # fold_case AGAIN: transliteration can emit uppercase from a non-Latin
-        # source the pre-fold can't reach (Old Persian 𐏈 → "Auramazda"), so fold
-        # here too for idempotency. fold_case only lowercases, so accents survive.
+        # fold_case AGAIN: transliteration can emit uppercase from a non-Latin source.
         ("fold_case", None),
-        # #433: explicit strip steps (was fused into collapse_whitespace).
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
-        # Terminal NFC (#416): sort_key preserves accents (#411), so a combining
-        # mark separated from its base by a now-stripped zero-width must be
-        # recomposed here or the key is not a fixed point.
+        # #807: the cap, after the strips (#850); the repeat drop before it (#835).
+        ("drop_repeated_marks", None),
+        ("strip_zalgo", None),
+        # Terminal NFC (#416): a mark separated from its base by a stripped zero-width
+        # must be recomposed here or the key is not a fixed point.
         ("normalize", "NFC"),
     ],
     "canonicalize_strict": [
-        # #121: order and steps corrected to match actual Rust execution in
-        # presets.rs — bidi/invisible stripping runs FIRST for idempotency.
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
+        # #121: the invisible strips run FIRST, so they cannot split a mark run.
         ("strip_bidi", None),
         ("strip_zero_width", None),
         ("strip_control", None),
-        # #413: strip Tags / variation selectors / CGJ / noncharacters / PUA
-        # (comparison policy). Runs after the invisible strips so it cannot split a
-        # mark run that the zalgo cap below then counts (the #121 lesson).
         ("strip_invisibles", "comparison"),
+        # #638: the fold (to a fixed point with NFC) and the #615 cross-script mark strip,
+        # iterated together — each exposes work for the other.
+        (
+            "fixed_point",
+            "fixed_point(confusables(latin) -> normalize(NFC)) -> strip_cross_script_marks",
+        ),
+        # #862: the cap AFTER the fold, because the cross-script strip deletes marks.
+        ("drop_repeated_marks", None),
         ("strip_zalgo", None),
-        ("confusables", "latin"),
         ("collapse_whitespace", None),
-        # Terminal NFC (#416/#413): recompose any base+mark adjacency left by an
-        # invisible (e.g. a CGJ) stripped from between them, so the pipeline stays
-        # a fixed point.
+        # Terminal NFC (#416/#413).
         ("normalize", "NFC"),
     ],
     "strip_obfuscation": [
+        ("resolve_deletions", None),
+        ("policy_pre_fold", "latin"),
         ("normalize", "NFKC"),
         ("strip_zalgo", "max_marks=0"),
         ("strip_bidi", None),
         ("strip_zero_width", None),
-        ("demojize", "cldr"),
-        # #413: strip Tags / variation selectors / noncharacters / PUA after
-        # demojize (so the emoji pass sees flags/selectors intact). CGJ is already
-        # gone via the strip_zalgo(0) combining-mark strip above.
+        # No demojize (#910): a comparison surface must not write attacker-chosen words.
         ("strip_invisibles", "comparison"),
-        # confusables runs AFTER demojize (matches src/presets.rs::_strip_obfuscation):
-        # typographic punctuation in emoji names must be folded too, for idempotency (#141).
         ("confusables", "latin"),
         ("strip_accents", None),
-        # #433: explicit strip_control before the fold (zero-width already stripped
-        # above); collapse folds whitespace only.
         ("strip_control", None),
+        ("collapse_whitespace", None),
+        # Terminal NFC (Finding 4): the control strip can leave two characters that
+        # compose side by side.
+        ("normalize", "NFC"),
+    ],
+    "skeleton_key": [
+        ("resolve_deletions", None),
+        # Before NFKC, so a removed character cannot keep a base and its mark apart.
+        ("strip_bidi", None),
+        ("strip_invisibles", "comparison"),
+        ("strip_control", None),
+        ("strip_zero_width", None),
+        ("normalize", "NFKC"),
+        ("confusables", "latin"),
+        # On cased text: that is why this builder exists (#650).
+        ("prototype_fold", None),
+        ("fixed_point", "fold_case -> confusables(latin) -> normalize(NFKC)"),
         ("collapse_whitespace", None),
     ],
 }
@@ -1236,14 +1308,24 @@ other:
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
   cleaning/normalization steps exposed as the ``canonicalize``,
   ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined in the Rust core
-  (``src/presets.rs``); this dict is a hand-maintained **mirror** of those step
-  lists for introspection, and nothing executes it.
+  (``src/presets.rs``); this dict is a **mirror** of those step lists for
+  introspection, and nothing executes it. A test reads the Rust lists and fails
+  when the two differ.
 * Policy *profiles* (see `list_profiles` / `get_pipeline`) —
   parameter sets for transliteration workflows (e.g.
   ``scholarly_cyrillic_iso9``). Defined in the Rust core (``src/pipeline.rs``).
 
 A name from one registry is **not** valid in the other: pass profile names to
 `get_pipeline`, and use the keys here to look up preset step lists.
+
+Most step names are the `TextPipeline` step or the public function of the same
+name. Five are not: ``policy_pre_fold`` (a no-op under the default
+``digit_policy``; under ``"tr39"`` or ``"preserve"``, the whole Latin confusable
+fold on the raw text), ``fixed_point`` (its parameter lists the inner steps,
+which run as a group until the text stops changing), ``drop_repeated_marks``,
+``strip_cross_script_marks`` and ``prototype_fold``. ``search_key`` and
+``sort_key`` also run their whole list to a fixed point under a non-default
+``digit_policy``.
 
 The deprecated preset names (``security_clean``, ``display_clean``,
 ``normalize_user_input``) remain valid keys through the 0.11 deprecation cycle
@@ -1270,6 +1352,14 @@ def get_pipeline(profile: str, *, digit_policy: str = "numeric") -> TextPipeline
     Policy profiles are pre-defined parameter sets for common institutional
     and application workflows.  Each call returns a fresh ``TextPipeline``
     instance.
+
+    A profile runs its steps again until the output stops changing (bounded), so
+    ``p(p(x)) == p(x)``. One pass was not always enough: the mark strip runs before the
+    confusable fold, and the control and zero-width strips after the normalization, so
+    ``llm_guardrail`` returned a negation overlay on a letter that the next call removed
+    (Findings 3 and 4 of the Lean model in ``formal/lean/Presets``). A ``TextPipeline``
+    built from the same flags runs its steps once: the two agree wherever one pass is
+    already a fixed point, which includes every single code point.
 
     ``digit_policy`` is fixed here, at construction (#646). A profile is a resolved
     pipeline and calling it takes text and nothing else, so the policy is chosen before

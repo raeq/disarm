@@ -127,7 +127,7 @@ def exists_in_db(slug: str) -> bool:
 unique = UniqueSlugifier(check=exists_in_db)
 ```
 
-The `check` callback is called for each candidate slug. If it returns `True`, the slugifier increments the suffix and tries again.
+The `check` callback is called for each candidate slug. If it returns `True`, the slugifier increments the suffix and tries again. An empty slug (an input with nothing sluggable) is returned as it is, without calling `check`.
 
 ---
 
@@ -180,9 +180,17 @@ The same literal reads the other way in [`PRESETS`](pipelines.md#presets), where
 
 ### Execution order
 
-Operations execute in this fixed order regardless of construction order:
+Operations execute in this fixed order regardless of construction order, which is the
+order `steps` reports:
 
-1. Normalize → 2. Confusables → 3. Demojize → 4. Strip accents → 5. Transliterate → 6. Fold case → 7. Collapse whitespace
+1. Resolve deletions → 2. Normalize → 3. Strip zalgo → 4. Strip bidi → 5. Strip Plane 14
+→ 6. Demojize → 7. Strip accents → 8. Transliterate → 9. Confusables → 10. Fold case →
+11. Confusables again and 12. fold case again (only when both are on) → 13. Strip control
+→ 14. Strip zero-width → 15. Strip PUA → 16. Collapse whitespace
+
+A `TextPipeline` runs its steps once. A named profile from `get_pipeline` runs them again
+until the output stops changing, so the two agree wherever one pass is already a fixed
+point (see [`get_pipeline`](pipelines.md#get_pipeline)).
 
 ### Performance
 

@@ -332,8 +332,8 @@ pub fn is_normalized(text: &str, form: NormalizationForm) -> bool {
 /// - **Not a zalgo control.** [`crate::api::strip_zalgo`] answers that question. 30
 ///   non-starters is far above anything a reader would call stacking abuse, and this makes
 ///   no judgement about whether the text is abusive — it only bounds the run.
-/// - **Not a size bound.** The presets already cap produced output (#768); this does not
-///   change how much text a call can return.
+/// - **Not a size bound.** The presets already cap how far a call can grow its input
+///   (#768); this does not change how much text a call can return.
 ///
 /// ```
 /// use disarm::api;

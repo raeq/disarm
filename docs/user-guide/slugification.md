@@ -94,19 +94,28 @@ assert slugify("a very long title here", max_length=10) == "a-very-lon"
 
 ### word_boundary
 
-When combined with `max_length`, truncate at word boundaries:
+When combined with `max_length`, truncate at word boundaries: the slug keeps the whole
+words that fit, up to the first that does not.
 
 ```python
 assert slugify("a very long title here", max_length=10, word_boundary=True) == "a-very"
+assert slugify("very long title here", max_length=9, word_boundary=True) == "very-long"
 ```
+
+When not even the first word fits, it is cut as if `word_boundary` were off. Either way a
+cut never leaves a trailing separator, whole or partial.
 
 ### stopwords
 
-Words to remove from the slug:
+Words to remove from the slug, compared case-insensitively whether or not `lowercase` is
+set:
 
 ```python
 assert slugify("the quick brown fox", stopwords=["the", "brown"]) == "quick-fox"
+assert slugify("The Quick Fox", stopwords=["the"], lowercase=False) == "Quick-Fox"
 ```
+
+With `separator=""` the slug has no words, so nothing is removed.
 
 ### regex_pattern
 
@@ -137,12 +146,15 @@ assert slugify("Tiếng Việt", allow_unicode=True) == "tiếng-việt"
 
 Everything outside those categories becomes a separator, exactly as it does on the
 default ASCII path — format characters (bidi controls, ZWSP, ZWNBSP, soft hyphen, the
-tag block), private use, noncharacters, surrogates, punctuation, symbols and emoji:
+tag block), private use, noncharacters, surrogates, punctuation, symbols and emoji. That
+includes the letter-like symbols, such as the circled Latin letters, which are `So`
+although Unicode calls them alphabetic:
 
 ```python
 assert slugify("file\u202egnp.exe", allow_unicode=True) == "file-gnp-exe"
 assert slugify("a\u200bb", allow_unicode=True) == "a-b"
 assert slugify("Hello 👋 World", allow_unicode=True) == "hello-world"
+assert slugify("\u24b6dmin", allow_unicode=True) == "dmin"
 ```
 
 This matches `django.utils.text.slugify(allow_unicode=True)`, which keeps `\w`. disarm
@@ -150,7 +162,9 @@ adds two things Django does not:
 
 - **Combining marks**, capped at two per base character. Django drops them, which breaks
   Devanagari and Arabic. Two is the cap the `strip_zalgo` presets use, and what
-  Vietnamese `ệ` needs.
+  Vietnamese `ệ` needs. The cap counts the base's own marks, over its decomposition, as
+  `strip_zalgo` does: `à` takes one more. A precomposed character that already carries
+  more than two, such as polytonic Greek U+1F82 with three, is kept whole and takes none.
 - **ZWJ and ZWNJ**, when they sit *between* two other kept characters. Both are
   orthographically required, so dropping them changes the word:
 
@@ -168,12 +182,22 @@ assert slugify("a\u200d", allow_unicode=True) == "a"  # never at a token edge
     [`strip_obfuscation`](../api/pipelines.md) first.
 
 `max_length` cuts on a **grapheme-cluster** boundary under `allow_unicode`, so a cut
-never lands inside a cluster. A budget too small for the first cluster yields an empty
-slug, the same outcome an all-stopword input already produces:
+never lands inside a cluster, and a joiner the cut would leave at the end is dropped. A
+budget too small for the first cluster yields an empty slug, the same outcome an
+all-stopword input already produces:
 
 ```python
 assert slugify("한국어", allow_unicode=True, max_length=6) == "한국"
 assert slugify("क\u094dषि", allow_unicode=True, max_length=9) == ""  # one 12-byte cluster
+assert slugify("a\u200db", allow_unicode=True, max_length=4) == "a"  # not a + ZWJ
+```
+
+The Unicode-preserving path composes after lowercasing, so its slug is NFC even where
+lowercasing creates a pair that composes: `T` + U+0308 has no precomposed form, `t` +
+U+0308 does.
+
+```python
+assert slugify("T\u0308", allow_unicode=True) == "\u1e97"
 ```
 
 ### lang
@@ -293,6 +317,26 @@ unique.reset()  # clear history
 assert unique("My Post") == "my-post"
 ```
 
+With `max_length`, a suffixed slug is cut to fit by shortening the base, never the
+suffix. The cut is the slug's own, so no separator or joiner is left before the suffix,
+and at least one character of the base is kept; when the suffix leaves no room for one,
+`InvalidArgumentError` is raised rather than returning a bare `-1`:
+
+```python
+unique = UniqueSlugifier(max_length=5)
+assert unique("ab cd") == "ab-cd"
+assert unique("ab cd") == "ab-1"
+```
+
+An input with nothing sluggable gives the empty slug every time. It is not suffixed or
+recorded, and `check` is not called for it; pass `default` for a unique fallback.
+
+```python
+unique = UniqueSlugifier()
+assert unique("\U0001f525") == ""
+assert unique("\U0001f525") == ""
+```
+
 #### External uniqueness check
 
 Pass a callback for database-backed uniqueness:
@@ -317,7 +361,7 @@ The slugification pipeline executes in this order:
 3. Decode decimal references (if `decimal=True`)
 4. Decode hexadecimal references (if `hexadecimal=True`)
 5. Transliterate (using `lang` if set), or keep Unicode (if `allow_unicode=True`)
-6. Lowercase (if `lowercase=True`)
+6. Lowercase (if `lowercase=True`); with `allow_unicode=True`, then compose to NFC
 7. Apply `regex_pattern`
 8. Replace non-alphanumeric with `separator`
 9. Collapse consecutive separators

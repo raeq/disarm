@@ -316,8 +316,9 @@ disarm_lang_info (
     char const * code);
 
 /** \brief
- *  ML/NLP normalization: NFKC → emoji→text → transliterate → strip accents →
- *  [case fold] → strip control → strip zero-width → collapse whitespace.
+ *  ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate →
+ *  strip accents → emoji→text → [case fold] → strip control → strip zero-width →
+ *  collapse whitespace → NFC.
  *
  *  `lang` is nullable (NULL = no transliteration). `emoji_style` is `"cldr"` or
  *  `"none"`. `fold_case` drops the case-fold step when false — pass false in front of a

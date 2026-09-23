@@ -9,10 +9,10 @@ use pyo3::prelude::*;
 
 /// Security-focused text canonicalization.
 ///
-/// Pipeline: NFKC → strip bidi/format → strip invisible classes (#413) →
-/// strip_control → strip_zero_width → collapse_whitespace → cap combining marks
-/// (anti-zalgo, #429) → NFC → confusables → NFC (confusables sandwiched between
-/// NFC passes for idempotency, #416).
+/// Pipeline: resolve deletions → NFKC → strip bidi/format → strip invisible classes
+/// (#413) → strip_control → strip_zero_width → collapse_whitespace → drop repeated marks →
+/// cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed point →
+/// drop repeated marks (the fold is iterated with NFC for idempotency, #416/#434).
 #[pyfunction]
 #[pyo3(signature = (text, *, digit_policy="numeric"))]
 pub fn _canonicalize(text: &str, digit_policy: &str) -> PyResult<String> {
@@ -46,8 +46,9 @@ pub fn _is_canonical(text: &str, preset: &str) -> PyResult<bool> {
 
 /// ML/NLP text normalization pipeline.
 ///
-/// Pipeline: NFKC → emoji→text → transliterate → strip_accents → [fold_case] →
-/// collapse_whitespace. `fold_case=False` drops the fold step only (#559).
+/// Pipeline: resolve deletions → NFKC → emoji→text → transliterate → strip_accents →
+/// emoji→text → [fold_case] → strip_control → strip_zero_width → collapse_whitespace → NFC.
+/// `fold_case=False` drops the fold step only (#559).
 #[pyfunction]
 #[pyo3(signature = (text, *, lang=None, emoji_style="cldr", fold_case=true))]
 pub fn _ml_normalize(

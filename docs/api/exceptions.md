@@ -54,11 +54,19 @@ A configured resource limit was exceeded.
 - A batch larger than the maximum batch size.
 - The registered-languages or replacements cap.
 - A `regex_pattern` over the byte limit, or `UniqueSlugifier` exhausting its attempts.
-- **Output** that expands past 10 MiB inside a preset — either through registered
-  replacements or through NFKC, which widens some code points by up to 18×. disarm does
-  not cap input size (that is the caller's to bound), and these two are the exceptions:
-  both amplify by an amount an input-size check cannot foresee. `normalize(form="NFKC")`
-  is deliberately not capped, because there the caller named the expansion.
+- **Output** that grows past a limit — registered replacements expanding the input past
+  10 MiB, or any step of a preset leaving the text more than 10 MiB **longer than the
+  input** the preset was given. NFKC widens some code points by up to 18×, and
+  `ml_normalize`'s emoji naming by up to 10× after it; the limit applies to whichever
+  step does the growing. disarm does not cap input size (that is the caller's to bound):
+  an input of any size that no step grows is accepted, and these two limits are the
+  exceptions because both amplify by an amount an input-size check cannot foresee.
+  `normalize(form="NFKC")` is deliberately not capped, because there the caller named
+  the expansion.
+
+  Until the Lean model in `formal/lean/Presets` (Finding 6), the preset limit was an
+  absolute size checked after NFKC alone: 10.4 MB of `U+1FAF0` came out of `ml_normalize`
+  as 106.6 MB, while 11 MiB of `a` after one `"` was refused as having "expanded".
 
 ### `UnsupportedError`
 A requested operation is not supported.

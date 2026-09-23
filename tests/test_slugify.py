@@ -255,7 +255,10 @@ class TestStatefulDefault:
     def test_unique_slugifier_no_default_unchanged(self) -> None:
         u = UniqueSlugifier()
         assert u("🔥") == ""
-        assert u("🔥") == "-1"  # legacy empty-uniquify behavior preserved
+        # The second call is the regression check: an empty slug is not recorded, so
+        # a repeat is returned as it is rather than suffixed to "-1" (Finding 9 of
+        # formal/lean/Sanitizers). The empty result is slugify's own, documented one.
+        assert u("🔥") == ""
 
     def test_text_slugify_default(self) -> None:
         assert Text("🔥").slugify(default="N/A").value == "n-a"

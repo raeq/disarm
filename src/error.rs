@@ -226,12 +226,21 @@ pub(crate) enum ErrorRepr {
         max: usize,
     },
 
-    /// NFKC expanded the input past the preset output cap (#768).
-    #[error("normalization expanded the input to {size} bytes, exceeding the {max} byte limit")]
+    /// A preset grew its input by more than the preset output ceiling (#768).
+    ///
+    /// The name is historical: NFKC was the only step checked when this was added. Any
+    /// step that grows the text is checked now, and the code string stays
+    /// `normalize_output_too_large` so no caller matching on it breaks.
+    #[error(
+        "a preset expanded the input from {input} to {size} bytes, more than the {max} bytes \
+         of growth it allows"
+    )]
     NormalizeOutputTooLarge {
+        /// The size of the preset's input, in bytes.
+        input: usize,
         /// The produced size in bytes.
         size: usize,
-        /// The maximum allowed.
+        /// The most the output may exceed the input by.
         max: usize,
     },
 
@@ -339,7 +348,8 @@ pub(crate) enum ErrorRepr {
     /// `UniqueSlugifier` `max_length` too small to ever produce a unique slug.
     #[error(
         "max_length={max_length} is too small to generate a unique slug with separator {separator:?}: \
-         need at least {min_unique_len} bytes for the separator plus one counter digit"
+         need at least {min_unique_len} bytes for one character of the slug, the separator \
+         and the counter"
     )]
     UniqueSlugMaxLengthTooSmall {
         /// The configured `max_length`.

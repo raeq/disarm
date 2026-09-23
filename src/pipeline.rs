@@ -242,6 +242,33 @@ pub(crate) struct Pipeline {
     /// would cost either way, and this is the parameter that lets a caller decide for
     /// their own text.
     demojize_replacement: Option<String>,
+    /// Run the steps again until the output stops changing (bounded). Set for a named
+    /// profile, and for nothing else.
+    ///
+    /// A profile is used as a key and a screen, and one that is not a fixed point answers
+    /// differently on a second call. Two orderings in [`STEP_ORDER`] make that happen,
+    /// and each is the right order for the rest of the text (Findings 3 and 4 of the Lean
+    /// model in `formal/lean/Presets`):
+    ///
+    /// * The mark strips run before the confusable fold and before `strip_pua`. #749 keeps
+    ///   a negation overlay (U+0338, U+20D2) on a base that is not alphanumeric; the fold
+    ///   then turns that base into a letter, or `strip_pua` deletes it, and the next pass
+    ///   strips the overlay. `llm_guardrail("\u{A2}\u{338}")` was `c\u{338}`, then `c`.
+    /// * The strips that run after `normalize` can separate two characters that compose:
+    ///   `normalize_web_input("c\0\u{327}")` was `c\u{327}`, which the next pass composes
+    ///   to `\u{E7}` and folds to `c`.
+    ///
+    /// Reordering does not close both. The model checks the targeted alternative (one more
+    /// mark strip after `strip_pua`, the control and zero-width strips ahead of
+    /// `normalize`) and it still fails `normalize_web_input` on 28 words, so the profile
+    /// iterates instead, the way `catalog_key`'s romanization core does (#467).
+    ///
+    /// Not for a hand-built `TextPipeline`. A caller who composes steps gets those steps
+    /// once, and cannot be assumed to want more: a `demojize` replacement that is itself
+    /// an emoji would be replaced again on every pass, so the text would double eight
+    /// times. The two agree wherever one pass is already a fixed point — every single code
+    /// point, among others.
+    fixed_point: bool,
 }
 
 impl Pipeline {
@@ -373,6 +400,7 @@ impl Pipeline {
             // when no profile fits.
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
             demojize_replacement,
+            fixed_point: false,
             steps,
             // Only meaningful alongside the step it parameterises; recording it without
             // `resolve_deletions` would be a setting that never runs.
@@ -466,7 +494,28 @@ impl Pipeline {
     /// usually short, ASCII) tail. Correctness of the single source of truth is
     /// worth more than that micro-optimization; the fused `_collapse_whitespace`
     /// remains available to direct callers.
+    ///
+    /// A named profile runs the list again until the output stops changing, bounded by
+    /// [`crate::presets::CONFUSABLE_FIXED_POINT_ITERS`] (see the `fixed_point` field). Text a
+    /// first pass leaves unchanged is already a fixed point and costs one pass, as before.
     pub(crate) fn process(&self, text: &str) -> Result<String, ErrorRepr> {
+        let once = self.process_once(text)?;
+        if !self.fixed_point || once == text {
+            return Ok(once);
+        }
+        let mut cur = once;
+        for _ in 0..crate::presets::CONFUSABLE_FIXED_POINT_ITERS {
+            let next = self.process_once(&cur)?;
+            if next == cur {
+                break;
+            }
+            cur = next;
+        }
+        Ok(cur)
+    }
+
+    /// One pass of the active steps, in [`STEP_ORDER`].
+    fn process_once(&self, text: &str) -> Result<String, ErrorRepr> {
         // #236 item 7: ping-pong two reusable buffers across the active steps
         // instead of allocating a fresh String per step. `cur` holds the current
         // text; each step writes its output into `scratch` (reusing its
@@ -790,6 +839,9 @@ impl ProfileSpec {
         // literal spelled out twice.
         pipeline.emoji_name_policy = emoji::NamePolicy::PIPELINE_BASELINE;
         pipeline.purpose = self.purpose;
+        // Every profile, not a field of the spec: a profile that is not a fixed point is
+        // a defect, not a configuration. See the field's doc comment.
+        pipeline.fixed_point = true;
         Ok(pipeline)
     }
 }
@@ -998,6 +1050,7 @@ mod tests {
             gost7034: false,
             emoji_name_policy: emoji::NamePolicy::PIPELINE_BASELINE,
             demojize_replacement: None,
+            fixed_point: false,
         }
     }
 
@@ -1687,6 +1740,99 @@ mod tests {
     #[test]
     fn unknown_profile_is_none() {
         assert!(get_pipeline("does_not_exist").unwrap().is_none());
+    }
+
+    fn profile(name: &str) -> Pipeline {
+        get_pipeline(name).unwrap().unwrap()
+    }
+
+    /// Findings 3 and 4 of the Lean model in `formal/lean/Presets`, one witness per cause.
+    ///
+    /// 3: the mark strips run before the fold and before `strip_pua`, so a negation overlay
+    /// kept on a symbol base survived onto the letter the fold made of it, or onto nothing.
+    /// 4: a character stripped after `normalize` separated two characters that compose.
+    #[test]
+    fn profiles_are_fixed_points_on_the_lean_witnesses() {
+        let expected = [
+            ("llm_guardrail", "\u{A2}\u{338}", "c"),
+            ("llm_guardrail", "\u{222A}\u{338}", "u"),
+            ("llm_guardrail", "\u{2200}\u{20D2}", "a"),
+            ("llm_guardrail", "\u{E000}\u{338}", ""),
+            ("ml_corpus_normalize", "\u{E000}\u{338}", ""),
+            ("ml_corpus_normalize", "\u{F0000}\u{20D2}", ""),
+            ("llm_guardrail", "\u{1100}\u{200B}\u{1161}", "\u{AC00}"),
+            ("ml_corpus_normalize", "\u{1100}\u{0}\u{1161}", "\u{AC00}"),
+            (
+                "normalize_web_input",
+                "\u{1100}\u{200B}\u{1161}",
+                "\u{AC00}",
+            ),
+            ("normalize_web_input", "e\u{8}\u{301}", "\u{E9}"),
+            ("normalize_web_input", "c\u{0}\u{327}", "c"),
+            ("normalize_web_input", "I\u{E000}\u{301}", "\u{CD}"),
+            ("normalize_web_input", "a\u{200B}\u{300}", "\u{E0}"),
+        ];
+        for (name, input, key) in expected {
+            let p = profile(name);
+            let once = p.process(input).unwrap();
+            assert_eq!(once, key, "{name}({input:?})");
+            assert_eq!(p.process(&once).unwrap(), once, "{name}({input:?})");
+        }
+        // And every witness through every profile, as a fixed point.
+        for name in PROFILE_NAMES {
+            let p = profile(name);
+            for (_, input, _) in expected {
+                let once = p.process(input).unwrap();
+                assert_eq!(p.process(&once).unwrap(), once, "{name}({input:?})");
+            }
+        }
+    }
+
+    /// Only the named profiles iterate. A hand-built pipeline runs its steps once: the
+    /// caller composed it, and a `demojize` replacement that is itself two emoji would
+    /// otherwise double on every pass.
+    #[test]
+    fn a_hand_built_pipeline_runs_once() {
+        let spec = profile_spec("llm_guardrail").unwrap();
+        let mut once = spec.build().unwrap();
+        once.fixed_point = false;
+        assert_eq!(once.process("\u{A2}\u{338}").unwrap(), "c\u{338}");
+        assert_eq!(
+            profile("llm_guardrail").process("\u{A2}\u{338}").unwrap(),
+            "c"
+        );
+
+        let replace = Pipeline::new(
+            None,
+            false,
+            None,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            None,
+            None,
+            false,
+            Some("\u{1F600}\u{1F600}".to_owned()),
+            false,
+            None,
+            false,
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(replace.process("\u{1F600}").unwrap(), "\u{1F600}\u{1F600}");
+    }
+
+    /// Text a profile leaves unchanged costs one pass and comes back as it went in.
+    #[test]
+    fn an_unchanged_input_is_not_iterated() {
+        for name in PROFILE_NAMES {
+            assert_eq!(profile(name).process("abc").unwrap(), "abc", "{name}");
+        }
     }
 
     // ── Edge cases ───────────────────────────────────────────────────

@@ -103,7 +103,7 @@ class Text:
         """Strip bidirectional override and formatting characters."""
         ...
     def canonicalize(self) -> Text:
-        """Apply the canonicalize pipeline (NFKC → bidi → confusables → whitespace)."""
+        """Apply the canonicalize pipeline (see `disarm.PRESETS["canonicalize"]`)."""
         ...
     def security_clean(self) -> Text:
         """Deprecated alias for :meth:`canonicalize` (#430); removed in 1.0."""

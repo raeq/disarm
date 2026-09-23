@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import warnings as _warnings
 from collections.abc import Iterable
-from functools import lru_cache, wraps
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from disarm._boundary import (
@@ -3714,7 +3714,8 @@ def make_cached_transliterator(
 
     seen_generation = _registration_generation
 
-    @wraps(_cached)
+    # Not @wraps(_cached): inspect.signature follows __wrapped__ and would report the
+    # private generation argument as part of the public one-string signature.
     def cached(text: str) -> str:
         nonlocal seen_generation
         generation = _registration_generation

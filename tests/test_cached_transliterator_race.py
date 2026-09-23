@@ -13,9 +13,12 @@ Runs in a subprocess: it registers replacements, which are process-global.
 
 from __future__ import annotations
 
+import inspect
 import subprocess
 import sys
 import textwrap
+
+import disarm
 
 SCRIPT = """
 import itertools, sys, threading, time
@@ -68,3 +71,9 @@ def test_a_registration_is_never_undone_by_an_in_flight_call() -> None:
         check=True,
     )
     assert run.stdout.strip() == "0", f"{run.stdout.strip()} of 300 rounds served a stale value"
+
+
+def test_the_callable_takes_one_string() -> None:
+    """The generation is private: introspection must not see it (Copilot review on #1012)."""
+    cached = disarm.make_cached_transliterator()
+    assert list(inspect.signature(cached).parameters) == ["text"]

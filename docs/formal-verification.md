@@ -25,15 +25,21 @@ Every guarantee below is tagged with one of these:
   a sample — it leaves zero untested inputs (e.g. all 11,172 Hangul syllables,
   the full BMP, all CJK ideographs).
 - **(b) Structural proof.** An argument over the *structure* of the computation
-  that reaches properties quantifying over unbounded strings (e.g. "the output of
-  a character-wise map that emits ASCII for every character is ASCII for every
-  string"). Exhaustion cannot reach these because the input set is infinite.
+  that reaches properties quantifying over unbounded strings (e.g. "an engine that
+  only ever appends ASCII pieces produces ASCII for every string"). Exhaustion
+  cannot reach these because the input set is infinite.
 - **(c) Property-based testing.** Randomized/fuzz testing (Hypothesis, proptest)
   of unbounded-input properties not reduced to (a) or (b). It is sound but
   **incomplete** evidence — label it **"tested, not proven."**
 
-The shipping library rests on **(a)** and **(c)**, with **(b)** used only where a
-finite per-character result lifts structurally to all strings (I2's ASCII output).
+The shipping library rests on **(a)** and **(c)**, with **(b)** for I1–I3. This page
+used to justify I2 by lifting the per-character exhaustion to strings, and that lift
+does not hold: it needs `transliterate` to be a character-wise map, `f(a+b) = f(a) +
+f(b)`, and it is not one. CJK word spacing, the Indic inherent vowel, canonical
+composition and `lang="auto"` all look past one character, and a Lean audit
+(`formal/lean/Transliterate`) counted 1,755,178 pairs where the equation fails. The
+argument that does hold is about what the engine *appends*, and is given under I2
+below.
 The paper's structural proofs of *reversibility / unique decodability* describe
 its reversible mode and are **out of scope** here.
 
@@ -50,6 +56,7 @@ decidable predicate does not hold for every entry:
 | All SMP table values are ASCII | All SMP mappings | Same guarantee for characters above U+FFFF |
 | All language override values are ASCII | 22 language tables | Language-specific overrides are pure ASCII |
 | All Hanzi pinyin values are ASCII | 20,924 entries | Chinese romanization is pure ASCII |
+| *(not asserted)* toned pinyin values | the `tones=True` table | Toned pinyin carries diacritics by design (`běi`), which is why I2 excludes `tones=True` |
 | Confusables table count ≥ 1,000 | TR39 table | Confusables data not truncated |
 | Default BMP table count ≥ 5,000 | BMP translations | Default table not truncated |
 | Hanzi pinyin count ≥ 20,000 | CJK mappings | Pinyin table not truncated |
@@ -82,12 +89,14 @@ output is pure ASCII.
 ### Full BMP — ASCII Output (63,488 characters)
 
 Every non-surrogate codepoint U+0080–U+FFFF with `ErrorMode::Ignore` yields pure
-ASCII — proves **I2** over the BMP by exhaustion.
+ASCII — proves **I2** for each BMP code point on its own, under the default options.
+It says nothing about strings by itself: see I2 below for what does.
 
 ### Full BMP — Idempotence (63,488 characters)
 
 Every non-surrogate codepoint U+0080–U+FFFF: `transliterate(transliterate(ch)) ==
-transliterate(ch)` — proves **I3** over the BMP by exhaustion.
+transliterate(ch)` — proves **I3** for each BMP code point on its own, under the
+default options.
 
 ### CJK Unified Ideographs (20,992 characters)
 
@@ -117,17 +126,40 @@ Each invariant is tagged with the strongest assurance that discharges it:
 | ID | Invariant | Statement | Assurance |
 |----|-----------|-----------|-----------|
 | I1 | ASCII Passthrough | `∀s: s.is_ascii() → transliterate(s) = s` | **(a)** exhaustion over the 128 ASCII chars + **(c)** property-tested at string level |
-| I2 | ASCII Output | `∀s: transliterate(s, errors='ignore').is_ascii()` | **(a)** exhaustion over the BMP + **(b)** structural (concatenation of ASCII is ASCII); **(c)** tested for SMP |
-| I3 | Idempotence | `∀s: f(f(s)) = f(s)`, `f = transliterate(·, errors='ignore')` | **(a)** exhaustion over the BMP + **(c)** property-tested (Python) |
+| I2 | ASCII Output | `∀s: transliterate(s, errors='ignore').is_ascii()` | **(b)** every piece the engine appends is ASCII, and its one deletion keeps ASCII ASCII (below); checked in Lean (`translit_I2`) and on 27 million inputs; **(a)** exhaustion per BMP code point |
+| I3 | Idempotence | `∀s: f(f(s)) = f(s)`, `f = transliterate(·, errors='ignore')` | **(b)** follows from I1 and I2 (`I3_of_I1_I2` in Lean): the output is ASCII, and ASCII is its own image; **(a)** exhaustion per BMP code point + **(c)** property-tested |
 | I4 | No Exceptions | `∀s ∈ UTF-8, |s| ≤ 10 MiB: transliterate(s) does not throw` | **(c)** property-tested (Hypothesis + edge cases) |
 | I5 | Deterministic | `∀s, n>0: n calls of transliterate(s) → identical result` | **(c)** property-tested (100× over mixed-script inputs) |
-| I6 | Input Size Bounded | `∀s: |s| > 10 MiB → DisarmError` | **(b)** structural guard (explicit length check), confirmed by a boundary test |
-| I7 | Output Length Bounded | `∀s: |f(s)| ≤ |s|_bytes × 4 + |s|_chars` | **(c)** property-tested (Hypothesis) |
+| I6 | No Input Size Cap | `∀s: transliterate(s)` accepts `s` whatever its length | **(c)** boundary test: a 12 MiB input is accepted. #80 removed the 10 MiB cap; the one 10 MiB limit left bounds the *output* of registered replacements |
+| I7 | Output Length Bounded | `∀s: |f(s)| ≤ |s|_bytes × 5 + |s|_chars` | **(a)** exhaustion per code point over every Unicode scalar: the worst ratio is exactly 5, at U+337F SQUARE CORPORATION (`zhu shi hui she`) + **(c)** property-tested for strings |
 
-**Proven vs tested at a glance.** I1–I3 are *proven* over their finite domains
-(exhaustion, with a structural lift for I2); I2 above the BMP and I4, I5, I7 are
-*tested, not proven* (unbounded inputs); I6 is a structural guard confirmed by a
-boundary test.
+**Why I2 holds for every string.** `transliterate` builds its output by appending
+pieces, and each piece is ASCII: table values (the `build.rs` assertions above), runs
+of ASCII input, the `' '` it inserts between CJK words, and the NFKC-recovery path,
+which appends pieces of the same kinds. With `errors='ignore'` an unmapped character
+appends nothing. Its only deletion is one `pop` (the Indic inherent vowel), and
+removing a character from ASCII leaves ASCII. Which pieces are appended may depend on
+the whole input, so the argument survives every context rule the engine has. It is
+modelled and checked in `formal/lean/Transliterate` (`translit_I2`), with each kind
+of piece discharged against the code.
+
+**Scope.** I1–I3 are stated for `tones=False` and no runtime registrations, and hold
+for every `lang`, scheme and `context` setting within that. Outside it:
+
+- `tones=True` emits pinyin with diacritics by design (`北` → `běi`), so it is outside
+  I2, and outside I3 too, since a second pass strips the tone.
+- Values given to `register_lang` and `register_replacements` are the caller's and
+  are not checked: a non-ASCII value breaks I2 and I3, and `register_replacements`
+  also breaks I1, because it runs before the ASCII fast path.
+- I3 is stated for `errors='ignore'`. Under `errors='preserve'` with `lang='auto'` it
+  can fail, because a preserved character changes what the second pass detects.
+- `context=True` kept none of I1–I3 for text outside Arabic and Hebrew words until
+  #1008, which found it this way.
+
+**Proven vs tested at a glance.** I1–I3 are *proven* for every string within that
+scope, by the argument above; the BMP exhaustion checks their per-character
+premises. I7 is exhaustive per code point and *tested, not proven* for strings. I4
+and I5 are *tested, not proven*; I6 is a boundary test.
 
 ---
 
@@ -139,6 +171,32 @@ decodability it carries — apply to a **specified reversible encoding**, which
 disarm does not implement. The exhaustive and structural results above are
 about canonicalization (I1–I7); none of them imply that `transliterate` can be
 inverted. Do not read "exhaustively verified" as "reversible."
+
+---
+
+## Machine-checked models (`formal/`)
+
+Four models, each written against the code and **validated against the built library
+by differential testing before any proof or counterexample was trusted**. Every
+property that failed was cut down to a minimal input and reproduced on the library,
+and each of those became a fix with a regression test in the ordinary suites, which
+is what keeps it fixed. `.github/workflows/formal.yml` re-checks the models whenever
+they change.
+
+| Model | Tool | What it establishes | Found |
+|---|---|---|---|
+| `formal/lean/Transliterate` | Lean 4 | I1–I3 for every string from the emitter argument; that the per-character lift needs a premise the code does not meet | #1008 (`context=True` passed non-word spans through raw), #1013 (canonical equivalents that disagreed), and the corrections on this page |
+| `formal/lean/Deletions` | Lean 4 | `resolve_deletions` never panics, never invents text and is idempotent; bounded-exhaustive checks up to length 7 | #1010 (line breaks the detector knew and the resolver did not; a zero-width character taking a cell) |
+| `formal/lean/Emoji` | Lean 4 | properties of `replace_emoji`, `demojize` and the pipeline step, in general by induction and exhaustively up to a length bound | #1011 (fully qualified ZWJ sequences named piece by piece, a dropped emoji gluing two words together, removals that left a new keycap behind) |
+| `formal/tla/Concurrency` | TLA+ / TLC | lock and GIL interleavings of the Python binding, and the registration paths of the Rust API | #1009 (two deadlocks through `__del__`), #1012 (a stale cached transliterator), #1014 (a registration landing after the seal and past the cap) |
+
+The Lean results use the kernel alone where they are proved by induction. The
+bounded-exhaustive ones use `native_decide`, which also trusts Lean's compiler; each
+model's README lists which is which. TLC explores every interleaving of a small
+configuration (two or three threads), so its passes are proofs about that
+configuration, not about every thread count. The configurations that model the code
+*as it was* are kept, and CI requires them to keep failing: a model change that made
+one pass would have lost its bug.
 
 ---
 

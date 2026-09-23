@@ -53,7 +53,10 @@ ROOT = Path(__file__).resolve().parent.parent
 ALLOWED = frozenset("\n\t")
 
 #: The suffixes the README guard's argument applies to — anything a reviewer reads.
-SUFFIXES = frozenset(".py .rs .md .rb .mjs .ts .java .kt .toml .yml .yaml .sh .c .h".split())
+#: `.lean`, `.tla` and `.cfg` are the formal models' sources (`formal/`).
+SUFFIXES = frozenset(
+    ".py .rs .md .rb .mjs .ts .java .kt .toml .yml .yaml .sh .c .h .lean .tla .cfg".split()
+)
 
 #: Directories that are not ours to police. `tmp` is where `rake compile` stages a copy
 #: of the gem, so a converted file there is a build artifact that reappears on the next

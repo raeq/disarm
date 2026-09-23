@@ -39,9 +39,9 @@ on:
         default: "6"
         required: false
 
-# Only `actions: write` is needed to delete caches; everything else stays read.
+# Only `actions: write` is needed to delete caches, and only the two jobs below hold
+# it: the grant is job-scoped so a job added here later starts from read-only.
 permissions:
-  actions: write
   contents: read
 
 concurrency:
@@ -53,6 +53,9 @@ jobs:
     name: Delete caches for closed PR
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Delete branch-scoped caches
         env:
@@ -105,6 +108,9 @@ jobs:
     name: Sweep caches older than max age
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     steps:
       - name: Delete caches created before the threshold
         env:

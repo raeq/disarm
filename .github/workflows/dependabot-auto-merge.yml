@@ -10,14 +10,19 @@ name: Dependabot auto-merge
 
 on: pull_request
 
+# Read-only by default. The write grant belongs to the one job that arms the merge, and
+# that job runs only for Dependabot's pull requests, so no other pull request's run of
+# this workflow ever holds a token that can write.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Arm auto-merge (squash)
         run: gh pr merge --auto --squash "$PR_URL"

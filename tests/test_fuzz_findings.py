@@ -12,10 +12,12 @@ import unicodedata
 import pytest
 
 from disarm import (
+    DisarmError,
     find_confusables,
     find_unmapped_confusables,
     find_untranslatable,
     slugify,
+    transliterate,
 )
 
 # -- 1. slugify: a numeric entity that fails to decode ------------------------------------
@@ -73,3 +75,14 @@ def test_a_mark_is_at_its_own_offset_and_a_homoglyph_is_its_base() -> None:
     assert find_untranslatable("x\ufe0f") == [("\ufe0f", 1)]
     assert ("\u0327", 2) in find_unmapped_confusables("\u04aa\u0327")
     assert find_confusables("a\u0456\u0308") == [("\u0456", 1, "i")]
+
+
+# -- 3. find_untranslatable: a compatibility character recovered only in part ---------
+
+
+def test_a_partial_compatibility_recovery_is_reported() -> None:
+    assert transliterate("\U0001f240") == "[?]ben[?]"
+    assert find_untranslatable("x\U0001f240y") == [("\U0001f240", 1)]
+    with pytest.raises(DisarmError, match=r"U\+1F240"):
+        transliterate("\U0001f240", errors="strict")
+    assert find_untranslatable("\ufb01\u337f") == []

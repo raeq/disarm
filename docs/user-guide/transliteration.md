@@ -187,6 +187,21 @@ assert find_untranslatable("a♠b♣c") == [("♠", 1), ("♣", 5)]
 This is useful for validating input up front, or reporting which characters a
 downstream pipeline will lose.
 
+A compatibility character that transliterates through its NFKC form counts only when
+the whole form does. `\U0001f240` is NFKC `\u3014\u672c\u3015`, whose ideograph
+romanizes and whose brackets do not, so `transliterate` writes `[?]ben[?]` and the
+character is reported. Each report is the input's own character at its offset: a base
+followed by combining marks is judged as the character they compose to, and reported as
+the base, as written.
+
+```python
+from disarm import find_untranslatable, transliterate
+
+assert transliterate("\U0001f240") == "[?]ben[?]"
+assert find_untranslatable("x\U0001f240") == [("\U0001f240", 1)]
+assert find_untranslatable("x\ufe0f") == [("\ufe0f", 1)]
+```
+
 ## Coverage
 
 ### Latin scripts

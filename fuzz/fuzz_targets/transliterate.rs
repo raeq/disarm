@@ -16,12 +16,11 @@
 //!   `tones = false`: the docs state it unscoped, and it does not hold with tones.
 //! - `find_untranslatable` points at each character it reports: the input's character at
 //!   the reported offset ([`disarm_fuzz::located`]), and when it reports nothing the three
-//!   `on_unknown` policies agree, on input NFKC leaves alone (the documented "exactly the
-//!   set" does not hold for compatibility characters).
+//!   `on_unknown` policies agree ("exactly the set `run` would replace/ignore/preserve").
 #![no_main]
 
 use arbitrary::Arbitrary;
-use disarm::api::{normalize, NormalizationForm, OnUnknown, Scheme, Transliterate};
+use disarm::api::{OnUnknown, Scheme, Transliterate};
 use disarm_fuzz::{located, text_and, Lang};
 use libfuzzer_sys::fuzz_target;
 
@@ -98,13 +97,7 @@ fuzz_target!(|data: &[u8]| {
     for u in &missing {
         assert!(located(&s, u.offset, u.ch), "{u:?} is not in {s:?}");
     }
-    // Weakened to input NFKC leaves alone. `find_untranslatable` is documented as
-    // "exactly the set run would replace/ignore/preserve", and a compatibility character
-    // breaks that: U+1F240 is NFKC "\u{3014}\u{672C}\u{3015}", its ideograph transliterates
-    // and its brackets do not, so `run` gives "[?]ben[?]" while `find_untranslatable`
-    // reports nothing (found by this target).
-    let compat_free = normalize(&s, NormalizationForm::Nfkc) == s;
-    if missing.is_empty() && compat_free {
+    if missing.is_empty() {
         let preserve = base.clone().on_unknown(OnUnknown::Preserve).run(&s);
         let replace = base.on_unknown(OnUnknown::Replace("\u{1}".into())).run(&s);
         assert_eq!(

@@ -8,7 +8,7 @@
 
 use disarm::api::{
     find_confusables, find_unmapped_confusables, normalize_confusables, slugify, NormalizationForm,
-    SlugConfig, TargetScript, Transliterate,
+    OnUnknown, SlugConfig, TargetScript, Transliterate,
 };
 
 fn nfc(s: &str) -> String {
@@ -152,4 +152,54 @@ fn every_report_points_at_its_character() {
     }
     // A long run of marks stays linear and still located.
     assert_located(&format!("a{}", "\u{301}\u{323}\u{FE0F}".repeat(2000)));
+}
+
+// -- 3. find_untranslatable: a compatibility character recovered only in part -------
+//
+// U+1F240 is NFKC `\u{3014}\u{672C}\u{3015}`. The ideograph romanizes and the brackets
+// do not, so `run` replaces the brackets, while `find_untranslatable` counted the
+// character as recovered and reported nothing.
+
+#[test]
+fn a_partial_compatibility_recovery_is_reported() {
+    let t = Transliterate::new();
+    assert_eq!(t.run("\u{1F240}"), "[?]ben[?]");
+    let found = t.find_untranslatable("x\u{1F240}y");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!((found[0].ch, found[0].offset), ('\u{1F240}', 1));
+    // Reported exactly when the policies disagree on it.
+    let ignore = t.clone().on_unknown(OnUnknown::Ignore).run("\u{1F240}");
+    let preserve = t.clone().on_unknown(OnUnknown::Preserve).run("\u{1F240}");
+    assert_ne!(ignore, preserve);
+    // A compatibility character recovered whole is still not reported.
+    assert!(t
+        .find_untranslatable("\u{FB01}\u{1D400}\u{337F}")
+        .is_empty());
+}
+
+/// The fuzz target's "nothing reported, so the three policies agree" check, which was
+/// limited to input NFKC leaves alone, over the enclosed and squared CJK blocks.
+#[test]
+fn nothing_reported_means_the_policies_agree() {
+    let t = Transliterate::new();
+    for cp in (0x1F200..=0x1F2FF)
+        .chain(0x3200..=0x33FF)
+        .chain(0xFF00..=0xFFEF)
+    {
+        let Some(c) = char::from_u32(cp) else {
+            continue;
+        };
+        let s = c.to_string();
+        if !t.find_untranslatable(&s).is_empty() {
+            continue;
+        }
+        let ignore = t.clone().on_unknown(OnUnknown::Ignore).run(&s);
+        let preserve = t.clone().on_unknown(OnUnknown::Preserve).run(&s);
+        let replace = t
+            .clone()
+            .on_unknown(OnUnknown::Replace("\u{1}".into()))
+            .run(&s);
+        assert_eq!(ignore, preserve, "U+{cp:04X}");
+        assert_eq!(ignore, replace, "U+{cp:04X}");
+    }
 }

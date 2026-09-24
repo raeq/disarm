@@ -22,3 +22,12 @@
   and a decomposed homoglyph as its base, as written, with the fold of the composed
   character as `target` (`[("\u0456", 1, "i")]` for `"a\u0456\u0308"`). The same
   change reaches every binding, and `errors="strict"` names the same character.
+- **`find_untranslatable` reports a compatibility character its NFKC form recovers only in
+  part (fuzz finding 3 of #1040).** `transliterate("\U0001F240")` is `[?]ben[?]`: the
+  character is NFKC `\u3014\u672c\u3015`, whose ideograph romanizes and whose brackets
+  do not. `find_untranslatable` counted it as recovered and reported nothing, against
+  "exactly the set `transliterate` would replace, drop, or preserve", and
+  `errors="strict"` let it through. The recovery pass now collects what it cannot map,
+  and a character whose recovery left anything unmapped is reported, and raises under
+  `errors="strict"`. A compatibility character recovered whole (`\ufb01`, `\u337f`) is
+  still not reported.

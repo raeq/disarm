@@ -254,8 +254,9 @@ def latest_release_headings() -> list[str]:
 def test_the_configured_types_cover_the_latest_release_headings() -> None:
     """The vocabulary in `pyproject.toml` has to be the one the changelog actually uses.
 
-    Scoped to the most recent release, not the whole file. The 7,600 lines below it are
-    frozen history and were written before any of this existed — they carry one-off
+    Scoped to the most recent release, not the whole file. The release below it, and the
+    archive under `docs/changelog/`, are frozen history and were written before any of
+    this existed — they carry one-off
     headings (*Maintenance*, *Notes*, *Upgrade notes (output-affecting fix)*) that
     nothing should reproduce. The latest release is the live vocabulary, and a
     `[[tool.towncrier.type]]` whose name drifts from it (`Bugfixes` for *Fixed*) would

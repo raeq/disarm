@@ -258,12 +258,13 @@ stripPua('a\u{E000}b') // => 'ab'
 
 ### `stripZalgo(text, options?)` · `isZalgo(text, options?)`
 
-`isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` on a
-base character; `stripZalgo` caps each base at `options.maxMarks`. Both defaults are
-the core's, 3, and equal on purpose (#788): `stripZalgo` never removes a mark from
-text `isZalgo` declines to flag. Every size option in this binding (`maxMarks`,
-`threshold`, `maxGraphemes`, `maxLength`, `maxDistance`) is a non-negative integer;
-anything else, `NaN` and fractions included, throws `DisarmInvalidArgument`.
+`isZalgo` flags "zalgo" — more than `options.threshold` marks of one combining
+class stacked on a base character; `stripZalgo` caps each class on each base at
+`options.maxMarks`. Both defaults are the core's, 3, and equal on purpose (#788):
+`stripZalgo` never removes a mark from text `isZalgo` declines to flag. Every size
+option in this binding (`maxMarks`, `threshold`, `maxGraphemes`, `maxLength`,
+`maxDistance`) is a non-negative integer; anything else, `NaN` and fractions included,
+throws `DisarmInvalidArgument`.
 
 ```ts
 isZalgo('Z\u0301\u0301\u0301\u0301') // => true

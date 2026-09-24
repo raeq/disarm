@@ -10,9 +10,9 @@ failing unit test and then classified. Line numbers refer to `scripts/watch_pr.p
 > replays live on in `tests/test_watch_pr_protocol.py`, where 9 of them failed against
 > the script as it was. F4's fix keys the latest run by workflow as well as name, not by
 > name as first proposed, so one workflow's job cannot hide another's failure. F6 is
-> documented in the script and in CONTRIBUTING rather than changed: requiring a review
-> of every head would hold a merge forever after a nit fix pushed on top of an approval,
-> and GitHub's "dismiss stale pull request approvals" setting does it on the server.
+> documented in the script and in `docs/contributing/pull-requests.md` rather than
+> changed: requiring a review of every head would hold a merge forever after a nit fix
+> pushed on top of an approval, and GitHub's "dismiss stale pull request approvals" setting does it on the server.
 > The counterexample traces are not committed; `run_tlc.py` regenerates them.
 
 | file | what |
@@ -106,7 +106,7 @@ twice: it is VIOLATED on the current code and it HOLDS with the fix.
 | S4b | `MergedCompletedGreen` | a merge that landed was of a completed green head |
 | S5 | `MergedNoUnresolved` | a merge that landed had no unresolved thread at merge time |
 | S6 | `ThreadGateSound` | the thread gate is passed only on a complete (`ok`) listing: a failed or truncated read never counts as "no threads" |
-| S6b | `StreakFromCompleteReads` | a stuck or failure sighting counts only on a complete read (CONTRIBUTING: "A poll whose read failed does not count towards the streak") |
+| S6b | `StreakFromCompleteReads` | a stuck or failure sighting counts only on a complete read (`docs/contributing/pull-requests.md`: "A poll whose read failed does not count towards the streak") |
 | S7 | `AwaitContract` | `--await-review`: no merge while a request is pending, and none before a non-author review stands |
 | S8 | `AwaitNoChangesRequested` | (intent) `--await-review` never merges over a standing CHANGES_REQUESTED |
 | S9 | `AwaitReviewedThisHead` | (intent) `--await-review` never merges a head that no reviewer saw |
@@ -272,8 +272,8 @@ reviewed_by=('copilot-pull-request-reviewer',))` and `decide(...)` returns `Acti
 *F1b, a side effect:* the same failed read still counts as a *sighting* for the stuck and
 failure streaks. `StreakFromCompleteReads` is VIOLATED in `disarm_streak_current` at depth
 5: a thread read fails and `stuck_polls` becomes 1. It HOLDS in `disarm_streak_fixed`.
-CONTRIBUTING says "A poll whose read failed does not count towards the streak", but that
-is true only for the PR view.
+The contributor guide (now `docs/contributing/pull-requests.md`) says "A poll whose read
+failed does not count towards the streak", but that is true only for the PR view.
 `test_f1b_a_failed_thread_read_does_not_count_towards_the_stuck_streak` fails with
 `assert 2 == 3`: the watcher stopped as stuck.
 

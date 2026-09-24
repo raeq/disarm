@@ -513,18 +513,19 @@ export function stripPua(text: string): string {
 }
 
 /**
- * Cap combining marks per base character at `maxMarks`, a non-negative integer. The
- * default is the core's, 3 — equal to {@link isZalgo}'s threshold (#788), so this never
- * strips from text `isZalgo` declines to flag. It is read from the core rather than
- * restated here: this layer had kept the old cap of 2 (`formal/bindings`, B1).
+ * Cap the marks of each combining class on one base character at `maxMarks`, a
+ * non-negative integer. The default is the core's, 3 — equal to {@link isZalgo}'s
+ * threshold (#788), so this never strips from text `isZalgo` declines to flag. It is read
+ * from the core rather than restated here: this layer had kept the old cap of 2
+ * (`formal/bindings`, B1).
  */
 export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
   return call(() => native.stripZalgo(text, optionalSize('maxMarks', options.maxMarks)))
 }
 
 /**
- * Whether any base character carries more than `threshold` combining marks. The default
- * is the core's, 3.
+ * Whether any base character carries more than `threshold` marks of one combining class.
+ * The default is the core's, 3.
  */
 export function isZalgo(text: string, options: { threshold?: number } = {}): boolean {
   return call(() => native.isZalgo(text, optionalSize('threshold', options.threshold)))

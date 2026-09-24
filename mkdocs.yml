@@ -149,8 +149,34 @@ nav:
       - Benchmarks: benchmarks.md
       - Limitations: limitations.md
   - Project:
-      - Changelog: CHANGELOG.md
-      - Contributing: CONTRIBUTING.md
+      - Changelog:
+          - Recent releases: CHANGELOG.md
+          - Archive: changelog/index.md
+          - 0.14.x: changelog/0.14.md
+          - 0.13.x: changelog/0.13.md
+          - 0.12.x: changelog/0.12.md
+          - 0.11.x: changelog/0.11.md
+          - 0.10.x: changelog/0.10.md
+          - 0.9.x: changelog/0.9.md
+          - 0.8.x: changelog/0.8.md
+          - 0.7.x: changelog/0.7.md
+          - 0.6.x: changelog/0.6.md
+          - 0.5.x: changelog/0.5.md
+          - 0.4.x: changelog/0.4.md
+          - 0.3.x: changelog/0.3.md
+          - 0.2.x: changelog/0.2.md
+          - 0.1.x: changelog/0.1.md
+      - Contributing:
+          - Start here: CONTRIBUTING.md
+          - What we're looking for: contributing/what-we-want.md
+          - Test architecture: contributing/testing.md
+          - Linting and formatting: contributing/linting.md
+          - Documentation: contributing/documentation.md
+          - Keys, artifacts and releases: contributing/gates.md
+          - Conventions: contributing/conventions.md
+          - AI-assisted contributions: contributing/ai-assistance.md
+          - Pull requests: contributing/pull-requests.md
+          - Packaging decisions: contributing/packaging.md
       - Binding guide: BINDINGS.md
       - Releasing: RELEASING.md
       - Dependency upgrades: DEPENDENCY_UPGRADES.md

@@ -396,17 +396,17 @@ module Disarm
       translate_errors { _strip_pua(text) }
     end
 
-    # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` combining
-    # marks per base character. The default is the core's, DEFAULT_ZALGO_MAX_MARKS (3),
-    # equal to #zalgo?'s threshold (#788), so this never strips from text #zalgo?
-    # declines to flag.
+    # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` marks of each
+    # combining class on one base character. The default is the core's,
+    # DEFAULT_ZALGO_MAX_MARKS (3), equal to #zalgo?'s threshold (#788), so this never
+    # strips from text #zalgo? declines to flag.
     def strip_zalgo(text, max_marks: DEFAULT_ZALGO_MAX_MARKS)
       translate_errors { _strip_zalgo(text, max_marks) }
     end
 
     # Whether `text` looks like zalgo: any base character carries more than
-    # `threshold:` combining marks. The default is the core's, DEFAULT_ZALGO_THRESHOLD
-    # (3).
+    # `threshold:` marks of one combining class. The default is the core's,
+    # DEFAULT_ZALGO_THRESHOLD (3).
     def zalgo?(text, threshold: DEFAULT_ZALGO_THRESHOLD)
       translate_errors { _zalgo?(text, threshold) }
     end

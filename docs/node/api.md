@@ -29,9 +29,10 @@ gate), so the documented outputs cannot rot.
 Romanize Unicode text to ASCII. `options.scheme` is `'default'` (general-purpose),
 `'strict_iso9'` (ISO 9:1995-style ASCII), or `'gost7034'` (GOST R 7.0.34).
 `options.lang` applies a language profile on top of the scheme (`'uk'`, `'de'`,
-…, or `'auto'` to detect). This is **phonetic romanization for legibility, not a
-security control** — use [`normalizeConfusables`](#confusable-folding) for
-homoglyph defence.
+…, or `'auto'` to detect); an unknown code throws `DisarmInvalidArgument`, as it
+does in every binding, rather than falling back to the default tables. This is
+**phonetic romanization for legibility, not a security control** — use
+[`normalizeConfusables`](#confusable-folding) for homoglyph defence.
 
 ```ts
 transliterate('café') // => 'cafe'
@@ -106,8 +107,9 @@ nearestMatch('something-else', ['paypal']) // => null
 
 ### `normalizeConfusables(text, options?)`
 
-Fold cross-script confusables toward `options.target` (`'latin'` default, or
-`'cyrillic'`) using the TR39 visual mapping — the homoglyph defence.
+Fold cross-script confusables toward `options.target` (`'latin'` default,
+`'cyrillic'`, `'arabic'` or `'hebrew'`) using the TR39 visual mapping — the
+homoglyph defence.
 
 ```ts
 normalizeConfusables('раypal') // => 'paypal'
@@ -131,7 +133,7 @@ isConfusable('paypal') // => false
 Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults; every option
 is optional (`separator`, `lowercase`, `maxLength`, `wordBoundary`, `saveOrder`,
 `stopwords`, `allowUnicode`, `lang`, `entities`, `decimal`, `hexadecimal`,
-`safeChars`).
+`safeChars`). An unknown `lang` throws `DisarmInvalidArgument`.
 
 ```ts
 slugify('Héllo Wörld') // => 'hello-world'
@@ -144,12 +146,15 @@ slugify('café au lait') // => 'cafe-au-lait'
 
 Strip diacritics; full Unicode case fold (more aggressive than
 `String.toLowerCase()`); and replace emoji with their plain names
-(`options.stripModifiers` drops skin-tone/variation marks).
+(`options.stripModifiers` drops skin-tone/variation marks). An emoji CLDR cannot
+name — a regional indicator or a Plane 14 tag character standing alone — becomes
+`'[?]'`, the sentinel `transliterate` writes, in every binding.
 
 ```ts
 stripAccents('café') // => 'cafe'
 foldCase('Straße') // => 'strasse'
 demojize('Café ☕') // => 'Café hot beverage'
+demojize('x\u{1F1E6}!') // => 'x[?]!'
 ```
 
 ### `isCaseFoldStable(text)`
@@ -253,8 +258,12 @@ stripPua('a\u{E000}b') // => 'ab'
 
 ### `stripZalgo(text, options?)` · `isZalgo(text, options?)`
 
-`isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` (3) on
-a base character; `stripZalgo` caps each base at `options.maxMarks` (2).
+`isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` on a
+base character; `stripZalgo` caps each base at `options.maxMarks`. Both defaults are
+the core's, 3, and equal on purpose (#788): `stripZalgo` never removes a mark from
+text `isZalgo` declines to flag. Every size option in this binding (`maxMarks`,
+`threshold`, `maxGraphemes`, `maxLength`, `maxDistance`) is a non-negative integer;
+anything else, `NaN` and fractions included, throws `DisarmInvalidArgument`.
 
 ```ts
 isZalgo('Z\u0301\u0301\u0301\u0301') // => true
@@ -560,14 +569,16 @@ inspectAnomalies('paypаl', ['paypal']).kinds // => ['mixed_script']
 ## Errors
 
 Everything disarm throws is a `DisarmError` (a subclass of `Error`), so a single
-`instanceof DisarmError` catches the whole surface. Bad input — an unknown
-scheme/target/form/platform token, etc. — throws the more specific
+`instanceof DisarmError` catches the whole surface — every function, the `Lexicon`
+constructor and the `Pipeline` methods. Bad input — an unknown
+scheme/target/form/platform token or `lang`, a size that is not a non-negative
+integer, an argument of the wrong type — throws the more specific
 `DisarmInvalidArgument`.
 
 | Class | Thrown for |
 | --- | --- |
 | `DisarmError` | Base class — `instanceof` this to catch everything. |
-| `DisarmInvalidArgument` | An invalid argument (bad scheme/target/form/platform token). |
+| `DisarmInvalidArgument` | An invalid argument (bad token, unknown `lang`, bad size, wrong type). |
 
 ```ts
 import { transliterate, DisarmError, DisarmInvalidArgument } from 'disarm'

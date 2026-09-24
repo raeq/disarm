@@ -8,7 +8,7 @@
  * and inherited here — see https://docs.disarm.dev for the language-neutral guides.
  */
 import * as native from './binding'
-import { Lexicon, Pipeline } from './binding'
+import { Lexicon as NativeLexicon, Pipeline } from './binding'
 import type {
   Untranslatable,
   UnmappedConfusable,
@@ -41,8 +41,19 @@ export type HostnameAnalysis = NativeHostnameAnalysis
  * `inspectAnomalies` rebuild an internal set from the caller's word array on
  * every call; constructing a `Lexicon` once (`new Lexicon([...])`) and passing
  * it instead builds that set a single time and reuses it across calls.
+ *
+ * A thin subclass of the native handle, so a bad argument to the constructor throws a
+ * {@link DisarmError} like every other entry point (`formal/bindings`, N2).
  */
-export { Lexicon }
+export class Lexicon extends NativeLexicon {
+  constructor(words: string[]) {
+    try {
+      super(words)
+    } catch (e) {
+      throw translate(e)
+    }
+  }
+}
 
 /**
  * A reusable, opaque named-policy-profile pipeline handle (#404). Build it once
@@ -57,6 +68,23 @@ export { Lexicon }
  * ```
  */
 export { Pipeline }
+
+// The handle's methods are native; route them through `call()` as every function is, so a
+// wrong argument or a refused digit policy throws a `DisarmError` rather than a bare
+// `Error` whose message still carries the shim's tag (`formal/bindings`, N2). Patched on
+// the prototype, so `getPipeline`'s native instances and `instanceof Pipeline` are
+// unchanged.
+const nativeProcess = Pipeline.prototype.process
+const nativeWithDigitPolicy = Pipeline.prototype.withDigitPolicy
+Pipeline.prototype.process = function process(this: Pipeline, text: string): string {
+  return call(() => nativeProcess.call(this, text))
+}
+Pipeline.prototype.withDigitPolicy = function withDigitPolicy(
+  this: Pipeline,
+  digitPolicy: string,
+): Pipeline {
+  return call(() => nativeWithDigitPolicy.call(this, digitPolicy))
+}
 
 /** The anomaly branch that fired for a finding. */
 export type AnomalyKind = 'invisible' | 'bidi' | 'bidi_mixed' | 'zalgo' | 'mixed_script' | 'leet' | 'segmentation' | 'control' | 'compat_fold' | 'confusable' | 'enclosing_mark' | 'mixed_numbers' | 'duplicate_mark' | 'deletion' | 'smuggled'
@@ -92,33 +120,90 @@ const INVALID_ARG_TAG = 'DisarmInvalidArgument: '
 const ERROR_TAG = 'DisarmError: '
 
 /**
+ * The napi statuses an argument conversion fails with: a value of the wrong JS type
+ * (`transliterate(123)`, `stripAccents(undefined)`). They are invalid arguments, as a
+ * `TypeError` is in the Ruby binding.
+ */
+const NAPI_ARGUMENT_STATUSES = new Set([
+  'InvalidArg',
+  'ObjectExpected',
+  'StringExpected',
+  'NameExpected',
+  'FunctionExpected',
+  'NumberExpected',
+  'BooleanExpected',
+  'ArrayExpected',
+  'BigintExpected',
+])
+
+/**
  * Run a native call, re-raising its tagged napi error as the matching
  * `DisarmError` subclass. The native shim prefixes fallible messages with
  * `"DisarmInvalidArgument: "` or `"DisarmError: "`; we strip the matched tag
- * cleanly. Any other throw — an untagged `Error`, or a non-`Error` value — is
- * still wrapped as a `DisarmError` so nothing leaks out unwrapped.
+ * cleanly. An argument napi could not convert is a `DisarmInvalidArgument`. Any
+ * other throw — an untagged `Error`, or a non-`Error` value — is still wrapped as a
+ * `DisarmError` so nothing leaks out unwrapped.
+ *
+ * Every export goes through here, the infallible ones included: they throw on an
+ * argument of the wrong type, and "everything disarm throws is a `DisarmError`" was
+ * false for them while they called the native function directly (`formal/bindings`,
+ * N2).
  */
 function call<T>(fn: () => T): T {
   try {
     return fn()
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (msg.startsWith(INVALID_ARG_TAG)) {
-      throw new DisarmInvalidArgument(msg.slice(INVALID_ARG_TAG.length))
-    }
-    if (msg.startsWith(ERROR_TAG)) {
-      throw new DisarmError(msg.slice(ERROR_TAG.length))
-    }
-    throw new DisarmError(msg)
+    throw translate(e)
   }
+}
+
+/** The {@link DisarmError} a thrown value becomes; see {@link call}. */
+function translate(e: unknown): DisarmError {
+  if (e instanceof DisarmError) {
+    return e
+  }
+  const msg = e instanceof Error ? e.message : String(e)
+  if (msg.startsWith(INVALID_ARG_TAG)) {
+    return new DisarmInvalidArgument(msg.slice(INVALID_ARG_TAG.length))
+  }
+  if (msg.startsWith(ERROR_TAG)) {
+    return new DisarmError(msg.slice(ERROR_TAG.length))
+  }
+  const code = (e as { code?: unknown } | null)?.code
+  if (typeof code === 'string' && NAPI_ARGUMENT_STATUSES.has(code)) {
+    return new DisarmInvalidArgument(msg)
+  }
+  return new DisarmError(msg)
+}
+
+/**
+ * Check a size or threshold option before it reaches napi, which converts any JS
+ * number to an integer: `NaN` and `0.9` became 0, `2 ** 64` saturated, so
+ * `stripZalgo('caf\u00e9', { maxMarks: NaN })` stripped the accent (`formal/bindings`, N1).
+ * A size is a non-negative safe integer; anything else throws
+ * {@link DisarmInvalidArgument}.
+ */
+function size(name: string, value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new DisarmInvalidArgument(`${name} must be a non-negative integer (got ${String(value)})`)
+  }
+  return value
+}
+
+/** {@link size} for an optional option: `undefined` or `null` stays absent. */
+function optionalSize(name: string, value: unknown): number | undefined {
+  return value == null ? undefined : size(name, value)
 }
 
 // ── Token types ─────────────────────────────────────────────────────────────
 
 /** Transliteration scheme: the general-purpose default, ISO 9-style ASCII, or GOST R 7.0.34. */
 export type Scheme = 'default' | 'strict_iso9' | 'gost7034'
-/** Confusable-folding target script. */
-export type TargetScript = 'latin' | 'cyrillic'
+/**
+ * Confusable-folding target script. `'arabic'` and `'hebrew'` fold toward those scripts
+ * (#792); the runtime accepted them before this type admitted them.
+ */
+export type TargetScript = 'latin' | 'cyrillic' | 'arabic' | 'hebrew'
 
 /**
  * How the fold treats non-Latin digits.
@@ -155,11 +240,11 @@ export interface TransliterateOptions {
   lang?: string
 }
 
-/** Romanize Unicode text to ASCII. */
+/** Romanize Unicode text to ASCII. An unknown `lang` throws {@link DisarmInvalidArgument}. */
 export function transliterate(text: string, options: TransliterateOptions = {}): string {
   const { scheme = 'default', lang } = options
   if (scheme === 'default' && lang == null) {
-    return native.transliterate(text)
+    return call(() => native.transliterate(text))
   }
   return call(() => native.transliterateOpts(text, scheme, lang ?? undefined))
 }
@@ -169,7 +254,10 @@ export function reverseTransliterate(text: string, options: { lang: ReverseLang 
   return call(() => native.reverseTransliterate(text, options.lang))
 }
 
-/** Every character in `text` with no romanization, as `{ char, offset }` (byte offset), in order. */
+/**
+ * Every character in `text` with no romanization, as `{ char, offset }` (byte offset), in
+ * order. An unknown `lang` throws {@link DisarmInvalidArgument}.
+ */
 export function findUntranslatable(
   text: string,
   options: TransliterateOptions = {},
@@ -251,13 +339,16 @@ export interface SlugifyOptions {
   safeChars?: string
 }
 
-/** Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults. */
+/**
+ * Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults. An unknown `lang`
+ * throws {@link DisarmInvalidArgument}.
+ */
 export function slugify(text: string, options: SlugifyOptions = {}): string {
   return call(() =>
     native.slugify(text, {
       separator: options.separator ?? '-',
       lowercase: options.lowercase ?? true,
-      maxLength: options.maxLength ?? 0,
+      maxLength: optionalSize('maxLength', options.maxLength) ?? 0,
       wordBoundary: options.wordBoundary ?? false,
       saveOrder: options.saveOrder ?? false,
       stopwords: options.stopwords ?? [],
@@ -275,12 +366,12 @@ export function slugify(text: string, options: SlugifyOptions = {}): string {
 
 /** Strip diacritics (`"café"` → `"cafe"`). */
 export function stripAccents(text: string): string {
-  return native.stripAccents(text)
+  return call(() => native.stripAccents(text))
 }
 
 /** Full Unicode case fold — more aggressive than `String.toLowerCase()`. */
 export function foldCase(text: string): string {
-  return native.foldCase(text)
+  return call(() => native.foldCase(text))
 }
 
 /**
@@ -294,7 +385,7 @@ export function foldCase(text: string): string {
  * folded into {@link hasAnomalies}.
  */
 export function isCaseFoldStable(text: string): boolean {
-  return native.isCaseFoldStable(text)
+  return call(() => native.isCaseFoldStable(text))
 }
 
 /** Which reducer {@link findKeyCollisions} builds its keys with. No default: the
@@ -331,9 +422,14 @@ export function findKeyCollisions(
   return call(() => native.findKeyCollisions(values, key, options.lang))
 }
 
-/** Replace emoji with their plain names. `stripModifiers` drops skin-tone/variation marks. */
+/**
+ * Replace emoji with their plain names. `stripModifiers` drops skin-tone/variation marks.
+ * An emoji CLDR cannot name — a regional indicator or a Plane 14 tag character standing
+ * alone — becomes `'[?]'`, the sentinel {@link transliterate} writes, and the default in
+ * every binding.
+ */
 export function demojize(text: string, options: { stripModifiers?: boolean } = {}): string {
-  return native.demojize(text, options.stripModifiers ?? false)
+  return call(() => native.demojize(text, options.stripModifiers ?? false))
 }
 
 /** Replace every emoji with `replacement`, verbatim (#972).
@@ -350,7 +446,7 @@ export function demojize(text: string, options: { stripModifiers?: boolean } = {
  * `''` closes an intra-word split (`aa🔥bb` → `aabb`) and `' '` keeps two words apart
  * (`stop🛑now` → `stop now`), and no rule serves both. */
 export function replaceEmoji(text: string, replacement = ''): string {
-  return native.replaceEmoji(text, replacement)
+  return call(() => native.replaceEmoji(text, replacement))
 }
 
 // ── Normalization ───────────────────────────────────────────────────────────
@@ -378,52 +474,60 @@ export function isNormalized(text: string, options: { form?: NormalizationForm }
  * deleting them) means `a\rb` → `a b`, never `ab`.
  */
 export function collapseWhitespace(text: string): string {
-  return native.collapseWhitespace(text)
+  return call(() => native.collapseWhitespace(text))
 }
 
 /** Remove C0/C1 control characters (except tab/newline). */
 export function stripControlChars(text: string): string {
-  return native.stripControlChars(text)
+  return call(() => native.stripControlChars(text))
 }
 
 /** Remove zero-width characters (ZWSP/ZWNJ/ZWJ/word-joiner). */
 export function stripZeroWidthChars(text: string): string {
-  return native.stripZeroWidthChars(text)
+  return call(() => native.stripZeroWidthChars(text))
 }
 
 /** Remove Unicode bidirectional control characters. */
 export function stripBidi(text: string): string {
-  return native.stripBidi(text)
+  return call(() => native.stripBidi(text))
 }
 
 /** Strip the Unicode Tags block (U+E0000–U+E007F), preserving valid emoji flag sequences (#413). */
 export function stripTags(text: string): string {
-  return native.stripTags(text)
+  return call(() => native.stripTags(text))
 }
 
 /** Strip every variation selector (VS1–VS256) (#413). */
 export function stripVariationSelectors(text: string): string {
-  return native.stripVariationSelectors(text)
+  return call(() => native.stripVariationSelectors(text))
 }
 
 /** Strip every Unicode noncharacter (#413). */
 export function stripNoncharacters(text: string): string {
-  return native.stripNoncharacters(text)
+  return call(() => native.stripNoncharacters(text))
 }
 
 /** Strip every Private Use Area code point (#413). */
 export function stripPua(text: string): string {
-  return native.stripPua(text)
+  return call(() => native.stripPua(text))
 }
 
-/** Cap combining marks per base character at `maxMarks` (default `2`). */
+/**
+ * Cap combining marks per base character at `maxMarks`, a non-negative integer. The
+ * default is the core's, 3 — equal to {@link isZalgo}'s threshold (#788), so this never
+ * strips from text `isZalgo` declines to flag. It is read from the core rather than
+ * restated here: this layer had kept the old cap of 2 (`formal/bindings`, B1).
+ */
 export function stripZalgo(text: string, options: { maxMarks?: number } = {}): string {
-  return call(() => native.stripZalgo(text, options.maxMarks ?? 2))
+  return call(() => native.stripZalgo(text, optionalSize('maxMarks', options.maxMarks)))
 }
 
-/** Whether any base character carries more than `threshold` (default `3`) combining marks. */
+/**
+ * Whether any base character carries more than `threshold` combining marks. The default
+ * is the core's, 3.
+ */
 export function isZalgo(text: string, options: { threshold?: number } = {}): boolean {
-  return call(() => native.isZalgo(text, options.threshold ?? 3))
+  return call(() => native.isZalgo(text, optionalSize('threshold', options.threshold)))
 }
 
 // ── Deobfuscation & security presets ────────────────────────────────────────
@@ -447,7 +551,7 @@ export function canonicalizeStrict(text: string, options: { digitPolicy?: DigitP
  * it collapses TAB/LF to a space, which the primitives leave alone. Infallible.
  */
 export function stripFormat(text: string): string {
-  return native.stripFormat(text)
+  return call(() => native.stripFormat(text))
 }
 
 /** Remove obfuscation (zero-width, bidi, combining-mark abuse, homoglyphs) while keeping legible content. */
@@ -510,7 +614,7 @@ export function sanitizeFilename(text: string, options: SanitizeFilenameOptions 
     native.sanitizeFilename(
       text,
       options.separator ?? '_',
-      options.maxLength ?? 255,
+      optionalSize('maxLength', options.maxLength) ?? 255,
       options.platform ?? 'universal',
       options.lang ?? undefined,
       options.preserveExtension ?? true,
@@ -579,7 +683,7 @@ export function skeletonKey(text: string, options: { digitPolicy?: DigitPolicy }
  * equal.
  */
 export function editDistance(a: string, b: string): number {
-  return native.editDistance(a, b)
+  return call(() => native.editDistance(a, b))
 }
 
 /** A candidate and how far {@link nearestMatch} found it from the value asked about. */
@@ -598,7 +702,11 @@ export function nearestMatch(
   candidates: string[],
   options: { maxDistance?: number } = {},
 ): NearestMatch | null {
-  return call(() => native.nearestMatch(value, candidates, options.maxDistance ?? 1)) ?? null
+  return (
+    call(() =>
+      native.nearestMatch(value, candidates, optionalSize('maxDistance', options.maxDistance) ?? 1),
+    ) ?? null
+  )
 }
 
 /** Options for {@link mlNormalize}. */
@@ -640,34 +748,34 @@ export function mlNormalize(text: string, options: MlNormalizeOptions = {}): str
 
 /** Number of grapheme clusters (user-perceived characters). */
 export function graphemeLen(text: string): number {
-  return native.graphemeLen(text)
+  return call(() => native.graphemeLen(text))
 }
 
 /** Split `text` into grapheme-cluster strings. */
 export function graphemeSplit(text: string): string[] {
-  return native.graphemeSplit(text)
+  return call(() => native.graphemeSplit(text))
 }
 
 /** Truncate to at most `maxGraphemes` clusters, never cutting through one. */
 export function graphemeTruncate(text: string, maxGraphemes: number): string {
-  return call(() => native.graphemeTruncate(text, maxGraphemes))
+  return call(() => native.graphemeTruncate(text, size('maxGraphemes', maxGraphemes)))
 }
 
 /** Display width (terminal columns) of a single grapheme `cluster` by East Asian Width. */
 export function graphemeWidth(cluster: string, options: { ambiguousWide?: boolean } = {}): number {
-  return native.graphemeWidth(cluster, options.ambiguousWide ?? false)
+  return call(() => native.graphemeWidth(cluster, options.ambiguousWide ?? false))
 }
 
 /** Total display width (terminal columns) of `text`. */
 export function terminalWidth(text: string, options: { ambiguousWide?: boolean } = {}): number {
-  return native.terminalWidth(text, options.ambiguousWide ?? false)
+  return call(() => native.terminalWidth(text, options.ambiguousWide ?? false))
 }
 
 // ── Hostname / script analysis ──────────────────────────────────────────────
 
 /** Whether the hostname looks like a mixed-script / confusable IDN spoof (a `false` is not a safety guarantee). */
 export function isSuspiciousHostname(host: string): boolean {
-  return native.isSuspiciousHostname(host)
+  return call(() => native.isSuspiciousHostname(host))
 }
 
 /**
@@ -684,12 +792,12 @@ export function analyzeHostname(
 
 /** The Unicode scripts present, in first-appearance order (Common/Inherited excluded). */
 export function detectScripts(text: string): string[] {
-  return native.detectScripts(text)
+  return call(() => native.detectScripts(text))
 }
 
 /** Whether `text` mixes characters from more than one script. */
 export function isMixedScript(text: string): boolean {
-  return native.isMixedScript(text)
+  return call(() => native.isMixedScript(text))
 }
 
 /**
@@ -701,7 +809,7 @@ export function isMixedScript(text: string): boolean {
  * right-to-left text.
  */
 export function hasBidiControl(text: string): boolean {
-  return native.hasBidiControl(text)
+  return call(() => native.hasBidiControl(text))
 }
 
 /**
@@ -711,12 +819,12 @@ export function hasBidiControl(text: string): boolean {
  * guarantee.
  */
 export function hasBidiConflict(text: string): boolean {
-  return native.hasBidiConflict(text)
+  return call(() => native.hasBidiConflict(text))
 }
 
 /** Explain how `lang: 'auto'` detection resolves `text`. */
 export function inspectAutoLang(text: string): AutoLangInspection {
-  return native.inspectAutoLang(text)
+  return call(() => native.inspectAutoLang(text))
 }
 
 // ── Metadata introspection (#404) ───────────────────────────────────────────
@@ -763,7 +871,7 @@ export function confusableCoverage(script: string): ConfusableCoverage {
  * because it decides whether disarm's normalization agrees with the host platform's.
  */
 export function unicodeVersion(): string {
-  return native.unicodeVersion()
+  return call(() => native.unicodeVersion())
 }
 
 /**
@@ -772,7 +880,7 @@ export function unicodeVersion(): string {
  * for the same input. Meaningless in isolation, by design.
  */
 export function keySchemaVersion(): number {
-  return native.keySchemaVersion()
+  return call(() => native.keySchemaVersion())
 }
 
 /**
@@ -784,17 +892,17 @@ export function keySchemaVersion(): number {
  * confusables fold stale?" without inferring it from behaviour.
  */
 export function confusablesVersion(): string {
-  return native.confusablesVersion()
+  return call(() => native.confusablesVersion())
 }
 
 /** Every Unicode script name known to the transliteration tables. */
 export function listScripts(): string[] {
-  return native.listScripts()
+  return call(() => native.listScripts())
 }
 
 /** Every language code that has a context-aware transliteration profile. */
 export function listContextLangs(): string[] {
-  return native.listContextLangs()
+  return call(() => native.listContextLangs())
 }
 
 // ── Anomaly detection ───────────────────────────────────────────────────────
@@ -812,9 +920,9 @@ export function hasAnomalies(
   lexicon: Iterable<string> | Lexicon = [],
 ): boolean {
   if (lexicon instanceof Lexicon) {
-    return native.hasAnomalies(text, lexicon)
+    return call(() => native.hasAnomalies(text, lexicon))
   }
-  return native.hasAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon])
+  return call(() => native.hasAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon]))
 }
 
 /**
@@ -828,8 +936,9 @@ export function inspectAnomalies(
   lexicon: Iterable<string> | Lexicon = [],
 ): AnomalyReport {
   if (lexicon instanceof Lexicon) {
-    return native.inspectAnomalies(text, lexicon) as AnomalyReport
+    return call(() => native.inspectAnomalies(text, lexicon)) as AnomalyReport
   }
-  const words = Array.isArray(lexicon) ? lexicon : [...lexicon]
-  return native.inspectAnomalies(text, words) as AnomalyReport
+  return call(() =>
+    native.inspectAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon]),
+  ) as AnomalyReport
 }

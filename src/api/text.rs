@@ -4,6 +4,7 @@
 
 use std::borrow::Cow;
 
+use crate::api::OnUnknown;
 use crate::Error;
 
 // ── Terminal width (UAX #11 / UAX #29) ───────────────────────────────────────
@@ -63,8 +64,9 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 // ── Typographic punctuation (#703) ────────────────────────────────────────────
 
 /// Fold typographic punctuation to its ASCII spelling: the dash family and the minus
-/// sign to `-`, the curly and low-9 quotes and the primes to `'` / `"`, the ellipsis to
-/// `...`, and the non-standard spaces to a space (#703).
+/// sign to `-`, the curly, low-9 and reversed-9 quotes and the primes (`U+2032` to
+/// `U+2037`, a triple prime to `'''`) to `'` / `"`, the ellipsis to `...`, and every space
+/// separator (`Zs`) to a space (#703).
 ///
 /// Nothing else in disarm does this as a stated purpose. [`canonicalize`](crate::api::canonicalize) folds five
 /// dashes and skips `U+2014 EM DASH` and `U+2015 HORIZONTAL BAR`; [`transliterate`](crate::api::transliterate) folds
@@ -126,16 +128,50 @@ pub fn strip_pua(text: &str) -> String {
 
 // ── Zalgo (combining-mark abuse) ─────────────────────────────────────────────
 
-/// True if any base character carries more than `threshold` consecutive
-/// combining marks in NFD (zalgo-style abuse). A sane default is 3.
+/// The default `threshold` of [`is_zalgo`]: a base carrying more than this many marks
+/// of one combining class is zalgo. Vietnamese `ệ` carries two in NFD.
+///
+/// Every binding that gives `is_zalgo` a default takes it from here, so they cannot
+/// drift from the core.
+pub const DEFAULT_ZALGO_THRESHOLD: usize = crate::zalgo::DEFAULT_THRESHOLD;
+
+/// The default `max_marks` of [`strip_zalgo`], equal to [`DEFAULT_ZALGO_THRESHOLD`] on
+/// purpose (#788): with a lower cap the transform removed marks from text the predicate
+/// had just declined to flag, such as pointed and cantillated Hebrew.
+///
+/// Every binding that gives `strip_zalgo` a default takes it from here. Node and Ruby
+/// had kept the old cap of 2 as a literal of their own after #788 raised it
+/// (`formal/bindings`, B1).
+pub const DEFAULT_ZALGO_MAX_MARKS: usize = crate::zalgo::DEFAULT_MAX_MARKS;
+
+/// True if any base character carries more than `threshold` marks of one canonical
+/// combining class in NFD (zalgo-style abuse). The default the bindings use is
+/// [`DEFAULT_ZALGO_THRESHOLD`] (3).
+///
+/// The count is per class (#842), since zalgo is many marks at *one* position: a base may
+/// carry `threshold` marks of each class. It runs over everything up to the next non-mark.
+/// Class-0 marks, which a renderer positions rather than stacks, are not counted unless
+/// `threshold` is 0, and do not split the count of the marks around them. The first
+/// negation overlay (`U+0338`, `U+20D2`) on a symbol is not counted either, matching
+/// [`strip_zalgo`](crate::api::strip_zalgo) (#749), so that function's output is never
+/// zalgo at the same threshold.
+///
+/// ```
+/// use disarm::api::is_zalgo;
+/// assert!(!is_zalgo("a\u{0301}\u{0301}\u{0301}\u{0316}\u{0316}\u{0316}", 3)); // two positions
+/// assert!(is_zalgo("a\u{0301}\u{0301}\u{0301}\u{034F}\u{0301}\u{0301}\u{0301}", 3)); // one
+/// ```
 #[must_use]
 pub fn is_zalgo(text: &str, threshold: usize) -> bool {
     crate::zalgo::is_zalgo(text, threshold)
 }
 
-/// Cap combining marks at `max_marks` per base character (recomposed to NFC),
-/// stripping zalgo stacking while preserving legitimate diacritics. `max_marks`
-/// of 0 strips all combining marks.
+/// Cap the marks of each canonical combining class at `max_marks` per base character
+/// (recomposed to NFC), stripping zalgo stacking while preserving legitimate diacritics.
+/// Counted as [`is_zalgo`](crate::api::is_zalgo) counts: class-0 marks are kept, and the
+/// first negation overlay on a symbol is kept beyond the cap (#749). `max_marks` of 0
+/// strips every combining mark but that overlay. The default the bindings use is
+/// [`DEFAULT_ZALGO_MAX_MARKS`] (3).
 #[must_use]
 pub fn strip_zalgo(text: &str, max_marks: usize) -> String {
     crate::zalgo::strip_zalgo(text, max_marks)
@@ -172,17 +208,21 @@ pub fn fold_case(text: &str) -> Cow<'_, str> {
 /// A `true` answer is not a promise the value is unique; two distinct stable
 /// strings can still be equal after some *other* normalization step.
 ///
-/// **Two builds of the same disarm version can disagree here (#718).** The
-/// `to_lowercase` side is whatever UCD the compiling toolchain shipped, and the
-/// crate does not control it. That divergence is currently **latent rather than
-/// live**: the smallest toolchain this crate can be built on is 1.88 — the ICU4X
-/// crates `idna` pulls in set that floor, and `idna_adapter` uses edition 2024,
-/// which cargo below 1.85 cannot parse at all — and every rustc from 1.88 carries
-/// Unicode 16 or newer. Measured over Garay (`U+10D50..=U+10D65`), the bicameral
-/// block added in Unicode 16 and the natural candidate for a split: 0 of 22 read
-/// unstable on 1.88, and `cargo +1.81`, `+1.85` and `+1.87` cannot build a
-/// consumer of this crate at all. The mechanism is real; no toolchain that can
-/// compile disarm currently exercises it.
+/// **Two builds of the same disarm version can disagree here (#718), and today they
+/// do.** The `to_lowercase` side is whatever UCD the compiling toolchain shipped
+/// (`char::UNICODE_VERSION`), which the crate does not control, while the fold table
+/// is pinned at Unicode 16.0. A toolchain on a *newer* Unicode than the table
+/// lowercases letters the table does not fold. On a Unicode 17 toolchain the 28 cased
+/// letters Unicode 17 added — `U+A7CE`, `U+A7D2`, `U+A7D4` and `U+16EA0..=U+16EB8` —
+/// read `false`; a rustc 1.88 build, on Unicode 16, knows none of them and reads
+/// `true` (C2 in `formal/lean/Text`).
+///
+/// An *older* toolchain than the table is not reachable. The smallest this crate can
+/// be built on is 1.88 — the ICU4X crates `idna` pulls in set that floor, and
+/// `idna_adapter` uses edition 2024, which cargo below 1.85 cannot parse at all — and
+/// every rustc from 1.88 carries Unicode 16 or newer. Measured over Garay
+/// (`U+10D50..=U+10D65`), the bicameral block added in Unicode 16: 0 of 22 read
+/// unstable on 1.88.
 ///
 /// ```
 /// use disarm::api;
@@ -460,15 +500,32 @@ pub use crate::slugify::SlugConfig;
 /// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
-/// unknown language code is treated as "best effort" and falls back to the
-/// default transliterator (the same lenient behaviour as the underlying engine),
-/// rather than erroring. The Python `slugify` wrapper treats `lang` the same way
-/// — it forwards the code unvalidated and silently falls back, so neither
-/// binding raises on an unknown slug `lang`. If you need strict validation,
-/// check the code against [`list_langs`](crate::api::list_langs) before building the config.
+/// unknown language code falls back to the default transliterator. Prefer
+/// [`try_slugify`], which rejects it the way Python's `slugify` and every other
+/// binding do.
 #[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
+}
+
+/// [`slugify`], rejecting a `config.lang` that [`validate_lang`](crate::api::validate_lang)
+/// does not accept instead of falling back to the default tables. What every binding's
+/// `slugify` calls (`formal/bindings`, B2).
+///
+/// # Errors
+///
+/// [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) for an unknown
+/// `config.lang`.
+///
+/// ```
+/// use disarm::api::{try_slugify, SlugConfig};
+/// let de = SlugConfig::default().with_lang("de");
+/// assert_eq!(try_slugify("M\u{fc}nchen", &de).unwrap(), "muenchen");
+/// assert!(try_slugify("M\u{fc}nchen", &SlugConfig::default().with_lang("dee")).is_err());
+/// ```
+pub fn try_slugify(text: &str, config: &SlugConfig) -> Result<String, crate::Error> {
+    crate::transliterate::validate_lang(config.lang.as_deref())?;
+    Ok(crate::slugify::slugify_impl(text, config))
 }
 
 // ── Emoji ────────────────────────────────────────────────────────────────────
@@ -479,12 +536,42 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
 /// `strip_modifiers` drops the modifier suffix (`": light skin tone"`, etc.) from
 /// each name. Pure-ASCII input is returned unchanged.
 ///
+/// An emoji the CLDR table cannot name becomes `[?]`, the sentinel
+/// [`transliterate`](crate::api::transliterate) writes for a character it cannot
+/// romanize: as bundled, the 26 regional indicators standing alone (CLDR names them
+/// only in pairs) and the 96 Plane 14 tag characters standing alone.
+/// [`demojize_with`] picks another policy. It was dropped here and in every binding
+/// but Python, whose documented default is the sentinel, so the same call gave `""`
+/// in one language and `"[?]"` in another (`formal/bindings`, D1).
+///
 /// This uses the **built-in CLDR data** (latest English). The custom Python
 /// `EmojiProvider` override exposed by the `disarm` package is binding-layer-only
 /// (Python-only) and is intentionally **not** part of the Rust surface.
+///
+/// ```
+/// use disarm::api::demojize;
+/// assert_eq!(demojize("\u{1F600}!", false), "grinning face!");
+/// assert_eq!(demojize("x\u{1F1E6}!", false), "x[?]!");
+/// ```
 #[must_use]
 pub fn demojize(text: &str, strip_modifiers: bool) -> String {
-    crate::emoji::demojize_rust(text, strip_modifiers)
+    demojize_with(text, strip_modifiers, &OnUnknown::default())
+}
+
+/// [`demojize`] with a policy for an emoji the CLDR table cannot name — the same
+/// [`OnUnknown`] [`Transliterate`](crate::api::Transliterate) takes, and Python's
+/// `errors=` / `replace_with=`: [`OnUnknown::Replace`] writes the string (the default is
+/// `[?]`), [`OnUnknown::Ignore`] drops the emoji, [`OnUnknown::Preserve`] keeps it.
+///
+/// ```
+/// use disarm::api::{demojize_with, OnUnknown};
+/// assert_eq!(demojize_with("x\u{1F1E6}!", false, &OnUnknown::Ignore), "x!");
+/// assert_eq!(demojize_with("x\u{1F1E6}!", false, &OnUnknown::Preserve), "x\u{1F1E6}!");
+/// ```
+#[must_use]
+pub fn demojize_with(text: &str, strip_modifiers: bool, on_unknown: &OnUnknown) -> String {
+    let (mode, replace_with) = on_unknown.parts();
+    crate::emoji::demojize_named(text, strip_modifiers, mode, replace_with)
 }
 
 /// Replace every emoji in `text` with `replacement`, verbatim (#972).

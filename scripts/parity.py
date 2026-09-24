@@ -176,6 +176,17 @@ PROVIDED_VIA = {
     "unicode_version": {"python": "disarm.UNICODE_VERSION"},
     "key_schema_version": {"python": "disarm.KEY_SCHEMA_VERSION"},
     "reverse_transliterate": {"python": "transliterate(target=…)"},
+    # `formal/bindings` B2: the Rust `slugify` is infallible and so cannot reject an
+    # unknown `lang`; `try_slugify` can, and every binding's `slugify` is that one.
+    "try_slugify": {
+        "python": "slugify",
+        "ruby": "slugify",
+        "node": "slugify",
+        "java": "slugify",
+        "kotlin": "slugify",
+    },
+    # D1: the policy for an emoji CLDR cannot name. Python spells it `errors=`.
+    "demojize_with": {"python": "demojize(errors=…, replace_with=…)"},
 }
 # Deliberate scope decisions for Ruby/Node — not blind backfill:
 #  * registration mutates process-global state; encoders are sink-context tools;

@@ -21,6 +21,12 @@ and an attacker cannot break up a run by interleaving classes — NFD canonicall
 marks by class, so `("\\u0301" + "\\u0323") * 10` sorts into ten of each and reads as a run
 of ten either way. The normalization does the work.
 
+Not for a class-0 mark, though (Z1 in `formal/lean/Text`). Canonical ordering sorts marks
+only *between starters*, and a class-0 mark is a starter, so `a` + three acutes + `U+034F` +
+three acutes stays two runs of three in NFD. The count is therefore per base as well as per
+class: a class-0 mark neither counts nor resets it, and only a non-mark starts a new base.
+`tests/test_text_formal_findings.py` holds that.
+
 Measured over the 22,963-row key-stability corpus: **142 false positives → 0**, with every
 zalgo form still caught.
 """
@@ -58,12 +64,25 @@ def test_ordinary_burmese_keeps_every_mark(word: str) -> None:
     assert marks(disarm.canonicalize(word)) == marks(word), "the truncation reached a key"
 
 
+#: Two synthetic rows #862 added to the corpus, not text anyone writes: a precomposed
+#: acute letter plus three diaeresis split by ``U+0489`` (class 0), so four class-230 marks
+#: on one base. They read as zalgo since Z1 (`formal/lean/Text`) stopped a class-0 mark
+#: from resetting the count, which is the point of that fix.
+STACKED_ACROSS_A_CLASS_ZERO_MARK = {
+    "\u00e1\u0308\u0308\u0489\u0308b",
+    "\u0403\u0308\u0308\u0489\u0308\u0432",
+}
+
+
 def test_the_whole_corpus_is_clean() -> None:
     """142 rows before, all Myanmar. A gate over the measured set, not a sample."""
     rows = [line for line in CORPUS.read_text(encoding="utf-8").split("\n") if line]
     assert len(rows) > 20_000, len(rows)
-    flagged = [r for r in rows if disarm.is_zalgo(r)]
+    flagged = [r for r in rows if disarm.is_zalgo(r) and r not in STACKED_ACROSS_A_CLASS_ZERO_MARK]
     assert not flagged, f"{len(flagged)} corpus rows read as zalgo; first: {flagged[:2]!r}"
+    for row in STACKED_ACROSS_A_CLASS_ZERO_MARK:
+        assert row in rows, "the exemption names a row the corpus no longer has"
+        assert disarm.is_zalgo(row), ascii(row)
 
 
 # ── what must still be caught ────────────────────────────────────────────────

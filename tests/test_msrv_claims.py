@@ -107,11 +107,13 @@ def _doc_claims(line: str) -> list[str]:
 def _user_facing_docs() -> list[Path]:
     """Every Markdown page a user or contributor reads, plus the crate's rustdoc.
 
-    `CHANGELOG.md` and `changelog.d/` are history: an entry saying the floor *was* 1.81
-    is true. Symlinks are skipped so `docs/CONTRIBUTING.md` is not read twice.
+    `CHANGELOG.md`, its archive under `docs/changelog/` and `changelog.d/` are history: an
+    entry saying the floor *was* 1.81 is true. Symlinks are skipped so
+    `docs/CONTRIBUTING.md` is not read twice.
     """
+    archive = ROOT / "docs" / "changelog"
     pages = [p for p in ROOT.glob("*.md") if p.name != "CHANGELOG.md"]
-    pages += list((ROOT / "docs").rglob("*.md"))
+    pages += [p for p in (ROOT / "docs").rglob("*.md") if archive not in p.parents]
     pages += [p for p in (ROOT / "bindings").rglob("*.md") if "node_modules" not in p.parts]
     return sorted(p for p in set(pages) if not p.is_symlink())
 

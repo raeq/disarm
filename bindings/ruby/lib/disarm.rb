@@ -24,6 +24,13 @@ end
 # keyword arguments with the core's defaults, symbol tokens (:latin, :default, …),
 # a single transliterate(text, scheme:) entrypoint, and a Disarm::Error hierarchy.
 # Each method is still a thin wrapper over the pure-Rust `disarm` core.
+#
+# Text arguments are read by the encoding the String declares. UTF-8 and US-ASCII are
+# read as they are, and ASCII-8BIT (BINARY) is read as UTF-8, the way the C ABI reads
+# its bytes; any other encoding (ISO-8859-1, Windows-1251, UTF-16LE, ...) is transcoded
+# to UTF-8 first. A malformed or unmappable sequence becomes one U+FFFD, and so does a
+# lone surrogate, the contract every binding shares (#469). An encoding Ruby cannot
+# convert from at all raises Disarm::InvalidArgument.
 module Disarm
   # Base class for every error disarm raises, so consumers can `rescue
   # Disarm::Error`. The native shim raises Ruby's built-in ArgumentError /
@@ -38,7 +45,8 @@ module Disarm
     # Transliterate Unicode text to ASCII. `scheme:` selects the standard:
     # :default (the general-purpose scheme), :strict_iso9, or :gost7034. `lang:`
     # applies a language profile on top of the scheme (e.g. "uk" → Київ → "Kyiv",
-    # "de" → ü → "ue"); nil means no profile. Both accept a String or Symbol.
+    # "de" → ü → "ue"); nil means no profile. Both accept a String or Symbol. Raises
+    # Disarm::InvalidArgument on an unknown lang, as every binding does.
     def transliterate(text, scheme: :default, lang: nil)
       scheme = scheme.to_s
       lang = lang&.to_s
@@ -53,7 +61,8 @@ module Disarm
       end
     end
 
-    # Fold cross-script confusables toward `target:` (:latin or :cyrillic).
+    # Fold cross-script confusables toward `target:` (:latin, :cyrillic, :arabic or
+    # :hebrew).
     #
     # `digit_policy:` selects how non-Latin DIGITS fold (#561).
     #
@@ -75,15 +84,16 @@ module Disarm
       translate_errors { _normalize_confusables(text, target.to_s, digit_policy.to_s) }
     end
 
-    # Whether `text` contains a character confusable with `target:` (:latin or
-    # :cyrillic).
+    # Whether `text` contains a character confusable with `target:` (:latin,
+    # :cyrillic, :arabic or :hebrew).
     def confusable?(text, target: :latin)
       translate_errors { _confusable?(text, target.to_s) }
     end
 
     # Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults; every
     # option past `text` is keyword-only. (`regex_pattern`/`replacements` are not
-    # surfaced yet — see ext/disarm/src/lib.rs.)
+    # surfaced yet — see ext/disarm/src/lib.rs.) Raises Disarm::InvalidArgument on an
+    # unknown `lang:`.
     def slugify(
       text,
       separator: "-",
@@ -111,7 +121,9 @@ module Disarm
     end
 
     # Replace emoji with their plain names (e.g. "👍" → "thumbs up").
-    # `strip_modifiers:` drops skin-tone / variation modifiers before naming.
+    # `strip_modifiers:` drops skin-tone / variation modifiers before naming. An emoji
+    # CLDR cannot name (a regional indicator or a Plane 14 tag character standing
+    # alone) becomes "[?]", the sentinel #transliterate writes, as in every binding.
     def demojize(text, strip_modifiers: false)
       translate_errors { _demojize(text, strip_modifiers) }
     end
@@ -147,7 +159,7 @@ module Disarm
     # keeps the VS15/VS16 presentation selectors after a base, which the naive chain
     # deletes, and it collapses TAB/LF to a space, which the primitives leave alone.
     def strip_format(text)
-      _strip_format(text)
+      translate_errors { _strip_format(text) }
     end
 
     # Remove obfuscation (zero-width, bidi, combining-mark abuse) while keeping
@@ -220,7 +232,12 @@ module Disarm
     # `max_distance:` (#894). Reports; it does not decide. An exact match is reported with
     # distance 0, and ties go to the first candidate at the lowest distance.
     def nearest_match(value, candidates, max_distance: 1)
-      hit = translate_errors { _nearest_match(value, candidates.map(&:to_s), max_distance) }
+      hit = translate_errors do
+        # A non-collection is a wrong-typed argument, not a NoMethodError (N2).
+        raise ::TypeError, "candidates must be an Array or Enumerable" unless candidates.respond_to?(:map)
+
+        _nearest_match(value, candidates.map(&:to_s), max_distance)
+      end
       hit && { value: hit[0], distance: hit[1] }
     end
 
@@ -379,15 +396,18 @@ module Disarm
       translate_errors { _strip_pua(text) }
     end
 
-    # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` (2)
-    # combining marks per base character.
-    def strip_zalgo(text, max_marks: 2)
+    # Strip "zalgo" combining-mark stacking, keeping at most `max_marks:` marks of each
+    # combining class on one base character. The default is the core's,
+    # DEFAULT_ZALGO_MAX_MARKS (3), equal to #zalgo?'s threshold (#788), so this never
+    # strips from text #zalgo? declines to flag.
+    def strip_zalgo(text, max_marks: DEFAULT_ZALGO_MAX_MARKS)
       translate_errors { _strip_zalgo(text, max_marks) }
     end
 
     # Whether `text` looks like zalgo: any base character carries more than
-    # `threshold:` (3) combining marks.
-    def zalgo?(text, threshold: 3)
+    # `threshold:` marks of one combining class. The default is the core's,
+    # DEFAULT_ZALGO_THRESHOLD (3).
+    def zalgo?(text, threshold: DEFAULT_ZALGO_THRESHOLD)
       translate_errors { _zalgo?(text, threshold) }
     end
 
@@ -517,7 +537,7 @@ module Disarm
     # anomaly detector's `bidi` kind reports nine of the twelve, holding back LRM, RLM
     # and ALM because a lone directional mark is ordinary in right-to-left text.
     def bidi_control?(text)
-      _has_bidi_control?(text)
+      translate_errors { _has_bidi_control?(text) }
     end
 
     # Explain how `lang: "auto"` detection resolves `text`: a hash with
@@ -678,13 +698,14 @@ module Disarm
     # whole surface. The original backtrace is preserved (passed as the third
     # `raise` argument) so the failing native call site stays visible. A bad
     # argument from the native layer can arrive as ArgumentError (an invalid
-    # scheme/target), TypeError (a non-String argument), or RangeError (e.g. a
-    # negative max_length) — all map to Disarm::InvalidArgument.
+    # scheme/target), TypeError (a non-String argument), RangeError (e.g. a
+    # negative max_length) or EncodingError (a String in an encoding Ruby cannot
+    # transcode to UTF-8) — all map to Disarm::InvalidArgument.
     def translate_errors
       yield
     rescue Error
       raise # already in our hierarchy — don't re-wrap
-    rescue ::ArgumentError, ::TypeError, ::RangeError => e
+    rescue ::ArgumentError, ::TypeError, ::RangeError, ::EncodingError => e
       raise InvalidArgument, e.message, e.backtrace
     rescue ::RuntimeError => e
       raise Error, e.message, e.backtrace

@@ -11,6 +11,10 @@ import warnings
 
 from disarm._api import TextPipeline
 from disarm._boundary import (
+    # The zalgo defaults, read from the core so no binding restates them (B1 of
+    # `formal/bindings`: Node and Ruby had kept a literal 2 after #788).
+    _DEFAULT_ZALGO_MAX_MARKS,
+    _DEFAULT_ZALGO_THRESHOLD,
     _canonicalize,
     _canonicalize_strict,
     _catalog_key,
@@ -777,9 +781,10 @@ def strip_tags(text: str) -> str:
 def fold_punctuation(text: str) -> str:
     """Fold typographic punctuation to its ASCII spelling (#703).
 
-    The dash family and the minus sign become ``-``; the curly and low-9 quotes and the
-    primes become ``'`` / ``"``; the ellipsis becomes ``...``; the non-standard spaces
-    become a space. Nothing else in disarm does this as a stated purpose: `canonicalize`
+    The dash family and the minus sign become ``-``; the curly, low-9 and reversed-9
+    quotes and the primes (``U+2032`` to ``U+2037``) become ``'`` / ``"``, a triple prime
+    ``'''``; the ellipsis becomes ``...``; every space separator (``Zs``) other than the
+    ASCII space becomes a space. Nothing else in disarm does this as a stated purpose: `canonicalize`
     folds five dashes and skips the em dash and the horizontal bar, `transliterate` folds
     those two and rejects the other four, and a key built from either treats ``a—b`` and
     ``a-b`` as distinct while treating ``a–b`` and ``a-b`` as the same. A separate
@@ -1033,15 +1038,25 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
     return _strip_obfuscation(text, digit_policy=digit_policy)
 
 
-def is_zalgo(text: str, *, threshold: int = 3) -> bool:
+def is_zalgo(text: str, *, threshold: int = _DEFAULT_ZALGO_THRESHOLD) -> bool:
     """Detect whether text contains zalgo-style combining mark abuse.
 
-    Returns ``True`` if any base character has more than *threshold*
-    consecutive combining marks in NFD decomposition.
+    Returns ``True`` if any base character carries more than *threshold* marks of one
+    canonical combining class, counted in NFD over everything up to the next non-mark.
+
+    The count is per combining class (#842), because zalgo is many marks at *one
+    position*: a base may carry *threshold* marks of each class, so
+    ``"a" + "\\u0301" * 3 + "\\u0316" * 3`` is not zalgo. Class-0 marks, which a renderer
+    positions rather than stacks (Indic matras, Thai and Burmese vowel signs), are not
+    counted unless *threshold* is ``0``, and they do not split the count of the marks
+    around them: ``"a" + "\\u0301" * 3 + "\\u034f" + "\\u0301" * 3`` is six acutes on one
+    base. The first negation overlay (``U+0338``, ``U+20D2``) on a symbol is part of the
+    symbol, as in `strip_zalgo` (#749), and is not counted either, so the output of
+    ``strip_zalgo(text, max_marks=k)`` is never zalgo at ``threshold=k``.
 
     Args:
         text: Input string to check.
-        threshold: Maximum allowed combining marks per base character
+        threshold: Maximum allowed marks of one combining class on one base character
             (default: ``3``).  Vietnamese ``ệ`` has 2 marks in NFD —
             the default is safe for all legitimate scripts.
 
@@ -1059,11 +1074,13 @@ def is_zalgo(text: str, *, threshold: int = 3) -> bool:
     return _is_zalgo(text, threshold=threshold)
 
 
-def strip_zalgo(text: str, *, max_marks: int = 3) -> str:
+def strip_zalgo(text: str, *, max_marks: int = _DEFAULT_ZALGO_MAX_MARKS) -> str:
     """Strip excessive combining marks, preserving legitimate diacritics.
 
-    Caps the number of combining marks per base character at *max_marks*.
-    Operates in NFD space and recomposes to NFC.
+    Caps the marks of each canonical combining class on one base character at
+    *max_marks*, counted as `is_zalgo` counts them: class-0 marks are kept and do not
+    reset the count, and the first negation overlay on a symbol is kept beyond the cap
+    (#749). Operates in NFD space and recomposes to NFC.
 
     The default equals `is_zalgo`'s threshold on purpose (#788). It was ``2`` while the
     threshold was ``3``, so this stripped from text the library had just declined to call
@@ -1074,9 +1091,10 @@ def strip_zalgo(text: str, *, max_marks: int = 3) -> str:
 
     Args:
         text: Input string (may contain zalgo abuse).
-        max_marks: Maximum combining marks to keep per base character
-            (default: ``3``).  Set to ``0`` to strip all combining marks
-            (equivalent to `strip_accents`), as `ml_normalize` does.
+        max_marks: Maximum marks of one combining class to keep on one base
+            character (default: ``3``).  Set to ``0`` to strip every combining mark
+            except one negation overlay on a symbol (#749), as `strip_accents` does and
+            as `ml_normalize` uses it.
 
     Returns:
         String with excess combining marks removed.

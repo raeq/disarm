@@ -22,6 +22,10 @@ _CONFUSABLES_VERSION: str
 _UNICODE_VERSION: str
 _KEY_SCHEMA_VERSION: int
 
+# The zalgo defaults every binding reads from the core (`formal/bindings`, B1).
+_DEFAULT_ZALGO_THRESHOLD: int
+_DEFAULT_ZALGO_MAX_MARKS: int
+
 class DisarmError(ValueError): ...
 class InvalidArgumentError(DisarmError): ...
 class ResourceLimitError(DisarmError): ...

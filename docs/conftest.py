@@ -5,7 +5,8 @@ against the **installed** ``disarm`` wheel, and any ``assert`` it contains is
 checked. This is what keeps published recipes from rotting: a wrong claim or a
 broken snippet turns the test suite red, gated alongside the existing tiers.
 
-Authoring rules for recipes (see CONTRIBUTING.md → "Doc-test recipes"):
+Authoring rules for recipes (see ``docs/contributing/documentation.md`` →
+"Doc-test recipes"):
 
 * Assert outputs, never decorate them with ``# =>`` comments.
 * Use the **public API only** — reaching into internals is itself a doc bug.
@@ -78,6 +79,9 @@ EXECUTED_RECIPES = [
     "user-guide/text-cleaning.md",
     "user-guide/transliteration.md",
     "security/watermarks.md",
+    # Its example sits inside a `!!!` admonition. Sybil always ran indented blocks;
+    # the coverage gate only counted column-0 fences, so nothing required this page.
+    "upgrading.md",
 ]
 
 #: The execute-only tier (#656). These pages' ``python`` blocks are run, and a

@@ -53,54 +53,34 @@ classifiers = [
 test = [
     "pytest>=9.1.0",
     "pytest-cov>=5.0",
-    # Not optional, and on by default in `addopts`. `--dist loadfile` is not
-    # optional either: `register_lang` mutates process-global state that cannot be
-    # undone, so tests have to stay grouped by file, which per-file distribution
-    # preserves.
-    #
-    # The #658 note here said serial 6.1s / -n 2 4.9s / -n auto 5.4s and concluded
-    # `auto` over-provisions and CI should stay serial. That was true of a 6-second
-    # suite and stopped being true as it grew; re-measured on four cores, without
-    # coverage: serial 93.4s, -n 2 65.2s, -n auto 35.1s. `--dist loadgroup` with
-    # only the process-global-state modules pinned was tried and is worse on both
-    # counts — 45.0s, and it breaks `test_docs_index_drift`, which depends on its
-    # file's tests sharing a worker.
+    # Required: `addopts` runs `-n auto --dist loadfile`
+    # (see docs/contributing/packaging.md#test-pytest-xdist).
     "pytest-xdist>=3.6",
     "hypothesis>=6.155.3",
     "mypy>=2.1.0",
     "sybil>=6",  # executable cookbook doc-tests (#154)
-    # The workflow gates (#830, #832) read `.github/workflows/*.yml`, and pattern-
-    # matching them is what produced the bug review caught: an `on: push` written
-    # inline read as "not a push workflow" and was silently exempted. Parsing needs
-    # a YAML reader, and `on` being a YAML 1.1 boolean is not a thing to hand-roll.
+    # The workflow gates parse `.github/workflows/*.yml` (#830, #832; see
+    # docs/contributing/packaging.md#test-pyyaml).
     "pyyaml>=6",
-    # Assembles changelog.d/ into CHANGELOG.md at release time (#993). In `test`, not
-    # `dev`: CI's test job installs `.[test]`, and with towncrier only in `dev` the
-    # assembly tests in tests/test_changelog_fragments.py skipped on every pull request
-    # (#994 review). `dev` still gets it through `disarm[test]`. Pinned here and read
-    # from here by CI's changelog job, for the reason #985 recorded: a second copy of a
-    # pin inside a workflow's `run:` line is invisible to Dependabot and turns every
-    # bump red until someone copies the number across.
+    # In `test`, not `dev`, and read from here by CI's changelog job (#993, #994, #985;
+    # see docs/contributing/packaging.md#test-towncrier).
     "towncrier==26.9.0",
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.16.7",
+    "ruff==0.16.8",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
 bench = [
-    # Exact-pinned so cross-run comparator ratios are reproducible (#234 gate V8).
-    # No `>=` permitted here: a floating comparator silently shifts every ratio's
-    # denominator. The hash-locked lockfile (gate V7) pins transitive deps + wheels;
-    # these `==` lines pin the declared intent. Versions are PyPI-current stable.
+    # Exact pins only, so comparator ratios are reproducible (#234 gate V8; see
+    # docs/contributing/packaging.md#bench-exact-pins).
     "pyperf==2.10.0",            # Python-side bench runner (tooling, not a comparator)
     # ── transliterate-axis comparators ──
     "Unidecode==1.4.0",
     "text-unidecode==1.3",
     "anyascii==0.3.3",
     # in-process pure-Python port; construct outside the measured region.
-    # (marker no longer needed: requires-python is >=3.10 since #277 lever 1)
     "uroman==1.3.1.1",
     # ── normalize / security_clean axis comparator (NOT a transliterator; gate V16) ──
     "ftfy==6.3.1",              # must never appear in a transliterate-axis ratio
@@ -115,14 +95,8 @@ docs = [
     "mkdocstrings[python]>=1.0.4",
     "pymdown-extensions>=10.0",
 ]
-# NOTE: context-aware transliteration (transliterate(context=True), ar/fa/he) is
-# NOT pip-installable. The dictionaries are large (~37 MB) and are not shipped in
-# the wheel. There used to be empty `arabic`/`hebrew`/`context` extras here; they
-# did nothing (installing them added no dictionaries), so they were removed (#56).
-# To enable context mode: build the dictionaries from a source checkout with
-#   bash scripts/bootstrap_dicts.sh
-# and point the DISARM_DICT_DIR environment variable at the output directory.
-# (Tracked for a proper packaged distribution — see issues #56/#60.)
+# No context-mode extras: the ar/fa/he dictionaries are not in the wheel (#56, #60; see
+# docs/contributing/packaging.md#no-context-mode-extras).
 
 [project.scripts]
 disarm = "disarm.__main__:main"
@@ -140,48 +114,18 @@ module-name = "disarm._core"
 # The crate default is now the pure Rust core (no pyo3); the Python extension
 # must opt into the `extension-module` feature (which pulls in pyo3 + abi3-py310).
 features = ["extension-module"]
-# Context dictionary data files (data/*.bin) are NOT shipped in the wheel. They
-# are built from source via `bash scripts/bootstrap_dicts.sh` and located at
-# runtime via the DISARM_DICT_DIR environment variable (see src/context.rs).
-# For a self-contained build, compile with the `embed-dicts` Cargo feature.
+# data/*.bin is not shipped in the wheel
+# (see docs/contributing/packaging.md#dictionary-data-files).
 
 [tool.pytest.ini_options]
-# Cookbook doc-tests live under docs/ and run as a separate invocation
-# (`python scripts/run_doc_tests.py`, see CONTRIBUTING.md — `pytest docs/` in one
-# process is NOT the gate, because `register_lang` is irreversible and one page's
-# registration leaks into another). They are deliberately NOT in testpaths:
-# docs/conftest.py would otherwise shadow tests/conftest.py, which the suite
-# imports shared fixtures from via `from conftest import ...`.
+# Doc-tests are not collected here: `python scripts/run_doc_tests.py` runs them
+# (see docs/contributing/packaging.md#testpaths).
 testpaths = ["tests"]
-# Put the repo root on sys.path so tests can import the out-of-CI `benchmarks`
-# package (e.g. tests/test_adversarial_eval.py). Needed when disarm is
-# installed from a wheel rather than editable — as in CI — where the repo root
-# is not otherwise importable.
+# Lets tests import the repo-root `benchmarks` package from an installed wheel
+# (see docs/contributing/packaging.md#pythonpath).
 pythonpath = ["."]
-# Bare `pytest` runs CI's selection minus the opt-in `slow` tier (#658). CI uses
-# `-m "not formal and not hypothesis and not serial"`, so the two expressions differ by
-# `not slow` — but nothing in that tier executes under CI conditions anyway:
-# `test_cabi_header_drift` skips when $CI is set, and the ratio floors need the
-# `bench` extra, which CI does not install. Measured with CI=1 and no bench
-# extra: 5 selected, 5 skipped. The *executed* set matches; the *expression*
-# does not.
-#
-# The Hypothesis tier was in the local default and in no CI job at all, so a
-# contributor paid ~67s on every run for a tier `nightly-hypothesis.yml` already
-# runs at 03:17 UTC with a freshly generated seed and a 10x oracle budget — a better
-# exercise of it than one more fixed-seed pass. `pytest -m hypothesis` on demand.
-# `-n auto --dist loadfile` is the default because the suite is no longer short enough
-# for worker startup to matter: 93s serial against 35s on four cores. Startup is not
-# free, though: re-measured on four cores, one small file costs ~0.6s more under
-# `-n auto` than under `-n 0` (test_slugify.py 1.1s against 0.5s), so pass `-n 0` for a
-# single-file inner loop, and for a debugger. `--dist loadfile` is not optional — see
-# the `test` extra.
-#
-# `not serial` (#997 review): tests that measure wall-clock parallelism cannot be
-# measured with a worker already on every core, so the parallel run deselects them and
-# CI runs them in a step of their own with `pytest -m serial -n 0`. CI's `-m` replaces
-# this one, so its expression has to say `not serial` too; tests/test_serial_tier.py
-# holds the three together.
+# CI's selection minus `slow`; `-n 0` for one file or a debugger; CI's own `-m` must
+# also say `not serial` (#658, #997; see docs/contributing/packaging.md#addopts).
 addopts = [
     "-v",
     "--tb=short",
@@ -193,12 +137,7 @@ addopts = [
     "not formal and not hypothesis and not slow and not serial",
 ]
 markers = [
-    # Opt-in since #658: the marker described itself as deselectable and nothing
-    # deselected it, so it had no effect. Both things it covers are gated
-    # elsewhere — `test_cabi_header_drift` mirrors the `cabi` CI job and costs a
-    # cold cargo build (~25s) on the first run after a Rust change, and
-    # `test_performance_claims`' ratio floors need the pinned comparators from
-    # the `bench` extra and skip without them. Run with `pytest -m slow`.
+    # `slow` is opt-in since #658 (see docs/contributing/packaging.md#markers).
     "slow: expensive, opt-in - run with 'pytest -m slow' (see #658)",
     "formal: exhaustive formal invariant tests — run before release with 'pytest -m formal'",
     "hypothesis: property-based / fuzz tests using Hypothesis — expensive, run locally not in CI",
@@ -235,10 +174,8 @@ include = ["python"]
 reportMissingModuleSource = false
 
 # --- Changelog fragments (#993) ---------------------------------------------
-# Entries live one-per-change in `changelog.d/` and are assembled into
-# CHANGELOG.md at release. Editing CHANGELOG.md directly is what made every pair
-# of concurrent PRs conflict: entries were prepended to the same anchor line, so
-# the collision was a function of concurrency rather than of content.
+# `changelog.d/` is assembled into CHANGELOG.md at release
+# (see docs/contributing/packaging.md#why-fragments).
 [tool.towncrier]
 directory = "changelog.d"
 template = "changelog.d/_template.md"
@@ -250,23 +187,17 @@ underlines = ["", "", ""]
 # Entries already carry their issue and PR numbers inline in the bold lead
 # (`**Thing (#990).**`), so towncrier must not append a second reference.
 issue_format = ""
-# Entries here are essays with code blocks, tables and measured numbers. Re-wrapping
-# them would destroy that, and the bullet is already part of the fragment: they are
-# written exactly as they will appear, so `towncrier build` concatenates rather than
-# reformats.
+# Fragments are written exactly as they ship; never re-wrap them
+# (see docs/contributing/packaging.md#wrapping).
 wrap = false
 all_bullets = false
 # A fragment with no PR number yet — the first push of a branch — is `+slug.type.md`.
 orphan_prefix = "+"
-# A fragment is named for the PULL REQUEST, not the issue. Several PRs per issue
-# is the norm here — #972 alone produced #973, #975, #976 and #989 — so keying on
-# the issue would put four fragments at one filename and rebuild the conflict this
-# is removing.
+# A fragment is named for the PULL REQUEST, not the issue
+# (see docs/contributing/packaging.md#fragment-names).
 
-# The order below is the order the headings are written in, and it is the order the
-# releases already use: 0.16.0, 0.15.0 and 0.14.0 all open on *Upgrade notes*, the
-# part a reader has to act on. tests/test_changelog_fragments.py pins it to the
-# latest release's order.
+# Heading order, pinned to the latest release's by tests/test_changelog_fragments.py
+# (see docs/contributing/packaging.md#type-order).
 [[tool.towncrier.type]]
 directory = "upgrade"
 name = "Upgrade notes"

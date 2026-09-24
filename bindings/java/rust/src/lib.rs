@@ -28,10 +28,11 @@
 //! which centralize the string-boundary + panic-guard + resolve plumbing so each
 //! function only names its core call.
 //!
-//! Strings: `mutf8_chars`/`new_string` use modified UTF-8 (CESU-8), decoded
-//! correctly for the astral plane. A faithful boundary for *lone surrogates* needs
-//! raw UTF-16 (`GetStringChars`) + the WTF-8 scrub the Python/Ruby bindings do;
-//! tracked as a Phase-2 follow-up.
+//! Strings: every argument is read with [`read_str`], which decodes the JVM's modified
+//! UTF-8 back to the UTF-16 code units the `String` holds and then to Rust text the way
+//! the other bindings do: a well-formed surrogate pair is its astral scalar, and each
+//! lone surrogate is exactly one U+FFFD (#469). `new_string` encodes results, astral
+//! plane included.
 
 // FFI boundary must never unwind into the JVM (S-4, mirrors Node/Ruby): forbid the
 // panic-shaped constructs. `with_env` is the structural backstop; these keep the
@@ -94,6 +95,60 @@ fn throw(env: &mut Env, class: &str, msg: &str) -> JniError {
     }
 }
 
+// ── The string boundary ──────────────────────────────────────────────────────────
+
+/// Read a Java `String` argument as Rust text: a surrogate pair is its astral scalar, a
+/// lone surrogate is one U+FFFD, the contract every binding shares (#469).
+///
+/// jni's own conversion (`mutf8_chars(..).to_string()`) decodes the modified UTF-8 and,
+/// if that fails anywhere in the string, falls back to `String::from_utf8_lossy` over
+/// the whole buffer. A lone surrogate's three bytes then became three U+FFFD, and every
+/// well-formed astral character in the same string — a six-byte surrogate pair in
+/// modified UTF-8 — became six, so an emoji stopped being an emoji and `replaceEmoji`
+/// removed nothing (`formal/bindings`, J1).
+fn read_str(env: &Env, s: &JString) -> JniResult<String> {
+    Ok(decode_mutf8(s.mutf8_chars(env)?.to_bytes()))
+}
+
+/// Decode modified UTF-8 (JNI `GetStringUTFChars`) to the UTF-16 code units it spells,
+/// then to Rust text with each unpaired surrogate as one U+FFFD.
+///
+/// Modified UTF-8 writes each UTF-16 code unit on its own, in one to three bytes: NUL
+/// is `C0 80`, and a supplementary character is its two surrogates, three bytes each.
+/// Text with neither is already UTF-8 and takes the first branch without a copy of the
+/// code units. A byte that begins no valid sequence (which a JVM does not produce) is
+/// one U+FFFD.
+fn decode_mutf8(bytes: &[u8]) -> String {
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_owned();
+    }
+    #[inline]
+    fn cont(b: Option<&u8>) -> Option<u16> {
+        b.filter(|&&x| x & 0xC0 == 0x80)
+            .map(|&x| u16::from(x & 0x3F))
+    }
+    let mut units: Vec<u16> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while let Some(&b) = bytes.get(i) {
+        let c1 = cont(bytes.get(i + 1));
+        let c2 = cont(bytes.get(i + 2));
+        let (unit, len) = if b < 0x80 {
+            (u16::from(b), 1)
+        } else if let (0b110, Some(x1)) = (b >> 5, c1) {
+            ((u16::from(b & 0x1F) << 6) | x1, 2)
+        } else if let (0b1110, Some(x1), Some(x2)) = (b >> 4, c1, c2) {
+            ((u16::from(b & 0x0F) << 12) | (x1 << 6) | x2, 3)
+        } else {
+            (0xFFFD, 1)
+        };
+        units.push(unit);
+        i += len;
+    }
+    char::decode_utf16(units)
+        .map(|r| r.unwrap_or('\u{FFFD}'))
+        .collect()
+}
+
 // ── Dispatch helpers ─────────────────────────────────────────────────────────────
 //
 // Each takes the raw JNI env + input string(s) and a closure naming the core call.
@@ -107,7 +162,7 @@ fn map_str<'l>(
     f: impl FnOnce(&str) -> String,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         Ok(env.new_string(f(&text))?.into())
     })
     .resolve::<Policy>()
@@ -120,7 +175,7 @@ fn map_bool<'l>(
     f: impl FnOnce(&str) -> bool,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         Ok(f(&text))
     })
     .resolve::<Policy>()
@@ -129,7 +184,7 @@ fn map_bool<'l>(
 /// `String -> long`, infallible (widths / counts, cast from `usize`).
 fn map_long<'l>(mut env: EnvUnowned<'l>, input: JString<'l>, f: impl FnOnce(&str) -> i64) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         Ok(f(&text))
     })
     .resolve::<Policy>()
@@ -142,7 +197,7 @@ fn map_str_array<'l>(
     f: impl FnOnce(&str) -> Vec<String>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         new_string_array(env, &f(&text))
     })
     .resolve::<Policy>()
@@ -169,7 +224,7 @@ fn read_string_array(env: &mut Env, arr: &JObjectArray<JString>) -> JniResult<Ve
     let mut out = Vec::with_capacity(len);
     for i in 0..len {
         let element = arr.get_element(env, i)?;
-        out.push(element.mutf8_chars(env)?.to_string());
+        out.push(read_str(env, &element)?);
     }
     Ok(out)
 }
@@ -258,8 +313,8 @@ pub fn transliterateOpts<'l>(
     lang: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let scheme = scheme.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let scheme = read_str(env, &scheme)?;
         let lang = read_optional(env, &lang)?;
         match build_transliterate(&text, &scheme, lang.as_deref()) {
             Ok(result) => Ok(env.new_string(result)?.into()),
@@ -278,8 +333,8 @@ pub fn reverseTransliterate<'l>(
     lang: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let lang = lang.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let lang = read_str(env, &lang)?;
         match lang.parse::<api::ReverseLang>() {
             Ok(lang) => Ok(env
                 .new_string(api::reverse_transliterate(&text, lang))?
@@ -291,11 +346,23 @@ pub fn reverseTransliterate<'l>(
 }
 
 /// Shared builder logic, mirroring the Node/Ruby shims' `transliterate_opts`.
+/// `try_run` rejects an unknown `lang` (B2) and applies registered replacements.
 fn build_transliterate(
     text: &str,
     scheme: &str,
     lang: Option<&str>,
 ) -> Result<String, disarm_core::Error> {
+    Ok(transliterate_builder(scheme, lang)?
+        .try_run(text)?
+        .into_owned())
+}
+
+/// The core's `Transliterate` builder for a scheme token and an optional `lang`; the
+/// `lang` is checked when the builder runs.
+fn transliterate_builder(
+    scheme: &str,
+    lang: Option<&str>,
+) -> Result<api::Transliterate, disarm_core::Error> {
     let mut b = api::Transliterate::new();
     if scheme != "default" {
         let scheme: api::Scheme = scheme.parse()?;
@@ -304,14 +371,14 @@ fn build_transliterate(
     if let Some(lang) = lang {
         b = b.lang(lang);
     }
-    Ok(b.run(text).into_owned())
+    Ok(b)
 }
 
 /// Decode a nullable `JString` argument into `Option<String>`.
 /// The `digitPolicy` token every key builder takes (#896): parsed at the boundary, and a
 /// bad token throws the core's `InvalidArgument` like any other.
 fn read_policy(env: &mut Env, s: &JString) -> JniResult<api::DigitPolicy> {
-    let token = s.mutf8_chars(env)?.to_string();
+    let token = read_str(env, s)?;
     match token.parse::<api::DigitPolicy>() {
         Ok(p) => Ok(p),
         Err(e) => Err(throw_core(env, &e)),
@@ -322,7 +389,7 @@ fn read_optional(env: &Env, s: &JString) -> JniResult<Option<String>> {
     if s.is_null() {
         Ok(None)
     } else {
-        Ok(Some(s.mutf8_chars(env)?.to_string()))
+        Ok(Some(read_str(env, s)?))
     }
 }
 
@@ -337,8 +404,8 @@ pub fn findUntranslatable<'l>(
     lang: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let scheme = scheme.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let scheme = read_str(env, &scheme)?;
         let lang = read_optional(env, &lang)?;
         let items = match build_find_untranslatable(&text, &scheme, lang.as_deref()) {
             Ok(v) => v,
@@ -359,15 +426,7 @@ fn build_find_untranslatable(
     scheme: &str,
     lang: Option<&str>,
 ) -> Result<Vec<api::Untranslatable>, disarm_core::Error> {
-    let mut b = api::Transliterate::new();
-    if scheme != "default" {
-        let scheme: api::Scheme = scheme.parse()?;
-        b = b.scheme(scheme);
-    }
-    if let Some(lang) = lang {
-        b = b.lang(lang);
-    }
-    Ok(b.find_untranslatable(text))
+    transliterate_builder(scheme, lang)?.try_find_untranslatable(text)
 }
 
 /// Construct a `dev.disarm.Untranslatable` record.
@@ -392,9 +451,9 @@ pub fn normalizeConfusables<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let target = target.mutf8_chars(env)?.to_string();
-        let digit_policy = digit_policy.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let target = read_str(env, &target)?;
+        let digit_policy = read_str(env, &digit_policy)?;
         let target = match target.parse::<api::TargetScript>() {
             Ok(t) => t,
             Err(e) => return Err(throw_core(env, &e)),
@@ -422,9 +481,9 @@ pub fn mlNormalize<'l>(
     fold_case: jboolean,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let lang = read_optional(env, &lang)?;
-        let emoji_style = emoji_style.mutf8_chars(env)?.to_string();
+        let emoji_style = read_str(env, &emoji_style)?;
         match api::ml_normalize(&text, lang.as_deref(), &emoji_style, fold_case) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
             Err(e) => Err(throw_core(env, &e)),
@@ -441,7 +500,7 @@ pub fn unmappedConfusables<'l>(
     target: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let target = target.mutf8_chars(env)?.to_string();
+        let target = read_str(env, &target)?;
         match target.parse::<api::TargetScript>() {
             Ok(target) => {
                 let items: Vec<String> = api::unmapped_confusables(target)
@@ -466,8 +525,8 @@ pub fn findUnmappedConfusables<'l>(
     target: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let target = target.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let target = read_str(env, &target)?;
         let target = match target.parse::<api::TargetScript>() {
             Ok(t) => t,
             Err(e) => return Err(throw_core(env, &e)),
@@ -497,8 +556,8 @@ pub fn isConfusable<'l>(
     target: JString<'l>,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let target = target.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let target = read_str(env, &target)?;
         match target.parse::<api::TargetScript>() {
             Ok(target) => Ok(api::is_confusable(&text, target)),
             Err(e) => Err(throw_core(env, &e)),
@@ -532,7 +591,7 @@ pub fn isCaseFoldStable<'l>(
     input: JString<'l>,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         Ok(api::is_case_fold_stable(&text))
     })
     .resolve::<Policy>()
@@ -551,7 +610,7 @@ pub fn findKeyCollisions<'l>(
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         let values = read_string_array(env, &values)?;
-        let key = key.mutf8_chars(env)?.to_string();
+        let key = read_str(env, &key)?;
         let key: api::KeyForm = match key.parse() {
             Ok(k) => k,
             Err(e) => return Err(throw_core(env, &e)),
@@ -572,7 +631,8 @@ pub fn findKeyCollisions<'l>(
     .resolve::<Policy>()
 }
 
-/// Replace emoji with their plain names; `stripModifiers` drops skin-tone marks.
+/// Replace emoji with their plain names; `stripModifiers` drops skin-tone marks. An
+/// emoji CLDR cannot name becomes `[?]`, as in every binding.
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn demojize<'l>(
     env: EnvUnowned<'l>,
@@ -593,9 +653,11 @@ pub fn replaceEmoji<'l>(
     replacement: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let replacement = replacement.mutf8_chars(env)?.to_string();
-        Ok(env.new_string(api::replace_emoji(&text, &replacement))?.into())
+        let text = read_str(env, &input)?;
+        let replacement = read_str(env, &replacement)?;
+        Ok(env
+            .new_string(api::replace_emoji(&text, &replacement))?
+            .into())
     })
     .resolve::<Policy>()
 }
@@ -611,8 +673,8 @@ pub fn normalize<'l>(
     form: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let form = form.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let form = read_str(env, &form)?;
         match form.parse::<api::NormalizationForm>() {
             Ok(form) => Ok(env.new_string(api::normalize(&text, form))?.into()),
             Err(e) => Err(throw_core(env, &e)),
@@ -630,8 +692,8 @@ pub fn isNormalized<'l>(
     form: JString<'l>,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let form = form.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let form = read_str(env, &form)?;
         match form.parse::<api::NormalizationForm>() {
             Ok(form) => Ok(api::is_normalized(&text, form)),
             Err(e) => Err(throw_core(env, &e)),
@@ -711,7 +773,7 @@ pub fn stripZalgo<'l>(
     max_marks: jlong,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let max_marks = match checked_size("maxMarks", max_marks) {
             Ok(n) => n,
             Err(msg) => return Err(throw_invalid(env, &msg)),
@@ -730,7 +792,7 @@ pub fn isZalgo<'l>(
     threshold: jlong,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let threshold = match checked_size("threshold", threshold) {
             Ok(n) => n,
             Err(msg) => return Err(throw_invalid(env, &msg)),
@@ -750,7 +812,7 @@ pub fn stripObfuscation<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::strip_obfuscation_with(&text, policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
@@ -783,7 +845,7 @@ pub fn canonicalizeStrict<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::canonicalize_strict_with(&text, policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
@@ -802,8 +864,8 @@ pub fn isCanonical<'l>(
     preset: JString<'l>,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let preset = preset.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let preset = read_str(env, &preset)?;
         match api::is_canonical(&text, &preset) {
             Ok(v) => Ok(jboolean::from(v)),
             Err(e) => Err(throw_core(env, &e)),
@@ -820,7 +882,7 @@ pub fn canonicalize<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::canonicalize_with(&text, policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
@@ -841,7 +903,7 @@ pub fn searchKey<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let lang = read_optional(env, &lang)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::search_key_with(&text, lang.as_deref(), policy) {
@@ -861,7 +923,7 @@ pub fn sortKey<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let lang = read_optional(env, &lang)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::sort_key_with(&text, lang.as_deref(), policy) {
@@ -883,7 +945,7 @@ pub fn catalogKey<'l>(
 ) -> JObject<'l> {
     let strict = strict_iso9;
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let lang = read_optional(env, &lang)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::catalog_key_with(&text, lang.as_deref(), strict, policy) {
@@ -905,7 +967,7 @@ pub fn skeletonKey<'l>(
     digit_policy: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let policy = read_policy(env, &digit_policy)?;
         match api::skeleton_key(&text, policy) {
             Ok(s) => Ok(env.new_string(s.as_ref())?.into()),
@@ -924,8 +986,8 @@ pub fn editDistance<'l>(
     b: JString<'l>,
 ) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
-        let a = a.mutf8_chars(env)?.to_string();
-        let b = b.mutf8_chars(env)?.to_string();
+        let a = read_str(env, &a)?;
+        let b = read_str(env, &b)?;
         Ok(jlong::try_from(api::edit_distance(&a, &b)).unwrap_or(jlong::MAX))
     })
     .resolve::<Policy>()
@@ -943,7 +1005,7 @@ pub fn nearestMatch<'l>(
     max_distance: jlong,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let value = value.mutf8_chars(env)?.to_string();
+        let value = read_str(env, &value)?;
         let candidates = read_string_array(env, &candidates)?;
         // A negative threshold is rejected, not coerced to "exact match only" (#952 review).
         let max = match checked_size("maxDistance", max_distance) {
@@ -976,9 +1038,9 @@ pub fn sanitizeFilename<'l>(
 ) -> JObject<'l> {
     let preserve = preserve_extension;
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let separator = separator.mutf8_chars(env)?.to_string();
-        let platform = platform.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let separator = read_str(env, &separator)?;
+        let platform = read_str(env, &platform)?;
         let lang = read_optional(env, &lang)?;
         let max_length = match checked_size("maxLength", max_length) {
             Ok(n) => n,
@@ -1027,9 +1089,9 @@ pub fn slugify<'l>(
     safe_chars: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
-        let separator = separator.mutf8_chars(env)?.to_string();
-        let safe_chars = safe_chars.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
+        let separator = read_str(env, &separator)?;
+        let safe_chars = read_str(env, &safe_chars)?;
         let lang = read_optional(env, &lang)?;
         let stopwords = read_string_array(env, &stopwords)?;
         let max_length = match checked_size("maxLength", max_length) {
@@ -1051,7 +1113,11 @@ pub fn slugify<'l>(
         config.entities = entities;
         config.decimal = decimal;
         config.hexadecimal = hexadecimal;
-        Ok(env.new_string(api::slugify(&text, &config))?.into())
+        // `try_slugify` rejects an unknown `lang` rather than falling back (B2).
+        match api::try_slugify(&text, &config) {
+            Ok(slug) => Ok(env.new_string(slug)?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
     })
     .resolve::<Policy>()
 }
@@ -1071,7 +1137,7 @@ pub fn graphemeTruncate<'l>(
     max_graphemes: jlong,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let max_graphemes = match checked_size("maxGraphemes", max_graphemes) {
             Ok(n) => n,
             Err(msg) => return Err(throw_invalid(env, &msg)),
@@ -1126,7 +1192,7 @@ pub fn analyzeHostname<'l>(
     contractions: jboolean,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let host = input.mutf8_chars(env)?.to_string();
+        let host = read_str(env, &input)?;
         let analysis = api::analyze_hostname_with(&host, contractions);
         new_hostname_analysis(env, &analysis)
     })
@@ -1143,11 +1209,7 @@ pub fn isMixedScript<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString
 /// two are disjoint. The detector's `bidi` kind reports nine, holding back LRM, RLM and ALM
 /// because a lone directional mark is ordinary in right-to-left text.
 #[jni_mangle("dev.disarm.internal.Native")]
-pub fn hasBidiControl<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    input: JString<'l>,
-) -> jboolean {
+pub fn hasBidiControl<'l>(env: EnvUnowned<'l>, _class: JClass<'l>, input: JString<'l>) -> jboolean {
     map_bool(env, input, api::has_bidi_control)
 }
 
@@ -1236,7 +1298,7 @@ pub fn listContextLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn langInfo<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, code: JString<'l>) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let code = code.mutf8_chars(env)?.to_string();
+        let code = read_str(env, &code)?;
         match api::lang_info(&code) {
             Ok(m) => new_lang_meta(env, &m),
             Err(e) => Err(throw_core(env, &e)),
@@ -1271,7 +1333,7 @@ pub fn scriptInfo<'l>(
     name: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let name = name.mutf8_chars(env)?.to_string();
+        let name = read_str(env, &name)?;
         match api::script_info(&name) {
             Ok(m) => new_script_meta(env, &m),
             Err(e) => Err(throw_core(env, &e)),
@@ -1319,7 +1381,7 @@ pub fn confusableCoverage<'l>(
     script: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let script = script.mutf8_chars(env)?.to_string();
+        let script = read_str(env, &script)?;
         match api::confusable_coverage(&script) {
             Ok(row) => {
                 let name = env.new_string(row.script)?;
@@ -1354,7 +1416,7 @@ pub fn inspectAutoLang<'l>(
     input: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let r = api::inspect_auto_lang(&text);
         let script = opt_string(env, r.script.as_deref())?;
         let chosen_lang = opt_string(env, r.chosen_lang.as_deref())?;
@@ -1418,7 +1480,7 @@ fn read_registry<V>(
 #[jni_mangle("dev.disarm.internal.Native")]
 pub fn pipelineNew<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, profile: JString<'l>) -> jlong {
     env.with_env(|env| -> JniResult<jlong> {
-        let profile = profile.mutf8_chars(env)?.to_string();
+        let profile = read_str(env, &profile)?;
         match api::get_pipeline(&profile) {
             Ok(p) => {
                 let id = next_handle();
@@ -1460,7 +1522,11 @@ pub fn pipelineWithDigitPolicy<'l>(
 
 /// What the named profile a handle was built from is for, or null (#860).
 #[jni_mangle("dev.disarm.internal.Native")]
-pub fn pipelinePurpose<'l>(mut env: EnvUnowned<'l>, _class: JClass<'l>, handle: jlong) -> JObject<'l> {
+pub fn pipelinePurpose<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    handle: jlong,
+) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
         // A stale handle must not read as "this pipeline has no purpose". `null` is a
         // real answer here — a hand-built pipeline has none — so the two have to be told
@@ -1486,7 +1552,7 @@ pub fn pipelineProcess<'l>(
     input: JString<'l>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let registry = read_registry(&PIPELINES);
         let Some(pipeline) = registry.get(&handle) else {
             return Err(throw_invalid(env, "invalid or closed Pipeline handle"));
@@ -1537,7 +1603,7 @@ pub fn hasAnomalies<'l>(
     lexicon: jlong,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let registry = read_registry(&LEXICONS);
         let Some(set) = registry.get(&lexicon) else {
             return Err(throw_invalid(env, "invalid or closed Lexicon handle"));
@@ -1556,7 +1622,7 @@ pub fn hasAnomaliesWords<'l>(
     words: JObjectArray<'l, JString<'l>>,
 ) -> jboolean {
     env.with_env(|env| -> JniResult<jboolean> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let set = api::lexicon(read_string_array(env, &words)?);
         Ok(api::has_anomalies(&text, &set))
     })
@@ -1572,7 +1638,7 @@ pub fn inspectAnomalies<'l>(
     lexicon: jlong,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         // Scope the read lock so it is released before building JNI objects.
         let report = {
             let registry = read_registry(&LEXICONS);
@@ -1595,7 +1661,7 @@ pub fn inspectAnomaliesWords<'l>(
     words: JObjectArray<'l, JString<'l>>,
 ) -> JObject<'l> {
     env.with_env(|env| -> JniResult<JObject> {
-        let text = input.mutf8_chars(env)?.to_string();
+        let text = read_str(env, &input)?;
         let set = api::lexicon(read_string_array(env, &words)?);
         let report = api::inspect_anomalies(&text, &set);
         new_anomaly_report(env, &report)
@@ -1746,4 +1812,57 @@ fn new_hostname_analysis<'l>(
             JValue::Object(&canonical),
         ],
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_mutf8;
+
+    /// The modified UTF-8 of UTF-16 code units, as `GetStringUTFChars` writes it.
+    fn mutf8(units: &[u16]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for &u in units {
+            match u {
+                0x01..=0x7F => out.push(u as u8),
+                0x00 | 0x80..=0x7FF => {
+                    out.push(0xC0 | (u >> 6) as u8);
+                    out.push(0x80 | (u & 0x3F) as u8);
+                }
+                _ => {
+                    out.push(0xE0 | (u >> 12) as u8);
+                    out.push(0x80 | ((u >> 6) & 0x3F) as u8);
+                    out.push(0x80 | (u & 0x3F) as u8);
+                }
+            }
+        }
+        out
+    }
+
+    /// J1 of `formal/bindings`: one U+FFFD per lone surrogate, and nothing else in the
+    /// string disturbed by it.
+    #[test]
+    fn a_lone_surrogate_is_one_replacement_and_touches_nothing_else() {
+        let mut units = vec![u16::from(b'x')];
+        units.extend("\u{1F600}".encode_utf16());
+        units.push(u16::from(b'y'));
+        units.push(0xD800);
+        assert_eq!(decode_mutf8(&mutf8(&units)), "x\u{1F600}y\u{FFFD}");
+        assert_eq!(decode_mutf8(&mutf8(&[0xDC00])), "\u{FFFD}");
+        assert_eq!(decode_mutf8(&mutf8(&[0xDE00, 0xD83D])), "\u{FFFD}\u{FFFD}");
+    }
+
+    #[test]
+    fn well_formed_text_round_trips() {
+        for text in [
+            "",
+            "plain",
+            "caf\u{E9}",
+            "a\u{0}b",
+            "\u{1D4D7}ello",
+            "\u{FFFF}",
+        ] {
+            let units: Vec<u16> = text.encode_utf16().collect();
+            assert_eq!(decode_mutf8(&mutf8(&units)), text, "{text:?}");
+        }
+    }
 }

@@ -9,6 +9,7 @@
  */
 #include "disarm.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int failures = 0;
@@ -347,6 +348,45 @@ int main(void) {
     char *tl = disarm_transliterate("caf\xE9");
     check("transliterate(Latin-1)", tl, "caf[?]");
     disarm_string_free(tl);
+
+    /* The bindings harness findings (formal/bindings/README.md). */
+
+    /* B2: an unknown lang is an error, as disarm_search_key's always was. */
+    DisarmResult_t badlang = disarm_transliterate_opts("\xd0\x9a\xd0\xb8\xd1\x97\xd0\xb2", "default", "UK");
+    printf("%-28s %-6s (err=%s)\n", "transliterate_opts bad lang",
+           (badlang.error && !badlang.value) ? "OK" : "FAIL",
+           badlang.error ? badlang.error : "(null)");
+    if (!(badlang.error && !badlang.value)) failures++;
+    disarm_string_free(badlang.value);
+    disarm_string_free(badlang.error);
+    DisarmResult_t uk = disarm_transliterate_opts("\xd0\x9a\xd0\xb8\xd1\x97\xd0\xb2", "default", "uk");
+    check("transliterate_opts lang uk", uk.value, "Kyiv");
+    disarm_string_free(uk.value);
+    disarm_string_free(uk.error);
+
+    /* S1: a singleton decomposition folds alone, not only beside a mark. */
+    char *gq = disarm_strip_accents("\xcd\xbe"); /* U+037E GREEK QUESTION MARK */
+    check("strip_accents(U+037E)", gq, ";");
+    disarm_string_free(gq);
+
+    /* D1: an emoji CLDR cannot name is the [?] sentinel, as in Python. */
+    char *ri = disarm_demojize("\xf0\x9f\x87\xa6", false); /* lone U+1F1E6 */
+    check("demojize(lone RI)", ri, "[?]");
+    disarm_string_free(ri);
+
+    /* E3: -1 is "could not answer", which a resource limit on a valid preset is too. */
+    {
+        size_t reps = 600000; /* U+FDFA x 600,000: NFKC past the output cap (#768) */
+        char *huge = (char *)malloc(reps * 3 + 1);
+        if (!huge) { failures++; } else {
+            for (size_t i = 0; i < reps; i++) memcpy(huge + i * 3, "\xef\xb7\xba", 3);
+            huge[reps * 3] = '\0';
+            int8_t r = disarm_is_canonical(huge, "canonicalize");
+            printf("%-28s %-6s (%d)\n", "is_canonical resource limit", r == -1 ? "OK" : "FAIL", r);
+            if (r != -1) failures++;
+            free(huge);
+        }
+    }
 
     if (failures == 0) {
         printf("\nC SMOKE PASSED\n");

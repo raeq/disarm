@@ -63,7 +63,7 @@ Use maturin for the extension.
 
 ## Test architecture
 
-Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
+Three tiers (full detail in **`docs/contributing/testing.md`**):
 
 ### Tier 1: CI (fast, deterministic)
 - **Rust unit + integration**: ~630 tests — `cargo test --no-default-features`
@@ -78,7 +78,8 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
   `tests/test_doc_table_counts.py` over 11 documented row counts (#591), the build.rs
   ASCII assertions (#587), and `JvmSignatureTest` over the published Kotlin JVM
   signatures (#588). Two read a *build product*, not source text, which is why they
-  catch what source-level assertions miss. Detail in CONTRIBUTING.md → "Drift gates"
+  catch what source-level assertions miss. Detail in `docs/contributing/testing.md` →
+  "Drift gates"
 
 ### Tier 2: Hypothesis / property-based (developer worktree only)
 - ~440 tests marked `@pytest.mark.hypothesis` — property/fuzz testing across the
@@ -97,6 +98,14 @@ Three tiers (full detail in **CONTRIBUTING.md → "Test architecture"**):
   layer beneath the one the bindings call is how #586 went unnoticed for a year
 - **Python formal invariant tests**: 12 tests marked `@pytest.mark.formal`
   (invariants I1–I7) — `pytest -m formal`
+
+### Report-only: fuzzing, coverage, mutation (detail in `docs/contributing/testing.md`)
+- **cargo-fuzz**: `bash fuzz/run.sh` (pinned nightly + cargo-fuzz); 10 targets assert
+  documented properties. `fuzz.yml`: 60 s per target on PRs touching the core, 15 min nightly
+- **Coverage**: `cargo llvm-cov --no-default-features --branch` (`coverage.yml`, no threshold)
+- **Mutation**: `cargo mutants -f src/<module>.rs` (`mutants.yml`, weekly, six modules)
+
+None of the three is in *All checks passed*.
 
 **Rule: do NOT remove `#[ignore]`, `@pytest.mark.formal`, or
 `@pytest.mark.hypothesis` from these tests.** They are excluded from CI
@@ -132,7 +141,7 @@ Never push directly to `main` — it will be rejected.
 
 CI rejects anything that fails these — run them locally first, don't push and
 wait. The full step-by-step (auto-fix passes, ordering, rationale) lives in
-**CONTRIBUTING.md → "Linting and formatting" / "Submitting changes"**.
+**`docs/contributing/linting.md`** and **CONTRIBUTING.md → "Submitting changes"**.
 
 ```bash
 git pull --rebase origin main           # 0. sync before pushing a stale branch
@@ -265,7 +274,8 @@ visible.
 `DCO sign-off` is a **required** status check: every non-merge commit needs a
 `Signed-off-by:` trailer matching its author. Use `git commit -s`, or
 `git rebase --signoff origin/main` for commits already made. An AI assistant must
-never add that trailer — see CONTRIBUTING.md → "Attribute the assistant".
+never add that trailer — see `docs/contributing/ai-assistance.md` →
+"Attribute the assistant".
 
 ## Context dictionaries (Arabic / Persian / Hebrew)
 
@@ -295,4 +305,5 @@ hand-edit dictionary files. All outputs (`data/corpora/`, `data/*_dict.bin`,
 - **Boy Scout / broken-windows rule:** if you touch an area and find something
   broken or sub-standard (incl. lints that only fire under
   `cargo clippy --all-targets`), fix it in the same change rather than stepping
-  around it. See CONTRIBUTING.md → "Leave it better than you found it".
+  around it. See `docs/contributing/conventions.md` →
+  "Leave it better than you found it".

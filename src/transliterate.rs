@@ -27,6 +27,97 @@ pub(crate) fn apply_replacements_bounded(text: &str) -> Result<Cow<'_, str>, cra
     })
 }
 
+/// Transliterate the way every public `transliterate` does: the registered replacement
+/// pre-pass (bounded), then the engine. `on_unknown` is the engine's error mode, or
+/// `None` for `errors="strict"`, which fails on the first untranslatable character.
+///
+/// `lang` must already be validated ([`validate_lang`]); the caller does it once, so a
+/// batch does not repeat it per item. This is the one body `api::Transliterate::try_run`
+/// and the Python binding share (`formal/bindings`, E1): the pre-pass used to be applied
+/// by the PyO3 glue alone, so `api::register_replacements` was documented as "applied
+/// before the tables" and no Rust API function applied it.
+///
+/// Returns `Cow::Borrowed` only when neither the pre-pass nor the engine changed a byte,
+/// so a borrowed result is the input itself.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn transliterate_after_replacements<'a>(
+    text: &'a str,
+    lang: Option<&str>,
+    on_unknown: Option<ErrorMode>,
+    replace_with: &str,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) -> Result<Cow<'a, str>, crate::ErrorRepr> {
+    // The engine borrows from whatever it is given, so the replaced text's two shapes
+    // are run separately: a borrowed pre-pass keeps the input's lifetime, an owned one
+    // has to hand back an owned result.
+    #[allow(clippy::too_many_arguments)]
+    fn run<'t>(
+        t: &'t str,
+        lang: Option<&str>,
+        on_unknown: Option<ErrorMode>,
+        replace_with: &str,
+        strict_iso9: bool,
+        gost7034: bool,
+        tones: bool,
+    ) -> Result<Cow<'t, str>, crate::ErrorRepr> {
+        Ok(match on_unknown {
+            None => Cow::Owned(transliterate_strict(t, lang, strict_iso9, gost7034, tones)?),
+            Some(mode) => {
+                transliterate_impl(t, lang, mode, replace_with, strict_iso9, gost7034, tones)
+            }
+        })
+    }
+    match apply_replacements_bounded(text)? {
+        Cow::Borrowed(t) => run(
+            t,
+            lang,
+            on_unknown,
+            replace_with,
+            strict_iso9,
+            gost7034,
+            tones,
+        ),
+        // When the engine changes nothing it borrows the replaced text, which is already
+        // owned here: hand that back rather than copying it (#1046 review).
+        Cow::Owned(t) => {
+            match run(
+                &t,
+                lang,
+                on_unknown,
+                replace_with,
+                strict_iso9,
+                gost7034,
+                tones,
+            )? {
+                Cow::Owned(out) => Ok(Cow::Owned(out)),
+                Cow::Borrowed(_) => Ok(Cow::Owned(t)),
+            }
+        }
+    }
+}
+
+/// [`find_untranslatable_impl`] after the registered replacement pre-pass, as
+/// [`transliterate_after_replacements`] runs it; offsets are relative to the
+/// post-replacement text. `lang` must already be validated.
+pub(crate) fn find_untranslatable_after_replacements(
+    text: &str,
+    lang: Option<&str>,
+    strict_iso9: bool,
+    gost7034: bool,
+    tones: bool,
+) -> Result<Vec<(char, usize)>, crate::ErrorRepr> {
+    let text = apply_replacements_bounded(text)?;
+    Ok(find_untranslatable_impl(
+        &text,
+        lang,
+        strict_iso9,
+        gost7034,
+        tones,
+    ))
+}
+
 /// Validate a `lang` argument eagerly (#68).
 ///
 /// An unknown code (typo like `"RU"` or `"russian"`) would otherwise silently
@@ -1582,16 +1673,28 @@ pub(crate) fn strip_accents(text: &str) -> String {
 }
 
 /// Borrowing form of [`strip_accents`](crate::api::strip_accents) (#352): returns `Cow::Borrowed` when there
-/// is nothing to strip — no combining marks in NFD means NFD→strip→NFC is the
-/// identity — so the no-op case (incl. all ASCII) never allocates. The NFD scan
-/// is iterator-only (no allocation).
+/// is nothing to strip, so the no-op case (incl. all ASCII) never allocates. The scans
+/// are iterator-only (no allocation).
+///
+/// "Nothing to strip" takes two conditions, not one. With no combining mark in the NFD
+/// form the strip removes nothing, so the transform reduces to NFD then NFC, which is
+/// NFC. That is the identity only when the text is already NFC. A character with a
+/// singleton canonical decomposition is not: NFC maps `U+037E` GREEK QUESTION MARK to
+/// `;`, `U+2126` OHM SIGN to `U+03A9`, `U+F900` to `U+8C48`. Testing the marks alone
+/// returned `U+037E` unchanged when it stood alone and `;` when an unrelated accent
+/// elsewhere sent the string down the owning path, so the same character folded or did
+/// not depending on the rest of the string, and the bindings (which call this) disagreed
+/// with Python (which called the owning path) on 1,401 inputs (`formal/bindings`, S1).
 pub(crate) fn strip_accents_cow(text: &str) -> std::borrow::Cow<'_, str> {
     use std::borrow::Cow;
-    use unicode_normalization::UnicodeNormalization;
+    use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
     if text.is_ascii()
-        || !text
+        || (!text
             .nfd()
             .any(unicode_normalization::char::is_combining_mark)
+            // Only the borrowing path pays for this scan; `Maybe` takes the owning
+            // path, which is correct for every input.
+            && is_nfc_quick(text.chars()) == IsNormalized::Yes)
     {
         return Cow::Borrowed(text);
     }

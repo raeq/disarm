@@ -35,7 +35,10 @@ public final class Disarm {
         return Native.transliterate(req(text));
     }
 
-    /** Unicode → ASCII with an explicit scheme and/or language profile. */
+    /**
+     * Unicode → ASCII with an explicit scheme and/or language profile. An unknown
+     * language code throws {@link DisarmInvalidArgumentException}, as in every binding.
+     */
     public static String transliterate(String text, TransliterateOptions options) {
         req(text);
         Objects.requireNonNull(options, "options");
@@ -135,7 +138,11 @@ public final class Disarm {
         return demojize(text, false);
     }
 
-    /** Replace emoji with their plain names; {@code stripModifiers} drops skin-tone marks. */
+    /**
+     * Replace emoji with their plain names; {@code stripModifiers} drops skin-tone marks.
+     * An emoji CLDR cannot name (a regional indicator or a Plane 14 tag character
+     * standing alone) becomes {@code "[?]"}, as in every binding.
+     */
     public static String demojize(String text, boolean stripModifiers) {
         return Native.demojize(req(text), stripModifiers);
     }
@@ -216,12 +223,12 @@ public final class Disarm {
         return Native.stripPua(req(text));
     }
 
-    /** Collapse runs of combining marks to at most {@code maxMarks} per base ("de-zalgo"). */
+    /** Cap the marks of each combining class on one base at {@code maxMarks} ("de-zalgo"). */
     public static String stripZalgo(String text, int maxMarks) {
         return Native.stripZalgo(req(text), maxMarks);
     }
 
-    /** Whether {@code text} carries more than {@code threshold} combining marks on any base. */
+    /** Whether any base in {@code text} carries more than {@code threshold} marks of one combining class. */
     public static boolean isZalgo(String text, int threshold) {
         return Native.isZalgo(req(text), threshold);
     }
@@ -233,7 +240,10 @@ public final class Disarm {
         return slugify(text, SlugOptions.builder().build());
     }
 
-    /** Generate a URL-safe slug with explicit options. */
+    /**
+     * Generate a URL-safe slug with explicit options. An unknown language code throws
+     * {@link DisarmInvalidArgumentException}.
+     */
     public static String slugify(String text, SlugOptions options) {
         req(text);
         Objects.requireNonNull(options, "options");

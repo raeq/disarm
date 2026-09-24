@@ -283,13 +283,25 @@ pub fn _demojize(
         guard.as_ref().map(|p| p.clone_ref(py))
     };
 
+    // No provider in play: the core's own scanner, the one `api::demojize` and every
+    // other binding run, so `errors=` and their default are one code path rather than
+    // two loops kept in step (`formal/bindings`, D1). The loop below exists only for
+    // the Python callback.
+    let Some(provider) = effective_provider else {
+        return Ok(crate::emoji::demojize_named(
+            text,
+            strip_modifiers,
+            error_mode,
+            replace_with,
+        ));
+    };
     Ok(demojize_impl(
         py,
         text,
         strip_modifiers,
         error_mode,
         replace_with,
-        effective_provider.as_ref(),
+        Some(&provider),
     ))
 }
 

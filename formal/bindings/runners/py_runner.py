@@ -142,6 +142,8 @@ CASES: dict[str, Callable[[str], Any]] = {
     "slug": lambda t: d.slugify(t),
     "zs": lambda t: d.strip_zalgo(t, max_marks=3),
     "zi": lambda t: d.is_zalgo(t, threshold=3),
+    "zs_def": lambda t: d.strip_zalgo(t),
+    "zi_def": lambda t: d.is_zalgo(t),
     "isconf": lambda t: d.is_confusable(t),
 }
 CASES = {k: guard(v) for k, v in CASES.items()}

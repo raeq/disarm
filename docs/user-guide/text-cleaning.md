@@ -76,7 +76,7 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     assert strip_zalgo("café") == "café"
     assert strip_zalgo("Việt Nam") == "Việt Nam"
 
-    # Zalgo stacking is stripped to max_marks (default: 2)
+    # Zalgo stacking is stripped to max_marks (default: 3, is_zalgo's threshold)
     is_zalgo("café")  # False
     is_zalgo("ḧ̸̡̢̧̛̗̱́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕o")  # True
     ```
@@ -87,11 +87,12 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     use disarm::api;
 
     // Legitimate diacritics are preserved
-    assert_eq!(api::strip_zalgo("café", 2), "café");
-    assert_eq!(api::strip_zalgo("Việt Nam", 2), "Việt Nam");
+    assert_eq!(api::strip_zalgo("café", api::DEFAULT_ZALGO_MAX_MARKS), "café");
+    assert_eq!(api::strip_zalgo("Việt Nam", api::DEFAULT_ZALGO_MAX_MARKS), "Việt Nam");
 
-    // Zalgo stacking is stripped to max_marks (default: 2)
-    assert_eq!(api::is_zalgo("café", 3), false);
+    // Zalgo stacking is stripped to max_marks; the default every binding uses is
+    // DEFAULT_ZALGO_MAX_MARKS (3), equal to is_zalgo's DEFAULT_ZALGO_THRESHOLD
+    assert_eq!(api::is_zalgo("café", api::DEFAULT_ZALGO_THRESHOLD), false);
     ```
 
 === "Ruby"
@@ -200,7 +201,9 @@ Full Unicode case folding per CaseFolding.txt (Unicode 16.0) — a more thorough
 Use `fold_case()` when you need case-insensitive comparison that handles the full Unicode case folding rules. It covers Latin, Greek, Cyrillic, Armenian (including the և→եւ ligature), Georgian Mtavruli, Cherokee, Adlam, Deseret, Osage, Warang Citi, and fullwidth Latin. Pure-ASCII strings take a branchless fast path with no table lookup.
 
 !!! tip
-    `fold_case()` produces identical output to Python's `str.casefold()` — but runs in Rust.
+    `fold_case()` produces identical output to Python's `str.casefold()` on a Python whose
+    `unicodedata` is Unicode 16.0 (3.14) — but runs in Rust. The table is disarm's, so on an
+    older Python the two differ on the letters added since that Python's Unicode version.
 
 ## collapse_whitespace
 
@@ -277,14 +280,17 @@ assert collapse_whitespace("hello\u200bworld") == "hello\u200bworld"
 To also delete them, run the dedicated steps first. The `canonicalize` /
 `canonicalize_strict` presets already do this internally; to compose it
 yourself, build a [`TextPipeline`](../api/pipelines.md) with the `strip_control`,
-`strip_zero_width`, and `collapse_whitespace` steps (Rust, Node, and Ruby also
-expose the standalone `strip_control_chars` / `strip_zero_width_chars` primitives
-directly; Python exposes them only as pipeline steps).
+`strip_zero_width`, and `collapse_whitespace` steps, or call the standalone
+`strip_control_chars` / `strip_zero_width_chars` primitives, which every binding
+exposes.
 
-Zero-width characters handled by the `strip_zero_width` step:
+The 22 zero-width characters handled by the `strip_zero_width` step:
 
 - U+200B Zero Width Space (ZWSP)
 - U+200C Zero Width Non-Joiner (ZWNJ)
 - U+200D Zero Width Joiner (ZWJ)
 - U+FEFF Byte Order Mark / Zero Width No-Break Space
-- U+2060 Word Joiner
+- U+2060 Word Joiner, and U+2061–U+2064, the invisible math operators
+- U+180E Mongolian Vowel Separator
+- U+1BCA0–U+1BCA3, the Duployan shorthand format controls (#813)
+- U+1D173–U+1D17A, the musical symbol format controls (#813)

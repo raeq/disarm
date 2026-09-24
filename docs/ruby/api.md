@@ -30,7 +30,9 @@ Romanize Unicode text to ASCII. `scheme:` selects the standard — `:default`
 (general-purpose), `:strict_iso9` (ISO 9:1995-style ASCII), or `:gost7034`
 (GOST R 7.0.34). `lang:` applies a language profile on top of the scheme (sparse
 overrides — e.g. `"de"` maps `ü` → `ue`, `"uk"` sharpens Ukrainian); `nil` means
-no profile. Both accept a String or Symbol.
+no profile. Both accept a String or Symbol. An unknown `lang:` raises
+`Disarm::InvalidArgument`, as it does in every binding, rather than falling back to
+the default tables.
 
 This is **phonetic romanization for legibility, not a security control** — reach
 for [`normalize_confusables`](#confusable-folding) to
@@ -48,8 +50,8 @@ Disarm.transliterate("Москва", scheme: :gost7034)  # => "Moskva"
 
 ### `Disarm.normalize_confusables(text, target: :latin)`
 
-Fold cross-script confusables toward `target:` (`:latin` or `:cyrillic`) using
-the TR39 visual mapping. This is the homoglyph defence — it canonicalizes
+Fold cross-script confusables toward `target:` (`:latin`, `:cyrillic`, `:arabic`
+or `:hebrew`) using the TR39 visual mapping. This is the homoglyph defence — it canonicalizes
 look-alikes (Cyrillic `а` → Latin `a`) rather than romanizing.
 
 ```ruby
@@ -58,8 +60,8 @@ Disarm.normalize_confusables("раypal")             # => "paypal"
 
 ### `Disarm.confusable?(text, target: :latin)`
 
-Whether `text` contains any character confusable with `target:` (`:latin` or
-`:cyrillic`). A `true` is a positive finding; a `false` asserts only that none of
+Whether `text` contains any character confusable with `target:` (`:latin`,
+`:cyrillic`, `:arabic` or `:hebrew`). A `true` is a positive finding; a `false` asserts only that none of
 the bundled confusables were found, not that the text is safe.
 
 ```ruby
@@ -74,7 +76,8 @@ Disarm.confusable?("paypal")                       # => false
 Generate a URL-safe slug. Mirrors the core's `SlugConfig` defaults; every option
 past `text` is keyword-only (`separator:`, `lowercase:`, `max_length:`,
 `word_boundary:`, `save_order:`, `stopwords:`, `allow_unicode:`, `lang:`,
-`entities:`, `decimal:`, `hexadecimal:`, `safe_chars:`).
+`entities:`, `decimal:`, `hexadecimal:`, `safe_chars:`). An unknown `lang:` raises
+`Disarm::InvalidArgument`.
 
 ```ruby
 Disarm.slugify("Héllo Wörld")                      # => "hello-world"
@@ -144,11 +147,14 @@ Disarm.find_key_collisions(%w[a.txt b.txt], key: "fold_case")   # => []
 ### `Disarm.demojize(text, strip_modifiers: false)`
 
 Replace emoji with their plain names. `strip_modifiers:` drops skin-tone /
-variation modifiers before naming.
+variation modifiers before naming. An emoji CLDR cannot name — a regional indicator
+or a Plane 14 tag character standing alone — becomes `"[?]"`, the sentinel
+`transliterate` writes, in every binding.
 
 ```ruby
 Disarm.demojize("👍")                               # => "thumbs up"
 Disarm.demojize("Café ☕")                          # => "Café hot beverage"
+Disarm.demojize("x\u{1F1E6}!")                      # => "x[?]!"
 ```
 
 ## Deobfuscation & security presets
@@ -369,10 +375,13 @@ Disarm.strip_noncharacters("a\u{FFFE}b")            # => "ab"
 Disarm.strip_pua("a\u{E000}b")                      # => "ab"
 ```
 
-### `Disarm.strip_zalgo(text, max_marks: 2)` · `Disarm.zalgo?(text, threshold: 3)`
+### `Disarm.strip_zalgo(text, max_marks: 3)` · `Disarm.zalgo?(text, threshold: 3)`
 
-`zalgo?` flags "zalgo" — combining marks stacked past `threshold:` on a base
-character; `strip_zalgo` caps each base character at `max_marks:` combining marks.
+`zalgo?` flags "zalgo" — more than `threshold:` marks of one combining class
+stacked on a base character; `strip_zalgo` caps each class on each base character
+at `max_marks:` marks. Both defaults are the core's, `Disarm::DEFAULT_ZALGO_MAX_MARKS`
+and `Disarm::DEFAULT_ZALGO_THRESHOLD`, and equal on purpose (#788): `strip_zalgo` never
+removes a mark from text `zalgo?` declines to flag.
 
 ```ruby
 Disarm.zalgo?("Z\u0301\u0301\u0301\u0301")                       # => true
@@ -633,9 +642,10 @@ Disarm.inspect_anomalies("paypаl", ["paypal"])[:kinds] # => ["mixed_script"]
 
 Everything disarm raises descends from `Disarm::Error < StandardError`, so a
 single `rescue Disarm::Error` catches the whole surface. Bad input — an unknown
-scheme/target token, a non-String argument, a negative `max_length` — raises the
-more specific `Disarm::InvalidArgument` (itself a `Disarm::Error`), with the
-original native backtrace preserved.
+scheme/target token or `lang:`, a non-String argument, a negative `max_length`, a
+String in an encoding Ruby cannot convert to UTF-8 — raises the more specific
+`Disarm::InvalidArgument` (itself a `Disarm::Error`), with the original native
+backtrace preserved.
 
 | Class | Raised for |
 | --- | --- |
@@ -648,6 +658,27 @@ begin
 rescue Disarm::InvalidArgument => e   # also rescuable as Disarm::Error
   warn e.message
 end
+```
+
+## String encodings
+
+A text argument is read by the encoding the `String` declares, so the same text gives
+the same answer whatever encoding it arrives in:
+
+| `String#encoding` | Read as |
+| --- | --- |
+| `UTF-8` | its bytes, under the malformed-input contract below |
+| `US-ASCII` | its bytes; a byte above `0x7F` is not US-ASCII and becomes one `U+FFFD` |
+| `ASCII-8BIT` (`BINARY`) | bytes of no declared encoding, read as UTF-8 under the contract below — what `File.binread` and socket reads usually hold, and how the C ABI reads its bytes |
+| anything else | transcoded to UTF-8 with `String#encode`; each invalid or unmappable sequence becomes one `U+FFFD` |
+
+An encoding Ruby cannot convert from at all (a dummy encoding such as `UTF-7`) raises
+`Disarm::InvalidArgument`. Before this, every `String` was read as UTF-8 whatever it
+declared, so an ISO-8859-1 `"caf\xE9"` transliterated to `"caf[?]"`.
+
+```ruby
+Disarm.transliterate("caf\xE9".b.force_encoding("ISO-8859-1"))  # => "cafe"
+Disarm.fold_case("CAF\u00C9".encode("UTF-16LE"))               # => "caf\u00e9"
 ```
 
 ## Malformed input (invalid UTF-8 / lone surrogates)

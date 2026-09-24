@@ -12,6 +12,16 @@ the opposite of what you intend.
 
 ## The one that fails silently: `is_safe_hostname` → `is_suspicious_hostname`
 
+<!--- invisible-code-block: python
+# Setup for the example in the admonition below: a spoofed host (two Cyrillic o's)
+# and an `allow` that records every host a branch lets through.
+from disarm import is_suspicious_hostname
+
+host = "g\u043e\u043egle.com"
+allowed = []
+allow = allowed.append
+-->
+
 !!! danger "The boolean was inverted — invert your branch, not just the name"
     In **0.9.1**, `is_safe_hostname` became `is_suspicious_hostname` with **no alias**, and
     the return value's meaning was **flipped** (the result field `safe` → `suspicious`, and
@@ -34,6 +44,11 @@ the opposite of what you intend.
     For a spoof-detection library, this is exactly the failure an upgrade guide exists to
     prevent. See [`is_suspicious_hostname`](api/predicates.md#is_suspicious_hostname) for the
     current API.
+
+<!--- invisible-code-block: python
+# The WRONG branch let the spoof through; the RIGHT branch did not.
+assert allowed == [host]
+-->
 
 ## All public renames since 0.9
 

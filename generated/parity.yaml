@@ -137,6 +137,15 @@ operations:
       java: demojize
       kotlin: demojize
       cabi: demojize
+  - id: demojize_with
+    names:
+      rust: demojize_with
+      python: { provided_via: "demojize(errors=…, replace_with=…)" }
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: detect_encoding
     names:
       rust: detect_encoding
@@ -875,6 +884,15 @@ operations:
       java: transliterate
       kotlin: transliterate
       cabi: transliterate
+  - id: try_slugify
+    names:
+      rust: try_slugify
+      python: { provided_via: "slugify" }
+      ruby: { provided_via: "slugify" }
+      node: { provided_via: "slugify" }
+      java: { provided_via: "slugify" }
+      kotlin: { provided_via: "slugify" }
+      cabi: null
   - id: unicode_version
     names:
       rust: unicode_version
@@ -893,6 +911,15 @@ operations:
       java: unmappedConfusables
       kotlin: unmappedConfusables
       cabi: unmapped_confusables
+  - id: validate_lang
+    names:
+      rust: validate_lang
+      python: null
+      ruby: null
+      node: null
+      java: null
+      kotlin: null
+      cabi: null
   - id: ascii_fold
     alias_of: transliterate
     names:

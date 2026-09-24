@@ -50,8 +50,8 @@ ordinary vocabulary: `boiling`/`bolling`, `doit`/`dolt`, `broil`/`broll`,
 Every existing key builder is in the expensive position. `catalog_key` folds case at step
 3 and only then enters the romanization core, with `Step::Confusables("latin")` sitting
 inside it between transliteration and accent stripping. The order is load-bearing rather
-than incidental: `src/presets.rs:1005-1009` records that folding before transliteration is
-what makes the preset idempotent (#419), and `:1011-1024` records why the three inner
+than incidental: `src/presets/keys.rs:77-81` records that folding before transliteration is
+what makes the preset idempotent (#419), and `:83-96` records why the three inner
 steps run in the order they do. Reordering to make room for this class would reintroduce
 that defect.
 

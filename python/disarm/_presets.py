@@ -1115,7 +1115,7 @@ def strip_zalgo(text: str, *, max_marks: int = _DEFAULT_ZALGO_MAX_MARKS) -> str:
 # are disjoint, so `get_pipeline("canonicalize")` raises and `PRESETS["rag_ingest"]`
 # is a KeyError. Profiles live behind `get_pipeline()` / `list_profiles()` (#600).
 #
-# This dict is a MIRROR of the step lists in `src/presets.rs`, one tuple per Rust
+# This dict is a MIRROR of the step lists in `src/presets/`, one tuple per Rust
 # `Step`, in order. Nothing executes it. It drifted for a long time — it missed
 # `resolve_deletions` (#937), `strip_invisibles` in the three key builders (#805),
 # `drop_repeated_marks` (#835), the cap's move after the fold in `canonicalize_strict`
@@ -1331,7 +1331,7 @@ other:
 * ``PRESETS`` (this dict) — *preset* pipelines: fixed, ordered sequences of
   cleaning/normalization steps exposed as the ``canonicalize``,
   ``ml_normalize``, ``canonicalize_strict`` … helpers. Defined in the Rust core
-  (``src/presets.rs``); this dict is a **mirror** of those step lists for
+  (``src/presets/``); this dict is a **mirror** of those step lists for
   introspection, and nothing executes it. A test reads the Rust lists and fails
   when the two differ.
 * Policy *profiles* (see `list_profiles` / `get_pipeline`) —

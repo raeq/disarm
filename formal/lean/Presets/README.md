@@ -21,8 +21,8 @@ refuted with a minimal counterexample that is reproduced on the library.
 > `formal/lean/Confusables`). Finding 5 derives the test from the Rust step lists rather
 > than exposing them through the binding. Finding 6 bounds growth, checked after every
 > step. The regression tests are `tests/test_presets_formal_findings.py`,
-> `tests/test_profiles_are_fixed_points.py` and the `presets_formal_findings` module in
-> `src/presets.rs`.
+> `tests/test_profiles_are_fixed_points.py` and the `presets_formal_findings` module,
+> `src/presets/presets_formal_findings.rs`.
 
 Written against `main` at `595fbda` (0.16.0 + unreleased, `KEY_SCHEMA_VERSION` 10). Line
 numbers (`presets.rs` L2103) refer to that commit. Core Lean 4.34.0 only, no Mathlib.

@@ -16,6 +16,7 @@ from disarm import (
     find_confusables,
     find_unmapped_confusables,
     find_untranslatable,
+    sanitize_filename,
     slugify,
     transliterate,
 )
@@ -86,3 +87,20 @@ def test_a_partial_compatibility_recovery_is_reported() -> None:
     with pytest.raises(DisarmError, match=r"U\+1F240"):
         transliterate("\U0001f240", errors="strict")
     assert find_untranslatable("\ufb01\u337f") == []
+
+
+# -- 4. sanitize_filename: a fixed point, however many passes it takes -----------------
+
+
+@pytest.mark.parametrize("n", [1, 8, 9, 64])
+@pytest.mark.parametrize("unit", [".*", ". ", ".?.", "*."])
+@pytest.mark.parametrize("preserve_extension", [False, True])
+def test_a_run_of_empty_extensions_is_a_fixed_point(
+    n: int, unit: str, preserve_extension: bool
+) -> None:
+    once = sanitize_filename("a" + unit * n, preserve_extension=preserve_extension)
+    assert sanitize_filename(once, preserve_extension=preserve_extension) == once
+
+
+def test_nine_empty_extensions() -> None:
+    assert sanitize_filename("a" + ".*" * 9, preserve_extension=False) == "a"

@@ -31,3 +31,11 @@
   and a character whose recovery left anything unmapped is reported, and raises under
   `errors="strict"`. A compatibility character recovered whole (`\ufb01`, `\u337f`) is
   still not reported.
+- **`sanitize_filename` returns a fixed point however many layers of empty extensions the
+  input carries (fuzz finding 4 of #1040).** Each pass stripped trailing separators and
+  then trailing dots once each, so a stem ending in both by turns lost one layer per
+  pass, and the pass loop stops at eight (`MAX_PASSES`, #1026):
+  `sanitize_filename("a" + ".*" * 9, preserve_extension=False)` returned `a._`, which
+  sanitizes to `a`. A pass now repeats its strips until none removes anything, so that
+  input gives `a` in one call, and a debug build asserts that the pass bound is never
+  reached. Names a single round already settled are unchanged.

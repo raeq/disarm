@@ -7,8 +7,8 @@
 //! `docs/architecture/testing-guarantees.md` under *Fuzzing* for the list.
 
 use disarm::api::{
-    find_confusables, find_unmapped_confusables, normalize_confusables, slugify, NormalizationForm,
-    OnUnknown, SlugConfig, TargetScript, Transliterate,
+    find_confusables, find_unmapped_confusables, normalize_confusables, sanitize_filename, slugify,
+    NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript, Transliterate,
 };
 
 fn nfc(s: &str) -> String {
@@ -201,5 +201,36 @@ fn nothing_reported_means_the_policies_agree() {
             .run(&s);
         assert_eq!(ignore, preserve, "U+{cp:04X}");
         assert_eq!(ignore, replace, "U+{cp:04X}");
+    }
+}
+
+// -- 4. sanitize_filename: a fixed point, however many passes it takes ---------------
+//
+// Each pass stripped trailing separators and then trailing dots, once each, so a stem
+// ending in separators and dots by turns lost one layer per pass, and the pass loop
+// stops at eight: `"a" + ".*" * 9` gave `a._`, which sanitizes to `a`.
+
+#[test]
+fn a_run_of_empty_extensions_settles_in_one_call() {
+    let sf = |s: &str, sep: &str, max: usize, platform: Platform, keep_ext: bool| {
+        sanitize_filename(s, sep, max, platform, None, keep_ext).unwrap()
+    };
+    let nine = format!("a{}", ".*".repeat(9));
+    assert_eq!(sf(&nine, "_", 255, Platform::Universal, false), "a");
+    for n in [1, 7, 8, 9, 10, 64, 300] {
+        for unit in [".*", ". ", ".?.", "*.", ". *", ".\u{2026}*"] {
+            let s = format!("a{}b{}", unit.repeat(n), unit.repeat(n));
+            for sep in ["_", "", "-", "--", "._"] {
+                for platform in [Platform::Universal, Platform::Windows, Platform::Posix] {
+                    for max in [0, 5, 255] {
+                        for keep_ext in [false, true] {
+                            let once = sf(&s, sep, max, platform, keep_ext);
+                            let twice = sf(&once, sep, max, platform, keep_ext);
+                            assert_eq!(twice, once, "{s:?} sep={sep:?} max={max} {keep_ext}");
+                        }
+                    }
+                }
+            }
+        }
     }
 }

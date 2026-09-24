@@ -1,0 +1,100 @@
+# cargo-fuzz targets for the disarm core. See docs/contributing/testing.md, "Fuzzing".
+#
+# A crate of its own, outside the root package: the root `Cargo.toml` has no
+# `[workspace]` and an `include` list, so nothing here is built by `cargo test` at
+# the root or shipped by `cargo package`. The empty `[workspace]` below stops cargo
+# from walking up and treating the root manifest as this crate's workspace.
+#
+# Needs a nightly toolchain (libFuzzer's sanitizer coverage flags):
+#   cargo +nightly-2026-09-01 fuzz run <target> fuzz/seeds/<target>
+[package]
+name = "disarm-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+arbitrary = { version = "1.4.2", features = ["derive"] }
+disarm = { path = ".." }
+
+[workspace]
+members = ["."]
+
+# Line tables only: enough for a symbolized backtrace on a crash, without the
+# size of full debug info in every target binary.
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "decode_bytes"
+path = "fuzz_targets/decode_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "presets"
+path = "fuzz_targets/presets.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "transliterate"
+path = "fuzz_targets/transliterate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "confusables"
+path = "fuzz_targets/confusables.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "anomalies"
+path = "fuzz_targets/anomalies.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filename"
+path = "fuzz_targets/filename.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "slugify"
+path = "fuzz_targets/slugify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hostname"
+path = "fuzz_targets/hostname.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "emoji"
+path = "fuzz_targets/emoji.rs"
+test = false
+doc = false
+bench = false

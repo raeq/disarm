@@ -1,0 +1,85 @@
+name: Coverage
+
+# Line, branch and function coverage of the Rust core under the Tier-1 Rust suite
+# (`cargo test --no-default-features`), measured with cargo-llvm-cov. See
+# docs/contributing/testing.md, "Coverage".
+#
+# REPORT ONLY. The numbers go to the job summary, lowest-covered module first, and the
+# lcov file is uploaded as an artifact; nothing compares them against a threshold yet. The
+# baseline is recorded in docs/architecture/testing-guarantees.md, and a gate, if one
+# comes, should be set from a few weeks of these reports rather than guessed.
+#
+# Python coverage is not measured here: the `test` job in ci.yml already runs the suite
+# under pytest-cov, uploads coverage.xml, and writes its total to that job's summary.
+#
+# Not part of the "All checks passed" roll-up: it gates nothing. Branch coverage is a
+# nightly-only instrumentation (`-Z coverage-options=branch`), so this runs on the same
+# pinned nightly as fuzz.yml; line and function numbers match a stable build's.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "scripts/coverage_summary.py"
+      - ".github/workflows/coverage.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "scripts/coverage_summary.py"
+      - ".github/workflows/coverage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTUP_TOOLCHAIN: nightly-2026-09-01
+  CARGO_LLVM_COV_VERSION: "0.9.1"
+
+jobs:
+  rust:
+    name: Rust coverage (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned nightly with llvm-tools
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component llvm-tools-preview
+
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+
+      - name: Install cargo-llvm-cov (pinned)
+        run: cargo install cargo-llvm-cov --version "$CARGO_LLVM_COV_VERSION" --locked
+
+      - name: Measure (cargo test --no-default-features)
+        run: cargo llvm-cov --no-default-features --branch --lcov --output-path lcov.info
+
+      - name: Write the job summary
+        run: |
+          {
+            echo "## Rust coverage (report only, no threshold)"
+            echo
+            echo "\`cargo test --no-default-features\` on ${RUSTUP_TOOLCHAIN}, lowest-covered module first."
+            echo
+            python3 scripts/coverage_summary.py lcov.info
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload lcov
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: rust-coverage-lcov
+          path: lcov.info

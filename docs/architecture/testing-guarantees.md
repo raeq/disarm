@@ -112,7 +112,7 @@ Exhaustive testing is not formal verification. We are precise about the boundary
 | Linguistic accuracy | Transliteration correctness is empirical, not provable by testing alone | Extensive corpus from native speakers; 83 language reference tests |
 | Unicode version drift | New Unicode versions add codepoints | CI tracks Unicode version; unknown chars handled by ErrorMode |
 | Memory safety / UB | Requires Miri (nightly-only) | `unsafe_code = "forbid"` in Cargo.toml — zero unsafe anywhere |
-| Absence of panics | Requires Kani bounded model checking (nightly-only) | Property tests with 1,000+ random inputs; no panics in 2,900+ tests |
+| Absence of panics | Requires Kani bounded model checking (nightly-only) | Property tests with 1,000+ random inputs; no panics in 2,900+ tests; cargo-fuzz over arbitrary bytes and text (below) |
 
 **Future**: When nightly Rust is available in CI, we plan to add Kani bounded model checking — a form of formal verification that would prove absence of panics and overflow in `romanize_hangul`, `indic_char_role`, and decomposition arithmetic — and Miri UB detection.
 
@@ -154,6 +154,83 @@ Each of the 83 built-in language profiles has dedicated tests verifying:
 | NFKC normalization | Output always in NFKC form |
 | Whitespace collapse | No consecutive whitespace in output |
 | Idempotency | `canonicalize(canonicalize(x)) == canonicalize(x)` |
+
+---
+
+## Fuzzing, coverage and mutation testing
+
+Three measurements of the suites above, all report-only: none is part of the required
+*All checks passed* status. How to run each is in `docs/contributing/testing.md` under
+*Fuzzing, coverage and mutation testing*.
+
+| Tool | What it adds | CI |
+|------|--------------|----|
+| cargo-fuzz (`fuzz/`) | Arbitrary bytes through `decode_to_utf8`, and arbitrary text through ten surfaces, each checked against its documented properties | `fuzz.yml`: 60 s per target on pull requests touching the core, 15 min nightly |
+| cargo-llvm-cov | Which lines and branches of the core the Rust suite executes | `coverage.yml`: job summary and lcov artifact |
+| cargo-mutants | Whether the Rust suite notices when a line of a security-critical module changes | `mutants.yml`: weekly, six modules |
+
+### Baselines
+
+Measured on 2026-09-23 on four cores, at the commit that added the tools. Re-measure
+rather than trust these once the code moves.
+
+**Fuzzing.** Every target ran for at least 180 s from the committed seeds in the default
+build, which keeps debug assertions and overflow checks on, and seven of them also for
+180 s optimized (`nightly-2026-09-01`, cargo-fuzz 0.13.2, AddressSanitizer). No run found
+a panic, an overflow, a sanitizer report or a timeout: every failure was a property.
+Throughput follows the work per input: `presets` runs every builder at least twice and
+managed about 360 inputs a second, `decode_bytes` calls the decoder thirteen times per
+input at about 720, and `slugify` about 4,000.
+
+The runs did find six documented properties that do not hold. Each is reproduced
+through the public API and left for a follow-up; the targets assert the weaker property
+that does hold and say why:
+
+| Surface | Documented | Reproduction |
+|---|---|---|
+| `slugify` | numeric entities are decoded; `allow_unicode` gives one slug for both spellings (#477) | A numeric entity that fails to decode is skipped together with up to 14 bytes of the ASCII after it: `"Q&#A session"` gives `q`, `"Tom &#and Jerry"` gives `tom`, and `"issue &#12 fixed"` (a control character, refused) gives `issue`. The skip stops at the first non-ASCII byte, so `"&#a\u0301"` gives `""` while its NFC gives `\u00e1`. |
+| `find_unmapped_confusables`, `find_confusables`, `find_untranslatable` | "its byte offset in the input string"; `find_confusables`: "the character as it appeared in the input" | `find_unmapped_confusables("\u04aa\u0327", Latin)` reports U+0327 at offset 0, where U+04AA is; `find_untranslatable("x\ufe0f")` reports U+FE0F at offset 0, where `x` is; `find_confusables("\u0456\u0308", Latin)` reports U+0457, which the input does not contain. The locators walk composed clusters and report every character of one at the cluster's start. |
+| `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. |
+| `sanitize_filename` | "The result is a fixed point" | `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass peels one extension, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. |
+| `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. |
+| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 are scoped to `tones=False`; I7 is not. |
+
+**Coverage.** Rust, `cargo +nightly-2026-09-01 llvm-cov --no-default-features --branch`
+over the Tier-1 Rust suite (1,237 tests; doctests are not instrumented): **92.4% of lines
+(14,281 of 15,458), 85.1% of branches, 92.1% of functions** under `src/`. The lowest
+modules, generated tables aside, are the Layer-2 wrappers that the Python suite
+exercises through the binding and the Rust suite mostly does not:
+
+| Module | Lines | Branches |
+|---|---:|---:|
+| `src/api/presets.rs` | 56.0% | - |
+| `src/api/safety.rs` | 66.7% | - |
+| `src/lib.rs` | 71.0% | - |
+| `src/normalize.rs` | 77.8% | 66.7% |
+| `src/whitespace.rs` | 79.9% | 77.8% |
+| `src/api/mod.rs` | 84.1% | 45.0% |
+| `src/api/transliterate.rs` | 85.3% | - |
+| `src/api/text.rs` | 85.6% | - |
+
+Python, `pytest --cov=disarm` over the Tier-1 Python suite: **96% of the 1,289 statements** of the `disarm` package, lowest `_compat.py` (88%) and `_api.py` (95%). That measures the Python wrappers only; the Rust they call is the table above.
+
+**Mutation.** cargo-mutants 27.1.0 over two of the six modules, against the Rust suite:
+
+| Module | Mutants | Caught | Missed | Timeout | Unviable |
+|---|---:|---:|---:|---:|---:|
+| `src/invisibles.rs` | 69 | 63 | 5 | 1 | 0 |
+| `src/hostname.rs` | 52 | 30 | 20 | 0 | 2 |
+
+121 mutants took 44 minutes with two jobs. The timeout is `subdivision_flag_len`
+returning `Some(0)`, which never advances the scan: a hang the timeout catches, as it
+should. The misses are the useful part. Nothing in the Rust suite fails when
+`is_invisible_in_hostname` always returns `false`, when `strip_invisibles` does nothing,
+or when `has_compat_form` always returns `false`: the hostname screen's invisible and
+compatibility-form checks (#605, #709, #1019) are asserted only by the Python suite
+(`tests/test_hn_compat_and_mapping.py`), which cargo-mutants does not run. The same
+holds for `strip_variation_selectors`, which can return `"xyzzy"` unnoticed, for
+`is_default_ignorable_format`, and for the IPv6-literal parser. Every other binding calls
+this code through the Rust core, so each miss is a Rust test worth writing.
 
 ---
 

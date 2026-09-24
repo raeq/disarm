@@ -380,7 +380,7 @@ class TestInvisibleCharacters:
 class TestInvisibleSetDoesNotDriftFromItsDocs:
     """Drift gate: the set is spelled out in prose in three places (#605 review).
 
-    ``src/api/safety.rs``, ``python/disarm/_api.py`` and ``docs/api/predicates.md``
+    ``src/api/safety.rs``, ``python/disarm/_api_security.py`` and ``docs/api/predicates.md``
     each enumerate the code points ``has_invisible`` covers, and none of them was
     checked against the implementation. Review caught the Rust doc comment
     omitting ``U+180E`` after ``is_zero_width`` had already gained it — the

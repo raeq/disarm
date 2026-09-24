@@ -107,13 +107,13 @@ CASES = [
         id="crate-docs-cyrillic",
     ),
     pytest.param(
-        Path("python/disarm/_api.py"),
+        Path("python/disarm/_api_text.py"),
         r"default, ~?([\d,]+) mappings",
         "confusables_to_latin.tsv",
         id="python-docstring-latin",
     ),
     pytest.param(
-        Path("python/disarm/_api.py"),
+        Path("python/disarm/_api_text.py"),
         r"\(~?([\d,]+) mappings\)",
         "confusables_to_cyrillic.tsv",
         id="python-docstring-cyrillic",
@@ -122,13 +122,13 @@ CASES = [
     # because the ordinal patterns above already broke once when a fifth "(N mappings)"
     # was added between them.
     pytest.param(
-        Path("python/disarm/_api.py"),
+        Path("python/disarm/_api_text.py"),
         r"``\"arabic\"`` \(~?([\d,]+) mappings\)",
         "confusables_to_arabic.tsv",
         id="python-docstring-arabic",
     ),
     pytest.param(
-        Path("python/disarm/_api.py"),
+        Path("python/disarm/_api_text.py"),
         r"``\"hebrew\"`` \(~?([\d,]+) mappings\)",
         "confusables_to_hebrew.tsv",
         id="python-docstring-hebrew",
@@ -167,8 +167,8 @@ _TR39_STATEMENTS = [
     ("docs/rust/getting-started.md", _TR39_DIFFER),
     ("src/api/safety.rs", r"disagree on (\d+) rows"),
     ("src/confusables.rs", _TR39_THREE),
-    ("python/disarm/_api.py", r"Three of the\s+(\d+) rows do not land"),
-    ("python/disarm/_api.py", r"policies differ on (\d+) rows"),
+    ("python/disarm/_api_text.py", r"Three of the\s+(\d+) rows do not land"),
+    ("python/disarm/_api_text.py", r"policies differ on (\d+) rows"),
     ("python/disarm/_text.py", r"Three of\s+the (\d+) rows land"),
     ("bindings/node/index.ts", _TR39_DIFFER),
     ("bindings/java/disarm-java/src/main/java/dev/disarm/Disarm.java", _TR39_DIFFER),

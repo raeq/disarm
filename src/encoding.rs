@@ -205,7 +205,7 @@ pub(crate) fn decode_to_utf8_impl(
     strict: bool,
 ) -> Result<(String, bool), crate::ErrorRepr> {
     // Validate the [0.0, 1.0] contract here in the core, not only in the
-    // `_api.py` wrapper: the raw `_decode_to_utf8` PyO3 function is importable
+    // `_api_encoding.py` wrapper: the raw `_decode_to_utf8` PyO3 function is importable
     // and callable directly, bypassing that wrapper, so a wrapper-only check
     // would leave it unguarded. The core is the single place every caller
     // crosses. The check is unconditional — an out-of-range threshold is a
@@ -476,7 +476,7 @@ mod tests {
     fn test_decode_min_confidence_out_of_range_rejected() {
         // The range contract is enforced in decode_to_utf8_impl itself, so it
         // holds for the raw `_decode_to_utf8` PyO3 entrypoint too — not just the
-        // `_api.py` wrapper. Rejected below 0, above 1, for NaN, and even when an
+        // `_api_encoding.py` wrapper. Rejected below 0, above 1, for NaN, and even when an
         // explicit encoding means the value is never used as a detection
         // threshold — an out-of-range threshold is a caller mistake either way.
         for bad in [-0.5_f64, 1.5, f64::NAN, -0.000_001, 1.000_001] {

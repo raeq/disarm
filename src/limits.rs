@@ -8,7 +8,7 @@
 //! The one cross-language limit, [`crate::MAX_BATCH_SIZE`] (re-exported to
 //! Python as `_MAX_BATCH_SIZE`, #200), stays in `lib.rs` because it must be
 //! kept consistent with the binding. The lone Python-only limit,
-//! `_MAX_GRAPHEME_SPLIT_INPUT` (`python/disarm/_api.py`), has no Rust
+//! `_MAX_GRAPHEME_SPLIT_INPUT` (`python/disarm/_api_common.py`), has no Rust
 //! counterpart by design (it bounds a binding-side grapheme split) and is
 //! tracked there.
 

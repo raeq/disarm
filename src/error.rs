@@ -393,7 +393,7 @@ pub(crate) enum ErrorRepr {
 
     /// `decode_to_utf8` was given a `min_confidence` outside the valid [0.0, 1.0]
     /// range. Validated in the core (the single source of truth) rather than only
-    /// in the `_api.py` wrapper, so the raw `_decode_to_utf8` PyO3 entrypoint —
+    /// in the `_api_encoding.py` wrapper, so the raw `_decode_to_utf8` PyO3 entrypoint —
     /// which bypasses that wrapper — is held to the same contract. Maps to
     /// `InvalidArgumentError`.
     #[error("min_confidence must be between 0.0 and 1.0, got {min_confidence}")]
@@ -463,7 +463,7 @@ pub(crate) enum ErrorRepr {
 
     /// Negative `max_length` (slugify / sanitize_filename). The PyO3 entrypoints
     /// accept a signed integer and validate here so the raw functions are held to
-    /// the same contract as the `_api.py` wrapper (#231).
+    /// the same contract as the `_api.py` and `_api_text.py` wrappers (#231).
     #[error("max_length must be non-negative, got {got}")]
     NegativeMaxLength {
         /// The offending value.

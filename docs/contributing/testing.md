@@ -236,7 +236,7 @@ cargo test --no-default-features --release \
 # non-ASCII fast-path sweep, both unreachable from an integration test.
 cargo test --no-default-features --release --lib -- --ignored
 
-# Python formal invariant tests (12 tests)
+# Python formal tier (27 tests, 16 of them the invariants I1-I7)
 pytest -m formal
 
 # Docs site — --strict fails on broken internal links and missing-nav pages.

@@ -241,7 +241,8 @@ The sanitization pipeline executes in this order:
 2. Strip OS-illegal characters (per `platform`)
 3. Replace stripped characters with `separator` (never at the start of the name)
 4. Collapse consecutive separators
-5. Strip trailing separators, and leading and trailing dots and spaces
+5. Strip trailing separators, and leading and trailing dots and spaces, repeating until
+   none is left (`"a._._"` loses both layers in one pass)
 6. Handle reserved names (prefix with `_`)
 7. Truncate to `max_length` (respecting `preserve_extension`)
 8. Strip leading and trailing dots and spaces from the whole name, then check it for a
@@ -259,6 +260,7 @@ for text, kwargs in [
     ("ab_cd", {"max_length": 3, "preserve_extension": False}),
     ("a.bcd.txt", {"max_length": 6}),
     ("*.con", {}),
+    ("a" + ".*" * 9, {"preserve_extension": False}),
 ]:
     once = sanitize_filename(text, **kwargs)
     assert sanitize_filename(once, **kwargs) == once

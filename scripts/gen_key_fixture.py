@@ -103,6 +103,16 @@ def unescape(value: str) -> str:
                     continue
                 except ValueError:
                     pass
+            # `\UXXXXXXXX`, for a corpus row outside the BMP that should not be written
+            # raw (Kirat Rai, #1040). `escape` never writes one: the golden fixture keeps
+            # such characters as they are, as it always has.
+            if nxt == "U" and i + 9 < len(value):
+                try:
+                    out.append(chr(int(value[i + 2 : i + 10], 16)))
+                    i += 10
+                    continue
+                except ValueError:
+                    pass
             out.append({"\\": "\\", "t": "\t", "n": "\n", "r": "\r"}.get(nxt, "\\" + nxt))
             i += 2
         else:

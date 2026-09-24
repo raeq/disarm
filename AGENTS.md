@@ -96,8 +96,8 @@ Three tiers (full detail in **`docs/contributing/testing.md`**):
   `cargo test --no-default-features --release --test exhaustive_confusables -- --ignored`.
   Deliberately separate from the lib-level sweep, which tests Layer 1: testing the
   layer beneath the one the bindings call is how #586 went unnoticed for a year
-- **Python formal invariant tests**: 12 tests marked `@pytest.mark.formal`
-  (invariants I1–I7) — `pytest -m formal`
+- **Python formal invariant tests**: 27 tests marked `@pytest.mark.formal`, 16 of
+  them the invariants I1–I7 — `pytest -m formal`
 
 ### Report-only: fuzzing, coverage, mutation (detail in `docs/contributing/testing.md`)
 - **cargo-fuzz**: `bash fuzz/run.sh` (pinned nightly + cargo-fuzz); 10 targets assert

@@ -202,25 +202,13 @@ pub fn nfd(s: &str) -> String {
     disarm::api::normalize(s, disarm::api::NormalizationForm::Nfd)
 }
 
-/// Whether a locator's `(ch, offset)` points at `ch` in `s`, in the weak sense the
-/// locators meet today: `offset` is a char boundary of `s`, and `ch` occurs at or after
-/// it, as itself, in the NFC of the rest (a discontiguous composition: `n U+05BC U+0327`
-/// composes to `U+0146`), or through its canonical decomposition. After, not at: a mark
-/// is reported at the offset of its base, however long the run of marks between them.
-///
-/// The documented contract is stronger — "its byte offset in the input string", and for
-/// `find_confusables` "the character as it appeared in the input" — and does not hold:
-/// the confusable locators walk composed clusters and report every character of one at
-/// the cluster's start, and a composed character that never appeared in the input (even
-/// a composition exclusion such as U+FB49, which no normalization form produces), and
-/// `find_untranslatable` reports a selector at the offset of its base. Found by this
-/// fuzzer; see docs/contributing/testing.md, "Fuzzing". Tighten this to
-/// `s[offset..].starts_with(ch)` once that is fixed.
+/// Whether a locator's `(ch, offset)` points at `ch` in `s`: `offset` is a char boundary
+/// of `s` and `ch` is the character there. That is the documented contract, "its byte
+/// offset in the input string", and for `find_confusables` "the character as it appeared
+/// in the input". Until the fuzz findings of #1040 were fixed the locators reported every
+/// character of a composed cluster at the cluster's start, composed characters the input
+/// did not contain among them, and this checked a weaker property; see
+/// docs/architecture/testing-guarantees.md, "Fuzzing".
 pub fn located(s: &str, offset: usize, ch: char) -> bool {
-    let Some(rest) = s.get(offset..) else {
-        return false;
-    };
-    let decomposed = nfd(ch.encode_utf8(&mut [0; 4]));
-    !rest.is_empty()
-        && (rest.contains(ch) || nfc(rest).contains(ch) || nfd(rest).contains(&decomposed))
+    s.get(offset..).is_some_and(|rest| rest.starts_with(ch))
 }

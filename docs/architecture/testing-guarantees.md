@@ -96,7 +96,7 @@ Seven properties are stated as specifications, each with a documented verificati
 | I6 | No Input Size Cap | ∀s: f(s) accepts s whatever its length | Boundary test: 12 MiB accepted (#80 removed the cap) |
 | I7 | Output Length Bounded | ∀s: \|f(s)\| ≤ \|s\|\_bytes × 5 + \|s\|\_chars | Exhaustive per code point (worst case U+337F, ratio 5) + Hypothesis 1,000 |
 
-I1–I3 are stated for `tones=False` and no runtime registrations; the scope and the argument behind I2 are in [Exhaustive Testing](../formal-verification.md#stated-invariants-i1i7-the-lossy-normalizer-specification). Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
+I1–I3 and I7 are stated for `tones=False` and no runtime registrations; the scope and the argument behind I2 are in [Exhaustive Testing](../formal-verification.md#stated-invariants-i1i7-the-lossy-normalizer-specification). Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
 
 See [formal-verification.md](../formal-verification.md) for the full specification document.
 
@@ -129,7 +129,7 @@ The exhaustive testing layers sit on top of a conventional test suite that is it
 | Python (pytest) | 2,268 | All public API functions |
 | Rust (#[test]) | 635 | Core algorithms, tables, edge cases |
 | Exhaustive domain (Rust) | 16 | Full BMP, Hangul, CJK, Indic |
-| Stated invariants (Python) | 12 | I1–I7 specifications |
+| Stated invariants (Python) | 16 | I1–I7 specifications |
 | Property-based (Hypothesis) | 500+ examples/property | Full Unicode input space |
 | Property-based (proptest) | Rust-side invariants | Normalization, roundtrips |
 | **Total** | **2,900+** | |
@@ -182,18 +182,21 @@ Throughput follows the work per input: `presets` runs every builder at least twi
 managed about 360 inputs a second, `decode_bytes` calls the decoder thirteen times per
 input at about 720, and `slugify` about 4,000.
 
-The runs did find six documented properties that do not hold. Each is reproduced
-through the public API and left for a follow-up; the targets assert the weaker property
-that does hold and say why:
+The runs found documented properties that did not hold: six in the first runs, and two
+more on 2026-09-24. Each is reproduced through the public API in `tests/fuzz_findings.rs`
+(and `tests/test_fuzz_findings.py` where the binding reaches it), and each target asserts
+the full property once its finding is resolved:
 
-| Surface | Documented | Reproduction |
-|---|---|---|
-| `slugify` | numeric entities are decoded; `allow_unicode` gives one slug for both spellings (#477) | A numeric entity that fails to decode is skipped together with up to 14 bytes of the ASCII after it: `"Q&#A session"` gives `q`, `"Tom &#and Jerry"` gives `tom`, and `"issue &#12 fixed"` (a control character, refused) gives `issue`. The skip stops at the first non-ASCII byte, so `"&#a\u0301"` gives `""` while its NFC gives `\u00e1`. |
-| `find_unmapped_confusables`, `find_confusables`, `find_untranslatable` | "its byte offset in the input string"; `find_confusables`: "the character as it appeared in the input" | `find_unmapped_confusables("\u04aa\u0327", Latin)` reports U+0327 at offset 0, where U+04AA is; `find_untranslatable("x\ufe0f")` reports U+FE0F at offset 0, where `x` is; `find_confusables("\u0456\u0308", Latin)` reports U+0457, which the input does not contain. The locators walk composed clusters and report every character of one at the cluster's start. |
-| `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. |
-| `sanitize_filename` | "The result is a fixed point" | `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass peels one extension, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. |
-| `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. |
-| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 are scoped to `tones=False`; I7 is not. |
+| Surface | Documented | Reproduction | Resolution |
+|---|---|---|---|
+| `slugify` | numeric entities are decoded; `allow_unicode` gives one slug for both spellings (#477) | A numeric entity that fails to decode is skipped together with up to 14 bytes of the ASCII after it: `"Q&#A session"` gives `q`, `"Tom &#and Jerry"` gives `tom`, and `"issue &#12 fixed"` (a control character, refused) gives `issue`. The skip stops at the first non-ASCII byte, so `"&#a\u0301"` gives `""` while its NFC gives `\u00e1`. | Fixed: `&#` with no digit after it is text, as in HTML, and an entity that names no allowed character is dropped without the text after it. A hex letter carrying a combining mark is not a digit, so both normal forms decode alike. `"Q&#A session"` gives `q-a-session`. |
+| `find_unmapped_confusables`, `find_confusables`, `find_untranslatable` | "its byte offset in the input string"; `find_confusables`: "the character as it appeared in the input" | `find_unmapped_confusables("\u04aa\u0327", Latin)` reports U+0327 at offset 0, where U+04AA is; `find_untranslatable("x\ufe0f")` reports U+FE0F at offset 0, where `x` is; `find_confusables("\u0456\u0308", Latin)` reports U+0457, which the input does not contain. The locators walk composed clusters and report every character of one at the cluster's start. | Fixed: each character is located at the input character it came from, and the one reported is the input's there: a mark that composes with nothing at its own offset, a decomposed homoglyph as its base with the composed character's fold as `target`. |
+| `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. | Fixed: a character counts as recovered only when its whole NFKC form transliterates, so U+1F240 is reported, and `errors="strict"` raises on it. |
+| `sanitize_filename` | "The result is a fixed point" | With `preserve_extension=False`, `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass strips one trailing `._`, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. | Fixed: a pass repeats its trailing-separator and dot strips until neither removes anything, so the input settles in one call, and a debug build asserts the pass bound is not reached. |
+| `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. | Fixed: with an empty separator the joined slug is composed again, so the first call returns U+AC00. |
+| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 were scoped to `tones=False`; I7 was not. | Scoped: I7 is stated for `tones=False`, as I1-I3 are, and `docs/formal-verification.md` says why. It bounds the ASCII normalizer; toned pinyin is a display form whose vowels are two bytes. |
+| `catalog_key_with`, `search_key_with` | idempotent under every digit policy (the Presets model, #1024, #1029) | Found on 2026-09-24: `"\ufffd\ufffd\U00016d67\x16\U00016d67"` keys as the two Kirat Rai vowel signs, and the key of that is U+16D68. The control is stripped after the last step that composes. | Fixed: both builders end with an NFC pass, as `sort_key` and `ml_normalize` do. No fixture row moved; three were added. |
+| `slugify` with `allow_unicode` | none of the circled and squared Latin symbols in the slug (#1028) | Found on 2026-09-24: a slug kept U+24B6 under a separator of NULs, `/`, U+24B6 and `d`. The U+24B6 was the separator's, inserted as given between two words. | Not a library defect: the target checked the whole slug where the property is about the words. It now checks the words, and `SlugConfig::separator` says a separator is inserted as given. |
 
 **Coverage.** Rust, `cargo +nightly-2026-09-01 llvm-cov --no-default-features --branch`
 over the Tier-1 Rust suite (1,237 tests; doctests are not instrumented): **92.4% of lines
@@ -231,6 +234,25 @@ compatibility-form checks (#605, #709, #1019) are asserted only by the Python su
 holds for `strip_variation_selectors`, which can return `"xyzzy"` unnoticed, for
 `is_default_ignorable_format`, and for the IPv6-literal parser. Every other binding calls
 this code through the Rust core, so each miss is a Rust test worth writing.
+
+`tests/hostname_and_invisibles.rs` writes them, through the public API: one character of
+every invisible class and of both compatibility shapes through the hostname screen, the
+IPv6-literal boundaries (seven colons and eight, one zone ID and two, the characters a
+literal may hold), `strip_variation_selectors`, the default-ignorable formats, and a
+subdivision flag skipped whole. Re-measured on 2026-09-24 with the same tool and options:
+
+| Module | Mutants | Caught | Missed | Timeout | Unviable |
+|---|---:|---:|---:|---:|---:|
+| `src/invisibles.rs` | 69 | 68 | 0 | 1 | 0 |
+| `src/hostname.rs` | 52 | 48 | 2 | 0 | 2 |
+
+The timeout is the same hang, caught. The two misses are equivalent mutants, which no test
+can kill: each turns one `||` of `is_invisible_in_hostname` into `&&`, removing the
+zero-width and tag classes (`is_zero_width && is_tag`) or the tag and variation-selector
+classes (`is_tag && is_variation_selector`) from the union. Every character of those three classes
+is also `Default_Ignorable_Code_Point` and none is a bidi control, so the union's last
+clause, added for the Lean model's Detection finding 8, still flags each one and the
+function is unchanged on every scalar.
 
 ---
 

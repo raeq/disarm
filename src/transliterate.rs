@@ -423,7 +423,8 @@ pub(crate) fn transliterate_impl<'a>(
 /// `(char, byte_offset)` in order of appearance (#184). "No transliteration"
 /// means the character reaches the unmapped branch of the engine: no table
 /// entry (lang override / strict_iso9 / gost7034 / default), and no NFKC
-/// recovery. Because this drives the *same* engine as `transliterate_impl`, the
+/// recovery of its whole compatibility image (a partial one, U+1F240's, is reported:
+/// #1040). Because this drives the *same* engine as `transliterate_impl`, the
 /// reported set is exactly what the transform would replace/ignore/preserve, so
 /// it cannot drift. ASCII characters are always translatable (identity).
 pub(crate) fn find_untranslatable_impl(
@@ -539,8 +540,11 @@ fn transliterate_impl_inner<'a>(
             )
             .expect("compose pass never bails (detect_compose = false)")
             .into_owned();
+            // The character reported is the input's at that offset, not the composed one,
+            // which the input may not contain (#1040).
             for entry in &mut collector[start..] {
                 entry.1 = remap_composed_offset(entry.1, &origin);
+                entry.0 = crate::compose::input_char_at(text, entry.1, entry.0);
             }
             Cow::Owned(out)
         }
@@ -923,8 +927,8 @@ where
 /// the hot mapped path stays tight (#235 item 5).
 ///
 /// Returns `true` when the character is **genuinely untranslatable** (no table
-/// entry and no NFKC recovery — the single point that defines the untranslatable
-/// set, #184), `false` when NFKC recovery handled it. The caller uses this to
+/// entry, and no NFKC recovery of its whole image — the single point that defines the
+/// untranslatable set, #184, #1040), `false` when NFKC recovery handled it. The caller uses this to
 /// early-exit the strict single-pass on the first offender (#240).
 #[cold]
 #[inline(never)]
@@ -984,6 +988,15 @@ fn handle_unmapped(
         // recovery table maps, so an unmapped excluded composite is never rebuilt), but
         // skipping the boundary compose here means a future map entry can't reintroduce
         // the recovery loop either.
+        //
+        // The recovery can be partial: U+1F240 is NFKC `\u{3014}\u{672C}\u{3015}`, whose
+        // ideograph romanizes and whose brackets do not, so `run` replaces the brackets.
+        // Those are replacements `run` makes on account of this character, so when a
+        // collector is listening the recovery pass collects too, and a character whose
+        // recovery left anything unmapped is reported, as the input's character at its
+        // own offset (#1040). Before, it was counted as recovered, and
+        // `find_untranslatable` reported nothing for input that `run` did not translate.
+        let mut unrecovered: Vec<(char, usize)> = Vec::new();
         let sub = transliterate_dispatch(
             decomposed,
             lang,
@@ -992,7 +1005,7 @@ fn handle_unmapped(
             strict_iso9,
             gost7034,
             tones,
-            None,
+            untranslatable.is_some().then_some(&mut unrecovered),
             false,
             false,
         )
@@ -1001,7 +1014,13 @@ fn handle_unmapped(
             result.push_str(&sub);
             *last_appended = sub.chars().next_back();
             *prev_class = ScriptClass::Latin;
-            return false; // NFKC-recovered → translatable
+            if unrecovered.is_empty() {
+                return false; // NFKC-recovered → translatable
+            }
+            if let Some(v) = untranslatable.as_mut() {
+                v.push((ch, byte_offset));
+            }
+            return true; // recovered in part: still untranslatable
         }
     }
 

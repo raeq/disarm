@@ -247,8 +247,13 @@ struct PassConfig<'a> {
 /// Upper bound on sanitizing passes, the confirming one included; see
 /// [`sanitize_filename`]. Every input of the Lean model's 8.5-million-case grid settles
 /// within four (`fixed_point_within_the_pass_bound`); most need two, the second only
-/// confirming. The margin is deliberate: hitting the bound costs idempotence, never
-/// safety.
+/// confirming. The margin is deliberate: hitting the bound would cost idempotence, never
+/// safety, and a debug build asserts that it is not hit.
+///
+/// It was hit, cheaply, until #1040's fuzzing found it: the trailing-separator and
+/// trailing-dot strips ran once each per pass, so `"a" + ".*" * 9` peeled one `._` per
+/// pass and needed ten. A pass now strips both until neither is left, and that input
+/// settles in two.
 const MAX_PASSES: usize = 8;
 
 /// Sanitize a string into a safe filename.
@@ -287,7 +292,8 @@ const MAX_PASSES: usize = 8;
 /// emits ASCII, and [`is_separator_char`] admits only ASCII), and on ASCII input NFC,
 /// transliteration and the `%` rule are all the identity, so they are skipped and only
 /// the string surgery runs again. Every pass, the last one included, ends with the
-/// reserved-name check, so stopping at the bound can cost idempotence but never safety.
+/// reserved-name check, so even stopping at the bound could cost idempotence but never
+/// safety; a debug build asserts that it is not reached (see [`MAX_PASSES`]).
 pub(crate) fn sanitize_filename(
     text: &str,
     separator: &str,
@@ -340,10 +346,16 @@ pub(crate) fn sanitize_filename(
         debug_assert!(name.is_ascii(), "a pass emitted non-ASCII: {name:?}");
         let next = sanitize_pass(&name, &config);
         if next == name {
-            break;
+            return Ok(name);
         }
         name = next;
     }
+    // Reached only if the bound is: a debug build, which is what the fuzz target and the
+    // test suite run, says so rather than returning a name that is not a fixed point.
+    debug_assert!(
+        sanitize_pass(&name, &config) == name,
+        "sanitize_filename did not settle in {MAX_PASSES} passes: {text:?} gave {name:?}"
+    );
     Ok(name)
 }
 
@@ -417,38 +429,33 @@ fn sanitize_pass(text: &str, config: &PassConfig<'_>) -> String {
     // preserved, as the whole name — so the output was not a fixed point. Keeping one
     // separator keeps it one. Only a stem the strip would have emptied is affected
     // (`"_.x"` now stays `"_.x"`, where it used to become `"x"`).
-    if !separator.is_empty() {
-        let mut keep = result.len();
-        while result[..keep].ends_with(separator) {
-            keep -= separator.len();
+    //
+    // Then the leading and the trailing dots and spaces, and the three strips repeat until
+    // none of them removes anything (#1040). They used to run once each, so a stem ending
+    // in separators and dots by turns lost one layer per call: `"a.*.*.*"` is `"a._._._"`
+    // after the loop above, one pass left `"a._"`, the next `"a"`, and `"a" + ".*" * 9`
+    // needed more passes than `MAX_PASSES` allows, so its output `"a._"` was not a fixed
+    // point. The order within a round is the order the single round had, so a stem one
+    // round already settled comes out as it did.
+    loop {
+        let before = result.len();
+        if !separator.is_empty() {
+            let mut keep = result.len();
+            while result[..keep].ends_with(separator) {
+                keep -= separator.len();
+            }
+            if keep == 0 && !result.is_empty() {
+                keep = separator.len();
+            }
+            result.truncate(keep);
         }
-        if keep == 0 && !result.is_empty() {
-            keep = separator.len();
-        }
+        // Leading dots and spaces with a single drain (avoids O(k^2) repeated shifts).
+        let trim_start = result.len() - result.trim_start_matches(['.', ' ']).len();
+        result.drain(..trim_start);
+        let keep = result.trim_end_matches(['.', ' ']).len();
         result.truncate(keep);
-    }
-
-    // Strip leading dots and spaces with a single drain (avoids O(k²) repeated shifts).
-    {
-        let trim_start = result
-            .chars()
-            .take_while(|c| *c == '.' || *c == ' ')
-            .map(char::len_utf8)
-            .sum::<usize>();
-        if trim_start > 0 {
-            result.drain(..trim_start);
-        }
-    }
-    // Strip trailing dots and spaces with a single truncate.
-    {
-        let trim_end = result
-            .chars()
-            .rev()
-            .take_while(|c| *c == '.' || *c == ' ')
-            .map(char::len_utf8)
-            .sum::<usize>();
-        if trim_end > 0 {
-            result.truncate(result.len() - trim_end);
+        if result.len() == before {
+            break;
         }
     }
 

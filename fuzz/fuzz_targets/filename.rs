@@ -14,8 +14,8 @@
 //! - **P7** at most `max_length` bytes when `max_length > 0`.
 //! - **P8** on universal and Windows, never a device name as Windows reads one: the part
 //!   before the first dot, trailing spaces ignored, compared case-insensitively.
-//! - **P9** a fixed point: sanitizing the output again returns it unchanged. Weakened to
-//!   inputs with fewer than eight dots: see the comment at the check.
+//! - **P9** a fixed point: sanitizing the output again returns it unchanged, however
+//!   many passes the input needs (a debug build also asserts the pass bound is not hit).
 //! - The output is ASCII (the docstring's premise for the passes after the first).
 //! - Every `%` in the output is one the input contained (#721, #1026): checked when the
 //!   separator carries none.
@@ -153,20 +153,7 @@ fuzz_target!(|data: &[u8]| {
             "manufactured a % in {out:?} from {s:?}"
         );
     }
-    // P9, weakened. The docstring promises a fixed point outright; the code iterates its
-    // pass at most MAX_PASSES (8) times and says, in `src/filename.rs`, that stopping at
-    // the bound "can cost idempotence". It does, and cheaply: each pass peels one
-    // extension that cleans to ".", so `"a" + ".*" * 9` gives `a._`, which sanitizes to
-    // `a` (found by this target). Asserted only while the input carries fewer dots than
-    // passes, before and after transliteration (which can make dots: U+2026). Restore the
-    // unconditional check once the bound is gone or the docstring states it.
-    let dots = s
-        .matches('.')
-        .count()
-        .max(disarm::api::transliterate(&s).matches('.').count());
-    if dots >= 8 {
-        return;
-    }
+    // P9.
     let again = sanitize_filename(
         &out,
         sep,

@@ -12,10 +12,6 @@ use crate::transliterate;
 // Resource limits are centralized in `crate::limits` (#256).
 use crate::limits::{MAX_REGEX_DFA_BYTES, MAX_REGEX_PATTERN_BYTES};
 
-/// Maximum digit count for numeric HTML entity parsing.
-/// Prevents unbounded string accumulation on malformed input.
-const MAX_ENTITY_DIGITS: usize = 10;
-
 /// Validate and compile a caller-supplied regex pattern after enforcing a size cap.
 ///
 /// Returns `Err(crate::ErrorRepr)` if the pattern exceeds `MAX_REGEX_PATTERN_BYTES`,
@@ -307,6 +303,10 @@ fn slug_replace_with_automaton(text: &str, automaton: &SlugReplacementAutomaton)
 #[non_exhaustive]
 pub struct SlugConfig {
     /// String inserted between words (default `"-"`).
+    ///
+    /// Inserted as given. The words are held to the rules below and the separator is
+    /// not, so a slug carries whatever its separator does: under `allow_unicode`, a
+    /// separator holding U+24B6 puts one between the words, although no word keeps one.
     pub separator: String,
     /// Lowercase the result (default `true`).
     pub lowercase: bool,
@@ -366,6 +366,11 @@ pub struct SlugConfig {
     /// Decode HTML named entities (e.g. `&amp;`) before slugifying.
     pub entities: bool,
     /// Decode HTML decimal numeric entities (e.g. `&#38;`).
+    ///
+    /// A numeric entity is `&#`, an optional `x`, a run of digits and an optional `;`.
+    /// `&#` with no digit after it is not one and stays text; one naming a control
+    /// character, a surrogate or no character at all is dropped, without the text after
+    /// it (#1040).
     pub decimal: bool,
     /// Decode HTML hexadecimal numeric entities (e.g. `&#x26;`).
     pub hexadecimal: bool,
@@ -828,6 +833,19 @@ pub(crate) fn slugify_impl_with_stopset(
         slug.truncate(slug.len() - separator.len());
     }
 
+    // Step 6b: with no separator, compose again (#1040). Step 4b composed each word, but
+    // joining the words with nothing can put two characters that compose side by side:
+    // `"\u{1100} \u{1161}"` gave the two conjoining jamo, which render as U+AC00 and which
+    // the next call composed to it, and Kirat Rai U+16D67 does the same with itself. A
+    // mark never starts a word (the loop above drops one), so only these starters that
+    // compose with the starter before them are affected; composing here gives the slug
+    // that already reads as one, and a second call has nothing left to compose.
+    if config.allow_unicode && separator.is_empty() {
+        if let Cow::Owned(composed) = crate::compose::compose_str(&slug) {
+            slug = composed;
+        }
+    }
+
     // Step 7: Remove stopwords
     // Note: if *all* words match the stopword list the result will be an empty
     // string.  This is intentional — callers that need a non-empty fallback
@@ -1106,68 +1124,68 @@ fn strip_trailing_separator_prefix<'a>(s: &'a str, separator: &str) -> &'a str {
     s
 }
 
-/// Decode a numeric HTML entity (`&#NNN;` / `&#xHHH;`) starting at `pos`.
+/// Decode a numeric HTML entity (`&#NNN;` / `&#xHHH;`) starting at `pos`, where
+/// `text[pos..]` starts with `&#`.
 ///
-/// Returns `(decoded, consumed)`: `decoded` is the character on success (`None`
-/// for a malformed or control-character entity), and `consumed` is **always** the
-/// number of bytes the entity occupies, so the caller advances the same amount
-/// either way (C3 — folds the former separate `decode_numeric_entity_skip` into
-/// one place so the success and skip scans can no longer drift their bounds).
-/// `num_buf` is a caller-supplied buffer reused across calls to avoid per-entity
-/// allocation.
-fn decode_numeric_entity(bytes: &[u8], pos: usize, num_buf: &mut String) -> (Option<char>, usize) {
-    let len = bytes.len();
+/// `None` when there is no entity there: no digit follows `&#` (or `&#x`). The caller
+/// then keeps the `&` as text, as an HTML parser does, so the characters after it are
+/// read as ordinary text. Otherwise `Some((decoded, consumed))`, where `consumed` is
+/// exactly the entity: `&#`, the `x`, the whole run of digits and one `;` if present.
+/// `decoded` is `None` for a value that is not a character a slug may carry (zero, a
+/// control character, a surrogate, anything above U+10FFFF), and the entity is then
+/// dropped, but only the entity.
+///
+/// Until the fuzz findings of #1040 a failed decode also skipped up to 14 bytes of the
+/// ASCII after the `&#`, stopping at the first non-ASCII byte: `"Q&#A session"` gave `q`,
+/// `"issue &#12 fixed"` gave `issue`, and because the skip stopped at a composed letter
+/// but not at its decomposition, `"&#a\u{301}"` gave `""` while its NFC gave `\u{e1}`.
+///
+/// An ASCII letter followed by a combining mark is read as the accented letter it
+/// renders as, so it is neither the `x` nor a hex digit. That is what keeps the decode
+/// the same for both normal forms: NFC composes `a` + U+0301 to `\u{e1}`, which is not a
+/// hex digit, and NFD spells it `a` + U+0301, which would otherwise be one. Decimal
+/// digits compose with nothing, so they need no such rule. The value is accumulated as
+/// the digits are read, with no buffer and no cap on how many there are: leading zeros
+/// are allowed, and a run too large for a scalar is dropped whole.
+fn decode_numeric_entity(text: &str, pos: usize) -> Option<(Option<char>, usize)> {
+    let bytes = text.as_bytes();
+    // An ASCII letter at `i` that carries a combining mark is not an ASCII letter to
+    // the reader (see above).
+    let carries_mark = |i: usize| {
+        text[i + 1..]
+            .chars()
+            .next()
+            .is_some_and(unicode_normalization::char::is_combining_mark)
+    };
     let mut i = pos + 2; // skip "&#"
-    let is_hex = i < len && (bytes[i] == b'x' || bytes[i] == b'X');
+    let is_hex = matches!(bytes.get(i), Some(b'x' | b'X')) && !carries_mark(i);
     if is_hex {
         i += 1;
     }
-    num_buf.clear();
-    while i < len {
-        let b = bytes[i];
-        if b == b';' {
-            i += 1;
+    let radix: u32 = if is_hex { 16 } else { 10 };
+    let digits_start = i;
+    let mut value: Option<u32> = Some(0);
+    while let Some(&b) = bytes.get(i) {
+        let Some(digit) = (b as char).to_digit(radix) else {
             break;
-        }
-        if num_buf.len() >= MAX_ENTITY_DIGITS {
-            break;
-        }
-        let valid_digit = if is_hex {
-            (b as char).is_ascii_hexdigit()
-        } else {
-            b.is_ascii_digit()
         };
-        if valid_digit {
-            num_buf.push(b as char);
-            i += 1;
-        } else {
+        if b.is_ascii_alphabetic() && carries_mark(i) {
             break;
         }
+        value = value
+            .and_then(|v| v.checked_mul(radix))
+            .and_then(|v| v.checked_add(digit));
+        i += 1;
     }
-    let parsed = if is_hex {
-        u32::from_str_radix(num_buf, 16).ok()
-    } else {
-        num_buf.parse::<u32>().ok()
-    };
+    if i == digits_start {
+        return None;
+    }
+    if bytes.get(i) == Some(&b';') {
+        i += 1;
+    }
     // Exclude control characters — they are never valid slug content.
-    if let Some(ch) = parsed.and_then(char::from_u32).filter(|c| !c.is_control()) {
-        return (Some(ch), i - pos);
-    }
-
-    // Malformed or control-char entity: skip the whole bad entity rather than
-    // re-scanning its tail as literal text. Only scans ASCII bytes — stops at
-    // non-ASCII (high bit set) so we never land inside a multi-byte char.
-    let mut j = pos + 2;
-    if j < len && (bytes[j] == b'x' || bytes[j] == b'X') {
-        j += 1;
-    }
-    while j < len && bytes[j].is_ascii() && bytes[j] != b';' && (j - pos) < MAX_ENTITY_DIGITS + 4 {
-        j += 1;
-    }
-    if j < len && bytes[j] == b';' {
-        j += 1;
-    }
-    (None, j - pos)
+    let decoded = value.and_then(char::from_u32).filter(|c| !c.is_control());
+    Some((decoded, i - pos))
 }
 
 /// Decode HTML entities in a single pass: named entities (&amp; &lt; etc.)
@@ -1188,8 +1206,6 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str>
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut i = first;
-    // Reusable buffer for numeric entity digits (avoids per-entity allocation).
-    let mut num_buf = String::with_capacity(MAX_ENTITY_DIGITS);
 
     while i < len {
         if bytes[i] != b'&' {
@@ -1225,12 +1241,18 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str>
             let is_hex = i + 2 < len && (bytes[i + 2] == b'x' || bytes[i + 2] == b'X');
             let decode = if is_hex { hexadecimal } else { decimal };
             if decode {
-                // `consumed` is returned in both cases (C3); push only on success.
-                let (decoded, consumed) = decode_numeric_entity(bytes, i, &mut num_buf);
-                if let Some(ch) = decoded {
-                    result.push(ch);
+                if let Some((decoded, consumed)) = decode_numeric_entity(text, i) {
+                    // `consumed` covers the entity whether or not it decoded (C3);
+                    // push only on success.
+                    if let Some(ch) = decoded {
+                        result.push(ch);
+                    }
+                    i += consumed;
+                } else {
+                    // No digits: not an entity, so the `&` is text (#1040).
+                    result.push('&');
+                    i += 1;
                 }
-                i += consumed;
             } else {
                 // Flag disabled — preserve the raw '&' and let the loop advance.
                 result.push('&');
@@ -1500,19 +1522,19 @@ mod tests {
 
     #[test]
     fn test_decode_malformed_entity() {
-        // Malformed entities are silently dropped (not reconstructed).
-        // "&#xyz;" — 'x' triggers hex mode, then the skip function
-        // scans past all remaining chars up to and including ';'.
-        assert_eq!(decode_entities("&#xyz;", true, true), "");
+        // "&#xyz;" has no hex digit after the `x`, so it is not an entity and stays
+        // text, as it does in HTML (#1040). It used to be dropped whole.
+        assert_eq!(decode_entities("&#xyz;", true, true), "&#xyz;");
+        // A run of digits is the entity; what follows it is text.
+        assert_eq!(decode_entities("&#12 fixed", true, true), " fixed");
+        assert_eq!(decode_entities("Q&#A session", true, true), "Q&#A session");
     }
 
     #[test]
     fn test_decode_malformed_entity_semicolon_preserved() {
-        // Empty decimal entity &#; — no digits, malformed, dropped silently.
-        // The semicolon is consumed by the digit-collection loop and also dropped.
-        assert_eq!(decode_entities("&#;", true, true), "");
-        // Empty hex entity &#x; — no hex digits, malformed, dropped silently.
-        assert_eq!(decode_entities("&#x;", true, true), "");
+        // Empty decimal and hex entities have no digits: text, `;` included (#1040).
+        assert_eq!(decode_entities("&#;", true, true), "&#;");
+        assert_eq!(decode_entities("&#x;", true, true), "&#x;");
         // Invalid codepoint (too large for Unicode): malformed, dropped silently.
         assert_eq!(decode_entities("&#xFFFFFFFF;", true, true), "");
         // U+0000 is a control character and is filtered; entity dropped silently.
@@ -1522,13 +1544,13 @@ mod tests {
 
     #[test]
     fn test_decode_entity_digit_limit() {
-        // Extremely long digit sequence should be capped at MAX_ENTITY_DIGITS.
-        // The entity fails to parse (truncated number is out of Unicode range)
-        // and is silently dropped — the result should be empty.
-        let long = format!("&#{}1;", "9".repeat(100));
-        let result = decode_entities(&long, true, true);
-        // No reconstruction: the malformed entity is dropped entirely.
-        assert!(!result.contains("&#"));
+        // An extremely long run of digits is one entity, too large for a scalar, and is
+        // dropped whole: none of its digits leak into the text (#1040).
+        let long = format!("&#{}1;x", "9".repeat(100));
+        assert_eq!(decode_entities(&long, true, true), "x");
+        // Leading zeros are not a length problem: the value is what counts.
+        let zeros = format!("&#{}65;", "0".repeat(100));
+        assert_eq!(decode_entities(&zeros, true, true), "A");
     }
 
     #[test]

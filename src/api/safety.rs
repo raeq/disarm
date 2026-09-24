@@ -289,6 +289,11 @@ pub fn is_confusable(text: &str, target: TargetScript) -> bool {
 #[non_exhaustive]
 pub struct UnmappedConfusable {
     /// The unmapped character.
+    ///
+    /// The input's own character at [`offset`](Self::offset). A base followed by combining
+    /// marks is looked up as the character they compose to, so a decomposed spelling is
+    /// judged as the precomposed one is; when that is what is reported, `ch` is the base as
+    /// written, and the report covers the cluster that starts there (#1040).
     pub ch: char,
     /// Its byte offset in the input string.
     pub offset: usize,
@@ -363,10 +368,17 @@ pub fn find_unmapped_confusables(text: &str, target: TargetScript) -> Vec<Unmapp
 #[non_exhaustive]
 pub struct MappedConfusable {
     /// The confusable character as it appeared in the input.
+    ///
+    /// The input's own character at [`offset`](Self::offset). A base followed by combining
+    /// marks is looked up as the character they compose to, so a decomposed spelling is
+    /// judged as the precomposed one is; when that is what is reported, `ch` is the base as
+    /// written, and the report covers the cluster that starts there (#1040).
     pub ch: char,
     /// Its byte offset in the input string.
     pub offset: usize,
     /// What the fold replaces it with — usually one character, sometimes more (`ﬁ`).
+    /// For a decomposed homoglyph, what it replaces the composed character with: `ch`
+    /// is U+0456 for `\u{456}\u{308}`, and `target` is the fold of U+0457.
     pub target: &'static str,
 }
 

@@ -435,7 +435,10 @@ def find_untranslatable(
         tones: Consider toned-pinyin coverage for CJK characters.
 
     Returns:
-        List of ``(char, byte_offset)`` for each untranslatable character.
+        List of ``(char, byte_offset)`` for each untranslatable character. The
+        character is the one *text* holds at that offset: a base followed by
+        combining marks is judged as the character they compose to, and reported
+        as the base, as written (#1040).
 
     Examples:
         >>> find_untranslatable("cafe")
@@ -564,7 +567,8 @@ def slugify(
 
     Args:
         text: Input Unicode string.
-        separator: Character(s) between slug words.
+        separator: Character(s) between slug words, inserted as given: the words
+            are screened and the separator is not.
         lowercase: Convert to lowercase.
         max_length: Maximum slug length in **bytes** (0 = unlimited). The unit is
             right for the filesystem and URL limits it exists for; use
@@ -2636,7 +2640,9 @@ def find_confusables(
 
     Composition runs exactly as it does in `normalize_confusables`, and offsets are
     anchored in *text* rather than in the composed intermediate — the same contract the
-    sibling gives.
+    sibling gives. Each reported character is the one *text* holds at that offset: a
+    decomposed homoglyph is found as the character it composes to and reported as its
+    base, as written, with the fold of the composed character as ``target`` (#1040).
 
     **This asks what could imitate a `target_script` letter, not what is
     suspicious (#900).** It runs one character at a time with no reference to the
@@ -2784,7 +2790,8 @@ def find_unmapped_confusables(
     Composition runs exactly as it does in `normalize_confusables`, so a
     *decomposed* homoglyph whose precomposed form is mapped counts as covered rather
     than as a gap — otherwise the report would disagree with what the transform does.
-    Offsets are anchored in *text*, never in the composed intermediate.
+    Offsets are anchored in *text*, never in the composed intermediate, and each reported
+    character is the one *text* holds at its offset (#1040).
 
     Ordinary English will report the letter ``m``; see `unmapped_confusables` for
     why that is deliberate.

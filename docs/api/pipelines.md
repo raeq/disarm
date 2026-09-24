@@ -64,7 +64,7 @@ assert ml_normalize("José Martínez", fold_case=False) == "Jose Martinez"
 
 ### Pipeline steps
 
-`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → fixed point(transliterate → confusables → strip_accents) → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → fixed point(transliterate → confusables → strip_accents) → fold_case → strip_control → strip_zero_width → collapse_whitespace → NFC`
 
 ```python
 from disarm import catalog_key
@@ -101,7 +101,7 @@ assert strip_format("admin\u202euser") == "adminuser"
 
 ### Pipeline steps
 
-`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace`
+`resolve_deletions → policy_pre_fold → NFKC → strip_bidi → strip invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control → strip_zero_width → collapse_whitespace → NFC`
 
 Under `digit_policy="tr39"` or `"preserve"` the pre-fold is the whole confusable table, not only its digit rows, and the list runs until the key stops changing. See [`digit_policy` on the key builders](#digit_policy-on-the-key-builders).
 

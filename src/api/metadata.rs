@@ -311,6 +311,16 @@ pub fn unicode_version() -> &'static str {
 /// `\u{e4}\u{489}c`, not `\u{e4}\u{489}\u{308}c`); `canonicalize_strict` moves on one of
 /// them only, because it strips `U+0489` from a Latin base before either count runs.
 /// `search_key`, `catalog_key` and `strip_obfuscation` remove every mark and do not move.
+///
+/// And `search_key` and `catalog_key` end with an NFC pass, as `sort_key` and
+/// `ml_normalize` already did (fuzz finding 7 of #1040). A control between two characters
+/// that compose was stripped after the last step that composes, and Kirat Rai composes
+/// with no mark involved and romanizes to nothing, so U+16D67 + U+0016 + U+16D67 keyed as
+/// the two vowel signs and the key of that was U+16D68. It is U+16D68 now, under every
+/// digit policy. A key moves only where it was not a fixed point, so no stable value
+/// moves: no row of the fixture did. It had no such row; three were added, written with
+/// the `\U` escape `scripts/gen_key_fixture.py` now reads, and `search_key` and
+/// `catalog_key` are the columns that would have moved on them.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -346,7 +356,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "384c0742f9188dd2c1ddf13080326f1d4c55498f2a856a5c886a732c0e87536c";
+    "21cea025664b0bb6ca4c5a8bd2e24e8ed7997796e5368832127f24ffed5d75f8";
 
 /// The key-schema counter, as a function (#645).
 ///

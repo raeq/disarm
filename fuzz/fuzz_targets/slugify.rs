@@ -13,17 +13,20 @@
 //! - **S6** with no truncation and `save_order = false`, no word of the slug is a
 //!   stopword, compared case-insensitively (#1028).
 //! - `allow_unicode`: no leading or trailing ZWJ/ZWNJ (#711, #1028), none of the 130
-//!   circled and squared Latin symbols `Alphabetic` used to let through (#1028), and the
+//!   circled and squared Latin symbols `Alphabetic` used to let through in any word
+//!   (#1028; the separator is the caller's, inserted as given, and may carry one), and the
 //!   NFC and NFD spellings of the input give one slug (#477, and #1028's
-//!   compose-after-lowercase), for input without `&#` (see the check for why).
+//!   compose-after-lowercase), numeric entities included.
 //! - **Idempotence** without stopwords or truncation, on both paths. Not in general:
 //!   truncation can cut a word down to a stopword, as python-slugify's does, and the
-//!   Sanitizers model records that as intended. Not with an empty separator under
-//!   `allow_unicode` either, which does not hold (see the check).
+//!   Sanitizers model records that as intended. With an empty separator under
+//!   `allow_unicode` too, where the words are composed again after they are joined.
 //!
 //! The shape checks and idempotence assume a separator of ASCII punctuation. A separator
 //! is the caller's string, and one made of combining marks joins the word before it on
 //! the next pass, which is the caller's doing rather than a property the docs claim.
+//! Idempotence also assumes, while entities are decoded, a separator with no `&`: one
+//! ending in `&#` before a word of digits spells an entity the next pass decodes.
 #![no_main]
 
 use arbitrary::Arbitrary;
@@ -113,26 +116,25 @@ fuzz_target!(|data: &[u8]| {
             !out.starts_with(JOINERS) && !out.ends_with(JOINERS),
             "a joiner at the edge of {out:?}"
         );
+        // In the words, not the separators: the separator is inserted as given, and one
+        // that carries U+24B6 puts it in the slug by the caller's hand, not the input's.
+        let words: Vec<&str> = if sep.is_empty() {
+            vec![out.as_str()]
+        } else {
+            out.split(sep.as_str()).collect()
+        };
         assert!(
-            !out.chars().any(is_enclosed_latin),
-            "an enclosed Latin symbol kept in {out:?}"
+            !words.iter().any(|w| w.chars().any(is_enclosed_latin)),
+            "an enclosed Latin symbol kept in {out:?} (separator {sep:?})"
         );
         // The documented property is form invariance (#477), not NFC: the path composes
         // with `compose_str`, which also forms composition exclusions, so
         // `"\u{F51}\u{FB7}"` gives U+0F52, which is not NFC but is what `"\u{F52}"` gives.
-        //
-        // Weakened to input without `&#`. A numeric entity that fails to decode is
-        // skipped together with up to 14 bytes of the ASCII after it, stopping at the
-        // first non-ASCII byte, so a composed letter stops the skip and its NFD does not:
-        // `"&#a\u{301}"` slugifies to `""` and `"&#\u{e1}"` to `"\u{e1}"`. The same skip
-        // swallows ordinary text: `"Q&#A session"` gives `"q"` (found by this target).
-        if !s.contains("&#") {
-            assert_eq!(
-                slugify(&nfc(&s), &config),
-                slugify(&nfd(&s), &config),
-                "NFC and NFD spellings of {s:?} slugify differently"
-            );
-        }
+        assert_eq!(
+            slugify(&nfc(&s), &config),
+            slugify(&nfd(&s), &config),
+            "NFC and NFD spellings of {s:?} slugify differently"
+        );
     } else {
         // S1, S5.
         for c in out.chars() {
@@ -169,13 +171,9 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    // Idempotence without stopwords or truncation. Weakened: not with an empty separator
-    // under `allow_unicode`, where joining two words can put two characters that compose
-    // side by side after the composing step has run. `"\u{1100} \u{1161}"` gives the two
-    // conjoining jamo, and slugifying that gives U+AC00; Kirat Rai U+16D67 does the same
-    // (found by this target).
-    let joins_compose = o.allow_unicode && sep.is_empty();
-    if stopwords.is_empty() && max_length == 0 && plain_sep && !joins_compose {
+    // Idempotence without stopwords or truncation.
+    let spells_entity = !o.no_entities && sep.contains('&');
+    if stopwords.is_empty() && max_length == 0 && plain_sep && !spells_entity {
         assert_eq!(
             slugify(&out, &config),
             out,

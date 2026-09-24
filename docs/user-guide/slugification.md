@@ -200,6 +200,14 @@ U+0308 does.
 assert slugify("T\u0308", allow_unicode=True) == "\u1e97"
 ```
 
+With `separator=""` the words are joined with nothing, and the joined slug is composed
+again, so two characters that compose across the join come out as the one they render
+as, and slugifying the slug returns it unchanged:
+
+```python
+assert slugify("\u1100 \u1161", allow_unicode=True, separator="") == "\uac00"
+```
+
 ### lang
 
 Language profile for transliteration:
@@ -248,6 +256,16 @@ Decode HTML entities and numeric character references:
 
 ```python
 assert slugify("&amp; test &#38;") == "test"
+```
+
+A numeric reference is `&#`, an optional `x`, a run of digits and an optional `;`. With no
+digit after the `&#` it is not a reference, and the text stays as written. One that names
+a control character, a surrogate or no character at all is dropped, and only it: the
+text after it is kept.
+
+```python
+assert slugify("Q&#A session") == "q-a-session"
+assert slugify("issue &#12 fixed") == "issue-fixed"
 ```
 
 ### default

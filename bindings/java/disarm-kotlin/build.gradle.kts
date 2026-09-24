@@ -27,7 +27,7 @@ dependencies {
     api(project(":disarm-java"))
 
     testImplementation(kotlin("test"))
-    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

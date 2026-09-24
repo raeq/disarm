@@ -7,6 +7,16 @@
 # ── Rust ──────────────────────────────────────────────
 /target/
 Cargo.lock
+# cargo-fuzz (fuzz/): build output, the corpus a run grows, and failing inputs. The
+# committed seeds live in fuzz/seeds/, which a run reads and never writes.
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/
+# cargo-mutants output, and cargo-llvm-cov's lcov
+/mutants.out/
+/mutants.out.old/
+/lcov.info
 **/*.rs.bk
 *.rlib
 

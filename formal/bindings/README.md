@@ -9,8 +9,20 @@ protocol (`../tla/CABI/`); C programs that exercise the real C library under
 AddressSanitizer and valgrind; and one reproduction per finding, in the language the
 finding is about.
 
-> **Status.** Nothing here is fixed yet. Every finding below was reproduced on the built
-> library; the proposed fixes are the minimal ones and have not been implemented.
+> **Status.** Every finding below was reproduced on the built library at the baseline.
+> C1 is fixed and C2 and C3 documented in the C ABI contract (#1020). J1, R1, B1, B2, S1,
+> D1, E1, E2, N1, N2 and J2 are fixed and E3 documented (#1046): the rule or default each
+> one is about now lives in the core, and every binding reads it from there. D1 kept
+> Python's documented `[?]` and moved the other bindings to it; E2 kept the documented
+> `ErrorKind::Unsupported` and moved the code. Re-run after #1046 on the cases these
+> findings touch (`tr`, `tr_de`, `tr_uk`, `tr_auto`, `tr_bad`, `sa`, `dj`, `dj_sm`, `fu`,
+> `slug`, `zs`, `zs_def`, `zi_def`, `nc_ara`, `nc_heb`, `fc`, `re_empty`; `zs_def` and
+> `zi_def` are new and call each binding's own default): 89,860,992 comparisons, no
+> difference in any binding, Java now expressing `nc_ara` and `nc_heb`. The C runner's
+> `tr_bad` blocks differ by CRC only, because C errors carry no kind and are compared by
+> message. The `surr 3000 7` relational check passes in Python, Node and Ruby on all 79
+> cases; Java has no such mode yet, and J1 is pinned by `FormalFindingsTest` and the
+> shim's unit tests instead. The sections below describe the baseline.
 
 Baseline: worktree at `595fbda` (main before #1016). Bindings built against the
 **in-repo** core with the `[patch.crates-io]` redirect from AGENTS.md ("Binding gates"),

@@ -796,6 +796,54 @@ pub fn demojize_rust(text: &str, strip_modifiers: bool) -> String {
     out
 }
 
+/// Standalone `demojize` (`api::demojize` and every binding): name every row, and
+/// give an emoji the table cannot name to `error_mode` — `Replace` writes `replace_with`,
+/// `Ignore` drops it, `Preserve` keeps it.
+///
+/// The pipeline's own step ([`demojize_rust`], [`demojize_rust_into`]) keeps dropping,
+/// which is what a preset wants. The standalone function used to drop too, while
+/// Python's documented default wrote `[?]`, so the same call disagreed across the
+/// bindings on 3,105 inputs (`formal/bindings`, D1). The Python binding calls this when
+/// no `EmojiProvider` is in play, so its `errors=` and every other binding's default are
+/// one code path.
+pub fn demojize_named(
+    text: &str,
+    strip_modifiers: bool,
+    error_mode: crate::ErrorMode,
+    replace_with: &str,
+) -> String {
+    let mut out = String::new();
+    demojize_rust_into_with(
+        text,
+        strip_modifiers,
+        NamePolicy::NAME_EVERYTHING,
+        Unnamed::from_mode(error_mode, replace_with),
+        &mut out,
+    );
+    out
+}
+
+/// What the scanner writes for an emoji it cannot name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Unnamed<'r> {
+    /// Nothing: the pipeline step, and `errors="ignore"`.
+    Drop,
+    /// This string, verbatim (`errors="replace"`; may be empty).
+    Replace(&'r str),
+    /// The emoji itself (`errors="preserve"`).
+    Preserve,
+}
+
+impl<'r> Unnamed<'r> {
+    pub(crate) fn from_mode(mode: crate::ErrorMode, replace_with: &'r str) -> Self {
+        match mode {
+            crate::ErrorMode::Replace => Unnamed::Replace(replace_with),
+            crate::ErrorMode::Ignore => Unnamed::Drop,
+            crate::ErrorMode::Preserve => Unnamed::Preserve,
+        }
+    }
+}
+
 /// Which CLDR name rows a caller wants left alone.
 ///
 /// CLDR `annotationsDerived` names characters that are not emoji: typographic
@@ -874,6 +922,19 @@ pub fn demojize_rust_into(
     policy: NamePolicy,
     result: &mut String,
 ) {
+    demojize_rust_into_with(text, strip_modifiers, policy, Unnamed::Drop, result);
+}
+
+/// [`demojize_rust_into`] with a choice of what to write for an emoji the table cannot
+/// name. The body is the one the Python binding's provider loop mirrors
+/// (`crate::py::emoji::demojize_impl`); with no provider Python calls this.
+pub(crate) fn demojize_rust_into_with(
+    text: &str,
+    strip_modifiers: bool,
+    policy: NamePolicy,
+    unnamed: Unnamed<'_>,
+    result: &mut String,
+) {
     result.clear();
     // Fast path: pure-ASCII text cannot contain emoji.
     if text.is_ascii() {
@@ -884,6 +945,10 @@ pub fn demojize_rust_into(
     result.reserve(text.len());
     let mut win = CharWindow::new(text.chars());
     let mut last_was_emoji = false;
+    // Set with `last_was_emoji` when what was written is the emoji itself
+    // (`Unnamed::Preserve`) rather than a word: a mark after it was on the emoji in the
+    // input and stays on it, and only an alphanumeric is separated (#200, #996 review).
+    let mut last_was_raw = false;
 
     while let Some(ch) = win.current() {
         if ch == VS16 || ch == VS15 || ch == ZWJ {
@@ -902,6 +967,7 @@ pub fn demojize_rust_into(
             }
             result.push(ch);
             last_was_emoji = false;
+            last_was_raw = false;
             win.advance(1);
             continue;
         }
@@ -912,30 +978,57 @@ pub fn demojize_rust_into(
             win.advance(consumed);
             advance_past_trailing_modifiers(&mut win);
             last_was_emoji = true;
+            last_was_raw = false;
             continue;
         }
 
-        // An emoji this scanner cannot name, or a lone Plane 14 tag — dropped, as it
-        // always has been. What changed in #990 is only *what reaches here*: the test
-        // was a block range, so `\u{2606}` WHITE STAR and 776 other characters carrying
-        // no emoji property were dropped as emoji the library lacked data for.
+        // An emoji this scanner cannot name, or a lone Plane 14 tag. What changed in #990
+        // is only *what reaches here*: the test was a block range, so `\u{2606}` WHITE
+        // STAR and 776 other characters carrying no emoji property were handled as emoji
+        // the library lacked data for.
         if let Some(consumed) = unnamed_emoji_len_at(win.as_slice()) {
+            let wrote = match unnamed {
+                Unnamed::Drop => false,
+                Unnamed::Replace(with) => {
+                    result.push_str(with);
+                    !with.is_empty()
+                }
+                Unnamed::Preserve => {
+                    // `take` rather than a slice: the run is already measured.
+                    result.extend(win.as_slice().iter().take(consumed).copied());
+                    true
+                }
+            };
             win.advance(consumed);
-            // Nothing is written, so `last_was_emoji` keeps its value: a name written
-            // before the dropped emoji still needs its separator. Resetting it glued the
-            // next word on — `😀🇦x` gave `grinning facex` (Lean model).
-            //
-            // Dropped, so what follows meets what came before: the seam
-            // `replace_emoji` closes (#995 follow-up) is open here too.
-            drop_marks_the_seam_would_bind(&mut win, result);
+            if wrote {
+                // Parity with the named path (#200): a visible token flags the position
+                // so a following alphanumeric is separated.
+                last_was_emoji = true;
+                last_was_raw = matches!(unnamed, Unnamed::Preserve);
+            } else {
+                // Nothing is written, so both flags keep their values: a name written
+                // before the dropped emoji still needs its separator. Resetting them
+                // glued the next word on — `\u{1F600}\u{1F1E6}x` gave `grinning facex`
+                // (Lean model).
+                //
+                // Dropped, so what follows meets what came before: the seam
+                // `replace_emoji` closes (#995 follow-up) is open here too.
+                drop_marks_the_seam_would_bind(&mut win, result);
+            }
             continue;
         }
 
-        if last_was_emoji && needs_separator_after_a_name(ch) {
+        let separate = if last_was_raw {
+            ch.is_alphanumeric()
+        } else {
+            needs_separator_after_a_name(ch)
+        };
+        if last_was_emoji && separate {
             result.push(' ');
         }
         result.push(ch);
         last_was_emoji = false;
+        last_was_raw = false;
         win.advance(1);
     }
 }

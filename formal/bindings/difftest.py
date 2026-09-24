@@ -194,6 +194,8 @@ ALL_CASES = [
     "slug",
     "zs",
     "zi",
+    "zs_def",
+    "zi_def",
     "isconf",
 ]
 

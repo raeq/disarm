@@ -441,6 +441,17 @@ jobs:
           COVERAGE_CORE: sysmon
         run: pytest tests/ --ignore=tests/test_typing.py -m "not formal and not hypothesis and not serial" -q --tb=short --cov=disarm --cov-report=xml --cov-report=term-missing
 
+      - name: Python coverage to the job summary (report only)
+        # The measurement the step above already took, rendered where a reviewer sees it
+        # without downloading coverage.xml. No threshold: coverage.yml says why, and
+        # records the Rust side of the same report.
+        run: |
+          {
+            echo "## Python coverage (python/disarm, report only)"
+            echo
+            python -m coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run serial tests (wall-clock parallelism)
         # #70's GIL-release guard proves the GIL is released by finishing two batches on
         # two threads faster than one thread can. Under the `-n auto` above every core

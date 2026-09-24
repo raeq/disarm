@@ -635,10 +635,10 @@ def slugify(
         ValueError: If ``max_length`` is negative (validated for both scalar and
             list input, #193).
         TypeError: If ``text`` is neither ``str`` nor ``list[str]``.
+        InvalidArgumentError: If ``lang`` is not a known language code (#68,
+            #257), as in every binding.
         DisarmError: If an internal Rust error occurs (e.g. an invalid
-            ``regex_pattern``). An unknown ``lang`` does **not** raise — it is
-            treated as best-effort and falls back to the default transliterator;
-            pre-check against ``list_langs()`` if you need strict validation.
+            ``regex_pattern``).
 
     Examples:
         >>> slugify("Hello World!")
@@ -3588,8 +3588,9 @@ def register_lang(code: str, mappings: dict[str, str]) -> None:
         mappings: Dict of source→replacement character mappings.
 
     Raises:
-        DisarmError: If registrations are sealed, the language table lock is
-            poisoned, or the mapping cannot be stored.
+        UnsupportedError: If registrations are sealed (a `DisarmError`).
+        DisarmError: If the language table lock is poisoned, or the mapping cannot
+            be stored.
 
     Examples:
         >>> register_lang("xx", {"Ä": "Ae", "ä": "ae", "Ö": "Oe", "ö": "oe"})
@@ -3672,7 +3673,7 @@ def seal_registrations() -> None:
 
     After this is called, `register_lang`, `register_replacements`,
     `remove_replacement`, and `clear_replacements` raise
-    `DisarmError`. This is a one-way security latch (#64): the
+    `UnsupportedError` (a `DisarmError`). This is a one-way security latch (#64): the
     registration APIs mutate **process-global** state that every
     ``transliterate``/``slugify``/``catalog_key``/... call shares, so in a
     multi-tenant or web context an imported library or request handler could
@@ -3684,7 +3685,7 @@ def seal_registrations() -> None:
         >>> seal_registrations()  # doctest: +SKIP
         >>> register_lang("yy", {"Ö": "Oe"})  # doctest: +SKIP
         Traceback (most recent call last):
-        disarm.DisarmError: register_lang: registration tables are sealed ...
+        disarm.UnsupportedError: register_lang: registration tables are sealed ...
 
     Note: the example is ``+SKIP``-ped because sealing is a one-way,
     process-global latch — executing it in the doctest run would seal the shared

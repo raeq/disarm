@@ -59,4 +59,4 @@ The `canonicalize_strict` preset extends this approach for web application input
 
 ## Zalgo detection
 
-The `is_zalgo()` predicate detects excessive combining mark stacking by walking the NFD decomposition and counting consecutive combining marks per base character. The default threshold of 3 marks is safe for all legitimate scripts — Vietnamese `ệ` (the most combining-mark-heavy legitimate character in common use) has exactly 2 marks in NFD. The `strip_zalgo()` function caps marks at a configurable limit (default: 2), preserving legitimate diacritics while removing abuse.
+The `is_zalgo()` predicate detects excessive combining mark stacking by walking the NFD decomposition and counting consecutive combining marks per base character. The default threshold of 3 marks is safe for all legitimate scripts — Vietnamese `ệ` (the most combining-mark-heavy legitimate character in common use) has exactly 2 marks in NFD. The `strip_zalgo()` function caps marks at a configurable limit (default: 3, equal to the `is_zalgo()` threshold since #788, in every binding), preserving legitimate diacritics while removing abuse.

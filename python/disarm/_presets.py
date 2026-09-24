@@ -11,6 +11,10 @@ import warnings
 
 from disarm._api import TextPipeline
 from disarm._boundary import (
+    # The zalgo defaults, read from the core so no binding restates them (B1 of
+    # `formal/bindings`: Node and Ruby had kept a literal 2 after #788).
+    _DEFAULT_ZALGO_MAX_MARKS,
+    _DEFAULT_ZALGO_THRESHOLD,
     _canonicalize,
     _canonicalize_strict,
     _catalog_key,
@@ -1034,7 +1038,7 @@ def strip_obfuscation(text: str, *, digit_policy: str = "numeric") -> str:
     return _strip_obfuscation(text, digit_policy=digit_policy)
 
 
-def is_zalgo(text: str, *, threshold: int = 3) -> bool:
+def is_zalgo(text: str, *, threshold: int = _DEFAULT_ZALGO_THRESHOLD) -> bool:
     """Detect whether text contains zalgo-style combining mark abuse.
 
     Returns ``True`` if any base character carries more than *threshold* marks of one
@@ -1070,7 +1074,7 @@ def is_zalgo(text: str, *, threshold: int = 3) -> bool:
     return _is_zalgo(text, threshold=threshold)
 
 
-def strip_zalgo(text: str, *, max_marks: int = 3) -> str:
+def strip_zalgo(text: str, *, max_marks: int = _DEFAULT_ZALGO_MAX_MARKS) -> str:
     """Strip excessive combining marks, preserving legitimate diacritics.
 
     Caps the marks of each canonical combining class on one base character at

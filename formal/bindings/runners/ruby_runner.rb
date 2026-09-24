@@ -145,6 +145,8 @@ CASES = {
   "slug" => ->(t) { D.slugify(t) },
   "zs" => ->(t) { D.strip_zalgo(t, max_marks: 3) },
   "zi" => ->(t) { D.zalgo?(t, threshold: 3) },
+  "zs_def" => ->(t) { D.strip_zalgo(t) },
+  "zi_def" => ->(t) { D.zalgo?(t) },
   "isconf" => ->(t) { D.confusable?(t) },
 }.freeze
 

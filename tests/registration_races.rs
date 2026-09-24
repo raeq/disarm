@@ -133,4 +133,17 @@ fn registration_is_atomic_with_its_cap_and_with_the_seal() {
         at_seal,
         "a registration landed after seal_registrations() returned"
     );
+
+    // Every sealed mutator reports the kind its docs promise (`formal/bindings`, E2):
+    // `Unsupported`, where `kind()` used to answer `Other`.
+    let sealed = [
+        api::register_lang("zz", HashMap::new()).unwrap_err(),
+        api::register_replacements(HashMap::new()).unwrap_err(),
+        api::remove_replacement("x").unwrap_err(),
+        api::clear_replacements().unwrap_err(),
+    ];
+    for e in sealed {
+        assert_eq!(e.kind(), ErrorKind::Unsupported, "{e}");
+        assert_eq!(e.code(), "sealed");
+    }
 }

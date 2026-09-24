@@ -32,13 +32,25 @@ fn ascii_for(c: char) -> Option<&'static str> {
         // The dash family, and the minus sign: every one is the same autocorrect.
         '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2015}'
         | '\u{2212}' => "-",
-        // Single quotes: the curly pair, the low-9 form, and the prime.
-        '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{2032}' => "'",
-        // Double quotes: the curly pair, the low-9 form, and the double prime.
-        '\u{201C}' | '\u{201D}' | '\u{201E}' | '\u{2033}' => "\"",
+        // Single quotes: the curly pair, the low-9 form, the reversed-9 form, and the
+        // prime and reversed prime.
+        '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}' | '\u{2032}' | '\u{2035}' => "'",
+        // Double quotes: the curly pair, the low-9 form, the reversed-9 form, and the
+        // double prime and its reverse.
+        '\u{201C}' | '\u{201D}' | '\u{201E}' | '\u{201F}' | '\u{2033}' | '\u{2036}' => "\"",
+        // The triple prime and its reverse, spelled as the three primes they are, the way
+        // the ellipsis is three full stops.
+        '\u{2034}' | '\u{2037}' => "'''",
         '\u{2026}' => "...",
-        // The non-standard spaces, folded to a space rather than deleted.
-        '\u{00A0}' | '\u{2000}'..='\u{200A}' | '\u{202F}' | '\u{205F}' | '\u{3000}' => " ",
+        // The non-standard spaces, folded to a space rather than deleted: every `Zs` but
+        // the ASCII space itself (D3 in `formal/lean/Text`: `U+1680 OGHAM SPACE MARK` was
+        // the one left out).
+        '\u{00A0}'
+        | '\u{1680}'
+        | '\u{2000}'..='\u{200A}'
+        | '\u{202F}'
+        | '\u{205F}'
+        | '\u{3000}' => " ",
         _ => return None,
     })
 }
@@ -89,6 +101,32 @@ mod tests {
         assert_eq!(fold_punctuation("5\u{2032} 10\u{2033}"), "5' 10\"");
         assert_eq!(fold_punctuation("wait\u{2026}"), "wait...");
         assert_eq!(fold_punctuation("a\u{00A0}b\u{2009}c\u{3000}d"), "a b c d");
+    }
+
+    /// D3 (`formal/lean/Text`): each class the documentation names is folded whole.
+    #[test]
+    fn every_member_of_the_named_classes_folds() {
+        assert_eq!(fold_punctuation("a\u{1680}b"), "a b");
+        assert_eq!(fold_punctuation("\u{201B}x\u{2019}"), "'x'");
+        assert_eq!(fold_punctuation("\u{201F}x\u{201D}"), "\"x\"");
+        assert_eq!(fold_punctuation("\u{2035}\u{2036}"), "'\"");
+        assert_eq!(fold_punctuation("\u{2034}|\u{2037}"), "'''|'''");
+        // Every space separator (`Zs`) but the ASCII one: White_Space, less the controls
+        // and the line and paragraph separators.
+        let space_separators = ('\0'..=char::MAX).filter(|&c| {
+            c.is_whitespace() && !c.is_control() && !matches!(c, ' ' | '\u{2028}' | '\u{2029}')
+        });
+        for c in space_separators {
+            assert_eq!(fold_punctuation(&c.to_string()), " ", "U+{:04X}", c as u32);
+        }
+        // The primes, U+2032 to U+2037, all fold.
+        for c in '\u{2032}'..='\u{2037}' {
+            assert!(
+                matches!(fold_punctuation(&c.to_string()), Cow::Owned(_)),
+                "U+{:04X}",
+                c as u32
+            );
+        }
     }
 
     #[test]

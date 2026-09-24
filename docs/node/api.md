@@ -253,8 +253,9 @@ stripPua('a\u{E000}b') // => 'ab'
 
 ### `stripZalgo(text, options?)` · `isZalgo(text, options?)`
 
-`isZalgo` flags "zalgo" — combining marks stacked past `options.threshold` (3) on
-a base character; `stripZalgo` caps each base at `options.maxMarks` (2).
+`isZalgo` flags "zalgo" — more than `options.threshold` (3) marks of one combining
+class stacked on a base character; `stripZalgo` caps each class on each base at
+`options.maxMarks` (2).
 
 ```ts
 isZalgo('Z\u0301\u0301\u0301\u0301') // => true

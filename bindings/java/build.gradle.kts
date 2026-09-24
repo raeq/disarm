@@ -4,5 +4,5 @@
 // resolves project() deps to POM coordinates correctly); the release workflow uploads
 // the signed staging bundle to the Central Portal via its REST API.
 plugins {
-    kotlin("jvm") version "2.1.0" apply false
+    kotlin("jvm") version "2.4.20" apply false
 }

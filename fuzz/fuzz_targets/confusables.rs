@@ -8,8 +8,7 @@
 //! 3. `is_confusable(s) == !find_confusables(s).is_empty()` (`isConfusable_eq_find`).
 //! 4. A detection implies the fold changes the string (`detect_changes`).
 //! 5. Every `(ch, offset)` `find_confusables` and `find_unmapped_confusables` report points
-//!    at `ch`, in the weak sense of [`disarm_fuzz::located`]: the strong, documented sense
-//!    does not hold (see there).
+//!    at `ch`: `ch` is the input's character at `offset` ([`disarm_fuzz::located`]).
 #![no_main]
 
 use arbitrary::Arbitrary;

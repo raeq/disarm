@@ -539,8 +539,11 @@ fn transliterate_impl_inner<'a>(
             )
             .expect("compose pass never bails (detect_compose = false)")
             .into_owned();
+            // The character reported is the input's at that offset, not the composed one,
+            // which the input may not contain (#1040).
             for entry in &mut collector[start..] {
                 entry.1 = remap_composed_offset(entry.1, &origin);
+                entry.0 = crate::compose::input_char_at(text, entry.1, entry.0);
             }
             Cow::Owned(out)
         }

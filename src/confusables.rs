@@ -371,8 +371,8 @@ pub(crate) fn unmapped_confusables(target_script: &str) -> Result<Vec<char>, cra
 ///
 /// Composes at lookup exactly as the fold does (#475/#477/#483), so a decomposed
 /// homoglyph whose *precomposed* form is mapped is correctly reported as covered
-/// rather than as a gap. Offsets are anchored in the caller's `text`, never in the
-/// composed intermediate; a multi-mark cluster reports the cluster's start.
+/// rather than as a gap. Each report is a character of the caller's `text` at its own
+/// offset ([`crate::compose::input_char_at`]), never one of the composed intermediate.
 ///
 /// # Valid `target_script` values
 /// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
@@ -393,7 +393,7 @@ pub(crate) fn find_unmapped_confusables(
     for (ch, offset) in crate::compose::composed(text) {
         let mapped = map.is_some_and(|m| m.contains_key(&ch));
         if !mapped && tables::is_upstream_confusable_source(ch) {
-            out.push((ch, offset));
+            out.push((crate::compose::input_char_at(text, offset, ch), offset));
         }
     }
     Ok(out)
@@ -412,7 +412,8 @@ pub(crate) fn find_unmapped_confusables(
 ///
 /// Offsets are anchored in the caller's `text`, and iterate through `composed` for the
 /// same reason the sibling does: one path keeps this scan and the fold in lockstep by
-/// construction.
+/// construction. The character reported is the input's at that offset
+/// ([`crate::compose::input_char_at`]); the target is the fold of what the scan looked up.
 ///
 /// # Valid `target_script` values
 /// `"latin"`, `"cyrillic"`, `"arabic"` or `"hebrew"` (#792). Any other value returns
@@ -435,7 +436,11 @@ pub(crate) fn find_confusables(
             if !allowed.is_empty() && is_allowed(ch, &allowed) {
                 continue;
             }
-            out.push((ch, offset, *target));
+            out.push((
+                crate::compose::input_char_at(text, offset, ch),
+                offset,
+                *target,
+            ));
         }
     }
     Ok(out)

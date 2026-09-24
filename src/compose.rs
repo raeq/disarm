@@ -38,15 +38,38 @@ use unicode_normalization::UnicodeNormalization;
 include!(concat!(env!("OUT_DIR"), "/excluded_compositions_phf.rs"));
 
 /// Iterate `text` yielding `(char, byte_offset)` with each base+mark cluster locally
-/// NFC-composed. `byte_offset` is the start of the cluster (or the char) in the
-/// original `text` — for diagnostics like `find_untranslatable`. See the module docs.
+/// NFC-composed. See the module docs.
+///
+/// `byte_offset` is the start of the input character the yielded one came from, in the
+/// original `text`, for diagnostics like `find_untranslatable`: always a char boundary of
+/// `text`, and never past the cluster. A character the cluster held unchanged is at its
+/// own offset, so `"\u{4AA}\u{327}"` yields the cedilla at 2, not at 0. A character
+/// composition made is at the offset of the input character it grew from, the base
+/// (see [`Composed::attribute`]). The diagnostics report the input's character at that
+/// offset, never the composed one, which the input may not contain (#1040).
 pub(crate) fn composed(text: &str) -> Composed<'_> {
     Composed {
         text,
         iter: text.char_indices().peekable(),
         pending: VecDeque::new(),
         scratch: String::new(),
+        inputs: Vec::new(),
     }
+}
+
+/// The character of `text` at `offset`, which is what a locator reports for the
+/// character `composed` yielded there (#1040).
+///
+/// The locators look up the composed form, so a decomposed homoglyph is found, and used
+/// to report that form: `\u{456}\u{308}` came back as U+0457 and `\u{5E9}\u{5BC}` as
+/// U+FB49, a composition exclusion no normal form produces, neither of them in the input.
+/// The finding is the cluster that starts at `offset`; what is reported is its first
+/// character as written. `composed` only yields offsets that are char boundaries of
+/// `text`, so the fallback to the composed character is never taken.
+pub(crate) fn input_char_at(text: &str, offset: usize, composed: char) -> char {
+    text.get(offset..)
+        .and_then(|rest| rest.chars().next())
+        .unwrap_or(composed)
 }
 
 /// Apply [`composed`] over the whole string: a borrowed `Cow` when `text` has no
@@ -128,6 +151,9 @@ pub(crate) struct Composed<'a> {
     /// allocate a fresh `String` per cluster. Cleared and refilled each cluster, so its
     /// capacity is retained across the whole iteration — one alloc, not one-per-cluster.
     scratch: String,
+    /// Reused buffer for a changed cluster's input characters, as `(offset, char,
+    /// claimed)`, while [`Composed::attribute`] points each output character at one.
+    inputs: Vec<(usize, char, bool)>,
 }
 
 // Conjoining Hangul jamo composition (#483). The L/V/T ranges and the syllable formula
@@ -239,7 +265,74 @@ impl Iterator for Composed<'_> {
         scratch.extend(self.text[start..end].nfc());
         self.recompose_excluded(&scratch, start);
         self.scratch = scratch;
+        self.attribute(start, end);
         self.pending.pop_front()
+    }
+}
+
+/// How far past the first unclaimed input character [`Composed::attribute`] looks for
+/// an output character's literal match. Canonical reordering moves a mark only past
+/// marks of a higher class, so a match is almost always within a few places; the bound
+/// keeps a cluster of thousands of marks linear rather than quadratic.
+const ATTRIBUTION_WINDOW: usize = 32;
+
+impl Composed<'_> {
+    /// Point each character of the cluster `text[start..end]` just queued on `pending`
+    /// at the input character it came from (#1040).
+    ///
+    /// Every character used to be reported at the cluster's start, so a mark that
+    /// composed with nothing (`\u{4AA}` + U+0327, `x` + U+FE0F) was located on its base.
+    /// Now a cluster that came out as it went in maps one to one. Otherwise each output
+    /// character that is itself an unclaimed input character takes that one's offset, and
+    /// each character composition made takes the first input character still unclaimed,
+    /// which for a composition is the base it grew from (`\u{456}` for the `\u{457}` of
+    /// `\u{456}\u{308}`). A cluster with more output characters than input ones (NFC
+    /// splitting a precomposed letter around a mark that sorts between its parts) puts
+    /// the extras at the cluster start.
+    fn attribute(&mut self, start: usize, end: usize) {
+        let cluster = &self.text[start..end];
+        if self.pending.iter().map(|&(c, _)| c).eq(cluster.chars()) {
+            for (slot, (i, _)) in self.pending.iter_mut().zip(cluster.char_indices()) {
+                slot.1 = start + i;
+            }
+            return;
+        }
+        let mut inputs = std::mem::take(&mut self.inputs);
+        inputs.clear();
+        inputs.extend(cluster.char_indices().map(|(i, c)| (start + i, c, false)));
+        // The lowest unclaimed input: everything before it is claimed.
+        let first_unclaimed = |inputs: &[(usize, char, bool)], from: usize| {
+            (from..inputs.len())
+                .find(|&j| !inputs[j].2)
+                .unwrap_or(inputs.len())
+        };
+        // Pass 1: output characters the input holds as they are.
+        let mut lo = 0;
+        for slot in &mut self.pending {
+            slot.1 = usize::MAX;
+            lo = first_unclaimed(&inputs, lo);
+            let window = lo..inputs.len().min(lo + ATTRIBUTION_WINDOW);
+            if let Some(j) = window
+                .into_iter()
+                .find(|&j| !inputs[j].2 && inputs[j].1 == slot.0)
+            {
+                inputs[j].2 = true;
+                slot.1 = inputs[j].0;
+            }
+        }
+        // Pass 2: characters composition made, in order, onto what is left.
+        let mut lo = 0;
+        for slot in &mut self.pending {
+            if slot.1 != usize::MAX {
+                continue;
+            }
+            lo = first_unclaimed(&inputs, lo);
+            slot.1 = inputs.get_mut(lo).map_or(start, |input| {
+                input.2 = true;
+                input.0
+            });
+        }
+        self.inputs = inputs;
     }
 }
 
@@ -325,6 +418,25 @@ mod tests {
         // bytes: a@0, і@1 (2B), ◌̈@3 (2B), b@5 — composed ї keeps the cluster start.
         let got: Vec<_> = composed("a\u{0456}\u{0308}b").collect();
         assert_eq!(got, vec![('a', 0), ('\u{0457}', 1), ('b', 5)]);
+    }
+
+    /// #1040: a character the cluster holds unchanged is at its own offset, not the
+    /// cluster's start, and a composed one at the base it grew from.
+    #[test]
+    fn each_character_is_at_the_offset_it_came_from() {
+        let got: Vec<_> = composed("\u{4AA}\u{327}").collect();
+        assert_eq!(got, vec![('\u{4AA}', 0), ('\u{327}', 2)]);
+        let got: Vec<_> = composed("x\u{FE0F}y").collect();
+        assert_eq!(got, vec![('x', 0), ('\u{FE0F}', 1), ('y', 4)]);
+        // i + U+0308 composes; U+0327 does not join it and sorts first (ccc 202 < 230).
+        let got: Vec<_> = composed("\u{456}\u{308}\u{327}").collect();
+        assert_eq!(got, vec![('\u{457}', 0), ('\u{327}', 4)]);
+        // Canonical reordering: a + U+0301 + U+0323 is U+1EA1 (a + dot below) + U+0301.
+        let got: Vec<_> = composed("a\u{301}\u{323}").collect();
+        assert_eq!(got, vec![('\u{1EA1}', 0), ('\u{301}', 1)]);
+        // Every offset is a boundary of the input, whatever the cluster's length.
+        let long = format!("a{}", "\u{301}\u{323}".repeat(500));
+        assert!(composed(&long).all(|(_, o)| long.is_char_boundary(o) && o < long.len()));
     }
 
     #[test]

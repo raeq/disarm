@@ -814,6 +814,18 @@ assert normalize_confusables("\u0456\u0308") == "i"  # і + ◌̈ composes to ї
 assert find_unmapped_confusables("\u0456\u0308") == []
 ```
 
+Every character either scan reports is the input's own, at its own offset. A mark that
+composes with nothing is reported where it is, not at its base, and a decomposed
+homoglyph that `find_confusables` finds is reported as its base, as written, with the
+fold of the character it composes to as the target:
+
+```python
+from disarm import find_confusables, find_unmapped_confusables
+
+assert find_confusables("a\u0456\u0308") == [("\u0456", 1, "i")]
+assert ("\u0327", 2) in find_unmapped_confusables("\u04aa\u0327")
+```
+
 ### Reading the result
 
 Most of the global set is **out of scope**, not missing. A source whose upstream target

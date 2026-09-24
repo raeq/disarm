@@ -14,10 +14,10 @@
 //!   with an ASCII replacement, where the same argument (I1 + I2) applies.
 //! - **I7** output length: `|f(s)| <= 5 * |s|_bytes + |s|_chars` under `Ignore`, with
 //!   `tones = false`: the docs state it unscoped, and it does not hold with tones.
-//! - `find_untranslatable` points at each character it reports, in the weak sense of
-//!   [`disarm_fuzz::located`] (the documented sense does not hold, see there), and when it
-//!   reports nothing the three `on_unknown` policies agree, on input NFKC leaves alone
-//!   (the documented "exactly the set" does not hold for compatibility characters).
+//! - `find_untranslatable` points at each character it reports: the input's character at
+//!   the reported offset ([`disarm_fuzz::located`]), and when it reports nothing the three
+//!   `on_unknown` policies agree, on input NFKC leaves alone (the documented "exactly the
+//!   set" does not hold for compatibility characters).
 #![no_main]
 
 use arbitrary::Arbitrary;

@@ -347,6 +347,11 @@ pub fn validate_lang(lang: &str) -> Result<(), Error> {
 #[non_exhaustive]
 pub struct Untranslatable {
     /// The untranslatable character.
+    ///
+    /// The input's own character at [`offset`](Self::offset). A base followed by combining
+    /// marks is looked up as the character they compose to, so a decomposed spelling is
+    /// judged as the precomposed one is; when that is what is reported, `ch` is the base as
+    /// written, and the report covers the cluster that starts there (#1040).
     pub ch: char,
     /// Its byte offset in the input string.
     pub offset: usize,

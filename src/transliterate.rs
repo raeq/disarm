@@ -79,8 +79,10 @@ pub(crate) fn transliterate_after_replacements<'a>(
             gost7034,
             tones,
         ),
-        Cow::Owned(t) => Ok(Cow::Owned(
-            run(
+        // When the engine changes nothing it borrows the replaced text, which is already
+        // owned here: hand that back rather than copying it (#1046 review).
+        Cow::Owned(t) => {
+            match run(
                 &t,
                 lang,
                 on_unknown,
@@ -88,9 +90,11 @@ pub(crate) fn transliterate_after_replacements<'a>(
                 strict_iso9,
                 gost7034,
                 tones,
-            )?
-            .into_owned(),
-        )),
+            )? {
+                Cow::Owned(out) => Ok(Cow::Owned(out)),
+                Cow::Borrowed(_) => Ok(Cow::Owned(t)),
+            }
+        }
     }
 }
 

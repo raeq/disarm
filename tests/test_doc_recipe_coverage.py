@@ -194,8 +194,9 @@ def test_a_quoted_python_block_is_not_a_recipe_at_any_indentation() -> None:
 
     Covers both fences indented to the same depth inside a tab, the inner fence
     indented further than the outer, and the outer at column 0 with the inner
-    indented, so no mix of indentation turns quoted content back into a recipe. Each case is also checked to flip once a
-    real block follows, so the tracking cannot pass by never matching.
+    indented, so no mix of indentation turns quoted content back into a recipe. Each
+    case is also checked to flip once a real block follows, so the tracking cannot
+    pass by never matching.
     """
     real = '\n=== "Tab"\n\n    ```python\n    assert f() == 1\n    ```\n'
     quoted = [

@@ -294,9 +294,9 @@ assert PRESETS["canonicalize_strict"] == [
 ```
 
 Use `PRESETS` to audit exactly which transforms a preset applies. It is a mirror of the
-step lists in `src/presets.rs`, and a test reads those lists and fails when the two
-differ — it drifted for a long time before that, missing steps that ran and listing one
-that did not (Finding 5 of the Lean model in `formal/lean/Presets`).
+step lists in `src/presets/text.rs` and `src/presets/keys.rs`, and a test reads those lists and
+fails when the two differ — it drifted for a long time before that, missing steps that ran
+and listing one that did not (Finding 5 of the Lean model in `formal/lean/Presets`).
 
 Most names are the `TextPipeline` step or public function of the same name. Five are not:
 

@@ -657,7 +657,7 @@ fn bidi_conflict(text: &str, letters_only: bool) -> bool {
 /// overrides (`U+202A`–`U+202E`) and the isolates (`U+2066`–`U+2069`).
 ///
 /// This is the **single definition** of the set for the crate.
-/// [`crate::presets::is_bidi_or_format`] builds on it by adding the soft hyphen and
+/// [`crate::presets::bidi::is_bidi_or_format`] builds on it by adding the soft hyphen and
 /// the deprecated format controls, so the two cannot drift apart.
 pub(crate) fn is_bidi_control(ch: char) -> bool {
     matches!(

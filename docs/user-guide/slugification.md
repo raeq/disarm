@@ -250,6 +250,16 @@ Decode HTML entities and numeric character references:
 assert slugify("&amp; test &#38;") == "test"
 ```
 
+A numeric reference is `&#`, an optional `x`, a run of digits and an optional `;`. With no
+digit after the `&#` it is not a reference, and the text stays as written. One that names
+a control character, a surrogate or no character at all is dropped, and only it: the
+text after it is kept.
+
+```python
+assert slugify("Q&#A session") == "q-a-session"
+assert slugify("issue &#12 fixed") == "issue-fixed"
+```
+
 ### default
 
 Fallback returned when the input has no sluggable characters (emoji,

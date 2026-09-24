@@ -182,18 +182,19 @@ Throughput follows the work per input: `presets` runs every builder at least twi
 managed about 360 inputs a second, `decode_bytes` calls the decoder thirteen times per
 input at about 720, and `slugify` about 4,000.
 
-The runs did find six documented properties that do not hold. Each is reproduced
-through the public API and left for a follow-up; the targets assert the weaker property
-that does hold and say why:
+The runs found documented properties that did not hold: six in the first runs, and two
+more on 2026-09-24. Each is reproduced through the public API in `tests/fuzz_findings.rs`
+(and `tests/test_fuzz_findings.py` where the binding reaches it), and each target asserts
+the full property once its finding is resolved:
 
-| Surface | Documented | Reproduction |
-|---|---|---|
-| `slugify` | numeric entities are decoded; `allow_unicode` gives one slug for both spellings (#477) | A numeric entity that fails to decode is skipped together with up to 14 bytes of the ASCII after it: `"Q&#A session"` gives `q`, `"Tom &#and Jerry"` gives `tom`, and `"issue &#12 fixed"` (a control character, refused) gives `issue`. The skip stops at the first non-ASCII byte, so `"&#a\u0301"` gives `""` while its NFC gives `\u00e1`. |
-| `find_unmapped_confusables`, `find_confusables`, `find_untranslatable` | "its byte offset in the input string"; `find_confusables`: "the character as it appeared in the input" | `find_unmapped_confusables("\u04aa\u0327", Latin)` reports U+0327 at offset 0, where U+04AA is; `find_untranslatable("x\ufe0f")` reports U+FE0F at offset 0, where `x` is; `find_confusables("\u0456\u0308", Latin)` reports U+0457, which the input does not contain. The locators walk composed clusters and report every character of one at the cluster's start. |
-| `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. |
-| `sanitize_filename` | "The result is a fixed point" | `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass peels one extension, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. |
-| `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. |
-| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 are scoped to `tones=False`; I7 is not. |
+| Surface | Documented | Reproduction | Resolution |
+|---|---|---|---|
+| `slugify` | numeric entities are decoded; `allow_unicode` gives one slug for both spellings (#477) | A numeric entity that fails to decode is skipped together with up to 14 bytes of the ASCII after it: `"Q&#A session"` gives `q`, `"Tom &#and Jerry"` gives `tom`, and `"issue &#12 fixed"` (a control character, refused) gives `issue`. The skip stops at the first non-ASCII byte, so `"&#a\u0301"` gives `""` while its NFC gives `\u00e1`. | Fixed: `&#` with no digit after it is text, as in HTML, and an entity that names no allowed character is dropped without the text after it. A hex letter carrying a combining mark is not a digit, so both normal forms decode alike. `"Q&#A session"` gives `q-a-session`. |
+| `find_unmapped_confusables`, `find_confusables`, `find_untranslatable` | "its byte offset in the input string"; `find_confusables`: "the character as it appeared in the input" | `find_unmapped_confusables("\u04aa\u0327", Latin)` reports U+0327 at offset 0, where U+04AA is; `find_untranslatable("x\ufe0f")` reports U+FE0F at offset 0, where `x` is; `find_confusables("\u0456\u0308", Latin)` reports U+0457, which the input does not contain. The locators walk composed clusters and report every character of one at the cluster's start. | Open |
+| `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. | Open |
+| `sanitize_filename` | "The result is a fixed point" | `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass peels one extension, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. | Open |
+| `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. | Open |
+| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 are scoped to `tones=False`; I7 is not. | Open |
 
 **Coverage.** Rust, `cargo +nightly-2026-09-01 llvm-cov --no-default-features --branch`
 over the Tier-1 Rust suite (1,237 tests; doctests are not instrumented): **92.4% of lines

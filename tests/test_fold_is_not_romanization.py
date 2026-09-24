@@ -27,7 +27,7 @@ import pytest
 import disarm
 
 ROOT = Path(__file__).resolve().parent.parent
-API = ROOT / "python" / "disarm" / "_api.py"
+API = ROOT / "python" / "disarm" / "_api_text.py"
 
 #: Moscow, in Cyrillic. The running example throughout #907.
 MOSCOW = "Москва"

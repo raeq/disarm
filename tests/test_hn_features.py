@@ -438,7 +438,7 @@ class TestInvisibleSetDoesNotDriftFromItsDocs:
     #: Every file whose prose enumerates the set.
     PROSE = (
         ROOT / "src" / "api" / "safety.rs",
-        ROOT / "python" / "disarm" / "_api.py",
+        ROOT / "python" / "disarm" / "_api_security.py",
         ROOT / "docs" / "api" / "predicates.md",
     )
 

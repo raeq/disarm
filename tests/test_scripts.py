@@ -328,7 +328,7 @@ class TestUnknownScriptWarning:
         from unittest.mock import patch
 
         # Mock _detect_scripts to return a name not in the Script enum
-        with patch("disarm._api._detect_scripts", return_value=["Latin", "Martian"]):
+        with patch("disarm._api_scripts._detect_scripts", return_value=["Latin", "Martian"]):
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 result = detect_scripts("hello")

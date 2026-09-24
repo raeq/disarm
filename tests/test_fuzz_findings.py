@@ -121,3 +121,13 @@ def test_an_empty_separator_slug_is_its_own_slug(text: str, slug: str) -> None:
     once = slugify(text, allow_unicode=True, separator="")
     assert once == slug
     assert slugify(once, allow_unicode=True, separator="") == once
+
+
+# -- 8. slugify: an enclosed Latin letter comes from the separator, not the text ------
+
+
+def test_an_enclosed_latin_letter_in_the_slug_is_the_separators() -> None:
+    circled_a = "\u24b6"
+    assert slugify("admin x", allow_unicode=True, separator=circled_a) == "admin" + circled_a + "x"
+    out = slugify(circled_a + "dmin " + circled_a, allow_unicode=True, separator="-")
+    assert out == "dmin"

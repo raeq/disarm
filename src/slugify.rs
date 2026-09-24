@@ -303,6 +303,10 @@ fn slug_replace_with_automaton(text: &str, automaton: &SlugReplacementAutomaton)
 #[non_exhaustive]
 pub struct SlugConfig {
     /// String inserted between words (default `"-"`).
+    ///
+    /// Inserted as given. The words are held to the rules below and the separator is
+    /// not, so a slug carries whatever its separator does: under `allow_unicode`, a
+    /// separator holding U+24B6 puts one between the words, although no word keeps one.
     pub separator: String,
     /// Lowercase the result (default `true`).
     pub lowercase: bool,

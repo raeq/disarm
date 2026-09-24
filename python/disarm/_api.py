@@ -567,7 +567,8 @@ def slugify(
 
     Args:
         text: Input Unicode string.
-        separator: Character(s) between slug words.
+        separator: Character(s) between slug words, inserted as given: the words
+            are screened and the separator is not.
         lowercase: Convert to lowercase.
         max_length: Maximum slug length in **bytes** (0 = unlimited). The unit is
             right for the filesystem and URL limits it exists for; use

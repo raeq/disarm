@@ -270,3 +270,31 @@ fn an_empty_separator_slug_is_its_own_slug() {
     let dashed = SlugConfig::new().with_allow_unicode(true);
     assert_eq!(slugify("\u{1100} \u{1161}", &dashed), "\u{1100}-\u{1161}");
 }
+
+// -- 8. slugify: an enclosed Latin letter comes from the separator, not the text -----
+//
+// The fuzz crash's options: `allow_unicode`, `max_length` 62, `save_order`, one empty
+// stopword, entities decoded, and a separator of NULs, a slash, U+24B6 and `d`. The
+// U+24B6 in the slug is the separator's, inserted as given between `m` and `p`; the text
+// never contributes one, which is the property `allow_unicode` documents (#1028).
+
+#[test]
+fn an_enclosed_latin_letter_in_the_slug_is_the_separators() {
+    let sep = "\0\0\0\0/\0\0\0\0\0\0\0\0\0\0\0\u{24B6}d";
+    let config = || {
+        SlugConfig::new()
+            .with_separator(sep)
+            .with_max_length(62)
+            .with_save_order(true)
+            .with_stopwords([""])
+            .with_allow_unicode(true)
+    };
+    assert_eq!(slugify("\u{FFFD}!M\0p\0", &config()), format!("m{sep}p"));
+    // The text's own U+24B6 is dropped under the same options: no word of the slug
+    // carries one.
+    let out = slugify("\u{24B6}dmin \u{24B6} x\u{24B6}y", &config());
+    for word in out.split(sep) {
+        assert!(!word.contains('\u{24B6}'), "{word:?} in {out:?}");
+    }
+    assert_eq!(out, format!("dmin{sep}x{sep}y"));
+}

@@ -13,7 +13,8 @@
 //! - **S6** with no truncation and `save_order = false`, no word of the slug is a
 //!   stopword, compared case-insensitively (#1028).
 //! - `allow_unicode`: no leading or trailing ZWJ/ZWNJ (#711, #1028), none of the 130
-//!   circled and squared Latin symbols `Alphabetic` used to let through (#1028), and the
+//!   circled and squared Latin symbols `Alphabetic` used to let through in any word
+//!   (#1028; the separator is the caller's, inserted as given, and may carry one), and the
 //!   NFC and NFD spellings of the input give one slug (#477, and #1028's
 //!   compose-after-lowercase), numeric entities included.
 //! - **Idempotence** without stopwords or truncation, on both paths. Not in general:
@@ -115,9 +116,16 @@ fuzz_target!(|data: &[u8]| {
             !out.starts_with(JOINERS) && !out.ends_with(JOINERS),
             "a joiner at the edge of {out:?}"
         );
+        // In the words, not the separators: the separator is inserted as given, and one
+        // that carries U+24B6 puts it in the slug by the caller's hand, not the input's.
+        let words: Vec<&str> = if sep.is_empty() {
+            vec![out.as_str()]
+        } else {
+            out.split(sep.as_str()).collect()
+        };
         assert!(
-            !out.chars().any(is_enclosed_latin),
-            "an enclosed Latin symbol kept in {out:?}"
+            !words.iter().any(|w| w.chars().any(is_enclosed_latin)),
+            "an enclosed Latin symbol kept in {out:?} (separator {sep:?})"
         );
         // The documented property is form invariance (#477), not NFC: the path composes
         // with `compose_str`, which also forms composition exclusions, so

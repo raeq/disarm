@@ -274,10 +274,11 @@ def test_f1_a_failed_thread_query_never_reads_as_no_threads(gh, reply) -> None:
 
 
 def test_f1b_a_failed_thread_read_does_not_count_towards_the_stuck_streak(gh) -> None:
-    """F1b: CONTRIBUTING says a poll whose read failed does not count towards the streak.
+    """F1b: the contributor docs say a failed read does not count towards the streak.
 
-    That held for the PR view and not for the thread query, whose failure still yielded
-    a snapshot. Five polls show the stuck shape and every second thread read fails, so
+    The rule is in `docs/contributing/pull-requests.md`, "Watching a PR to merge". That
+    held for the PR view and not for the thread query, whose failure still yielded a
+    snapshot. Five polls show the stuck shape and every second thread read fails, so
     there are never two good sightings in a row, which must not stop as stuck.
     """
     fake = gh(required_checks=True, protect_threads=True, checks=[])  # BLOCKED, nothing pending

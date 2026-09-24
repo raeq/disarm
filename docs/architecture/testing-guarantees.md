@@ -160,8 +160,8 @@ Each of the 83 built-in language profiles has dedicated tests verifying:
 ## Fuzzing, coverage and mutation testing
 
 Three measurements of the suites above, all report-only: none is part of the required
-*All checks passed* status. How to run each is in `CONTRIBUTING.md` under *Fuzzing,
-coverage and mutation testing*.
+*All checks passed* status. How to run each is in `docs/contributing/testing.md` under
+*Fuzzing, coverage and mutation testing*.
 
 | Tool | What it adds | CI |
 |------|--------------|----|

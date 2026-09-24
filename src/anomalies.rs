@@ -956,32 +956,23 @@ fn whole_token_compat_is_ordinary(ch: char) -> bool {
 
 /// The first stacking mark that appears twice in a row on one base (#835).
 ///
-/// Compared over NFD. Canonical ordering sorts a base's marks by combining class, so two
-/// copies of one mark end up adjacent however they were typed — the same property that
-/// makes `strip_zalgo`'s per-class count un-evadable by interleaving (#842).
+/// Compared over NFD. Canonical ordering sorts a base's marks by combining class between
+/// starters, so two copies of one mark end up adjacent however marks of *other non-zero
+/// classes* were interleaved with them (#842).
 ///
 /// Nonzero combining class only, which is #842's discriminator: a class-0 mark is
 /// positioned by the renderer rather than stacked, so a repeated Indic matra or Thai
 /// vowel is an orthography question and not this one.
 ///
 /// A run is bounded by any non-mark, so `a` + acute + `b` + acute is two bases carrying
-/// one mark each and is not a finding.
+/// one mark each and is not a finding. A class-0 mark does *not* bound it: canonical
+/// ordering treats one as a starter, so `a` + acute + `U+180B` + acute kept the two
+/// acutes apart in NFD and this reported nothing (Z1 in `formal/lean/Text`).
+///
+/// The same answer as the key builders' repeat-dropper, which is why it is that function's
+/// check rather than a copy of it.
 fn duplicate_stacking_mark(tok: &str) -> Option<char> {
-    use unicode_normalization::char::{canonical_combining_class, is_combining_mark};
-    use unicode_normalization::UnicodeNormalization;
-
-    let mut previous: Option<char> = None;
-    for ch in tok.nfd() {
-        if is_combining_mark(ch) && canonical_combining_class(ch) != 0 {
-            if previous == Some(ch) {
-                return Some(ch);
-            }
-            previous = Some(ch);
-        } else {
-            previous = None;
-        }
-    }
-    None
+    crate::zalgo::first_repeated_mark(tok)
 }
 
 /// The ASCII a confusable fold introduces that the input did not have (#719, #737).
@@ -2108,6 +2099,23 @@ mod tests {
         let l = lex(&[]);
         assert!(has_anomalies("z\u{0301}\u{0301}\u{0301}\u{0301}algo", &l));
         assert!(!has_anomalies("café résumé naïve", &l));
+    }
+
+    /// Z1 (`formal/lean/Text`): a class-0 mark between the marks of a stack or a repeat
+    /// hid both from the detector. `U+180B` renders as nothing, and the token reported
+    /// only `mixed_script`.
+    #[test]
+    fn class_zero_mark_hides_neither_a_stack_nor_a_repeat() {
+        let l = lex(&[]);
+        let stack = format!("a{}", "\u{0301}\u{180B}".repeat(20));
+        assert_eq!(
+            inspect_anomalies(&stack, &l).kinds.first(),
+            Some(&AnomalyKind::Zalgo)
+        );
+        let repeat = "ba\u{0301}\u{034F}\u{0301}d";
+        let r = inspect_anomalies(repeat, &l);
+        assert_eq!(r.kinds, vec![AnomalyKind::DuplicateMark], "{r:?}");
+        assert_eq!(r.findings[0].detail, "U+0301");
     }
 
     // ── mixed_script ────────────────────────────────────────────────────────

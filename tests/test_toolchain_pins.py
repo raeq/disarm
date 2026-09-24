@@ -240,9 +240,14 @@ def _floor_from(path: str, pattern: str) -> str:
 
 
 def _docs() -> list[Path]:
-    """Every Markdown page a user reads. Symlinks are skipped so none is read twice."""
+    """Every Markdown page a user reads. Symlinks are skipped so none is read twice.
+
+    The changelog and its archive under `docs/changelog/` are history: an old release's
+    entry naming the floor it had then is true, so they are not read.
+    """
+    archive = ROOT / "docs" / "changelog"
     pages = [p for p in ROOT.glob("*.md") if p.name != "CHANGELOG.md"]
-    pages += list((ROOT / "docs").rglob("*.md"))
+    pages += [p for p in (ROOT / "docs").rglob("*.md") if archive not in p.parents]
     pages += [p for p in (ROOT / "bindings").rglob("*.md") if "node_modules" not in p.parts]
     return sorted(p for p in set(pages) if not p.is_symlink())
 

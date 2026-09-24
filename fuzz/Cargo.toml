@@ -1,4 +1,4 @@
-# cargo-fuzz targets for the disarm core. See CONTRIBUTING.md, "Fuzzing".
+# cargo-fuzz targets for the disarm core. See docs/contributing/testing.md, "Fuzzing".
 #
 # A crate of its own, outside the root package: the root `Cargo.toml` has no
 # `[workspace]` and an `include` list, so nothing here is built by `cargo test` at

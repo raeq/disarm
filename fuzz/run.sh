@@ -5,11 +5,11 @@
 #   bash fuzz/run.sh anomalies text   # just these
 #   FUZZ_SECONDS=900 bash fuzz/run.sh presets
 #
-# Needs a nightly toolchain and cargo-fuzz (see CONTRIBUTING.md, "Fuzzing"). New corpus
-# entries are written to fuzz/corpus/<target>/ and failing inputs to
-# fuzz/artifacts/<target>/, both gitignored; the seeds under fuzz/seeds/ are read and never written. The default
-# build (no -O) keeps debug assertions and overflow checks on, which is the point: several
-# of the library's invariants are debug_assert!s.
+# Needs a nightly toolchain and cargo-fuzz (see docs/contributing/testing.md, "Fuzzing").
+# New corpus entries are written to fuzz/corpus/<target>/ and failing inputs to
+# fuzz/artifacts/<target>/, both gitignored; the seeds under fuzz/seeds/ are read and
+# never written. The default build (no -O) keeps debug assertions and overflow checks on,
+# which is the point: several of the library's invariants are debug_assert!s.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

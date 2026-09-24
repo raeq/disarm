@@ -19,6 +19,26 @@ section at that commit. The toolchain is core Lean 4.34.0 only, with no Mathlib.
 data in this directory is written as escapes; no file here contains a literal invisible
 character.
 
+> **Status.** Every finding below is fixed in #1034, with regression tests in
+> `tests/test_text_formal_findings.py` and in the Rust unit tests of `src/zalgo.rs`,
+> `src/width.rs`, `src/punctuation.rs` and `src/anomalies.rs`. The code findings: Z1 (the
+> count is per base and per class, and a class-0 mark neither counts nor resets it, in
+> `is_zalgo`, `strip_zalgo`, the repeat-dropper and `duplicate_mark`), Z2 (the predicate
+> skips the negation overlay the cap keeps), W1 (a zero-width `Prepend` prefix is skipped
+> before the base is chosen) and W2 (a VS16 widens only an emoji base). D3 is fixed in the
+> code rather than the docstring: `fold_punctuation` now folds `U+1680`, `U+201B`,
+> `U+201F` and `U+2034`-`U+2037`. Z3, C1, C2, D1 and D2 are fixed in the documentation.
+> Z1 moves stored keys (`canonicalize`, `canonicalize_strict`, `sort_key`), recorded
+> under `KEY_SCHEMA_VERSION` 10. The W1 fix is a list of the thirteen scalars rather than a
+> generated table; a unit test checks it against the segmenter over every scalar. This
+> README still describes `595fbda`, so `scripts/repro.py` now reports Z1, Z2, W1, W2 and
+> D3 as not reproduced (the documentation findings are claims about text it does not
+> read), and `scripts/difftest.py` disagrees with the library on the fixed shapes and
+> nowhere else: 15,754,190 of 16,417,680 comparisons agree, the fixed zalgo model
+> (`isZalgoFixed`, `stripFixed`) agrees on all 5,043,200 zalgo inputs, `gwFixed` agrees on
+> every width input without a `U+FE0F` (W2 is not in the model), and every
+> `fold_punctuation` disagreement involves a character D3 added.
+
 ## Findings at a glance
 
 | # | Class | Severity | One line |

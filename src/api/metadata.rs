@@ -297,6 +297,20 @@ pub fn unicode_version() -> &'static str {
 ///   moves: an input over 10 MiB that no step grows is accepted where one with an
 ///   actionable byte was refused, and an input that `ml_normalize`'s emoji naming grows by
 ///   more than 10 MiB is refused where it used to return up to ten times its size.
+///
+/// And `canonicalize`, `canonicalize_strict` and `sort_key` move for a combining mark of
+/// class 0 between the marks on one base (Z1, found by the Lean model in
+/// `formal/lean/Text`). The zalgo cap and the #835 repeat-dropper both reset their count
+/// at a class-0 mark, because canonical ordering treats one as a starter; so `U+034F`,
+/// `U+180B` or a Thai vowel sign between two runs of acutes let a base carry any number of
+/// them, and `a` + acute + `U+180B` + acute kept both acutes. Neither resets there now:
+/// `canonicalize("a" + ("\u{0301}" * 3 + "\u{180B}") * 6)` keeps one acute where it kept
+/// six, as `a` + eight acutes always did. The fixture moved on 6 rows for `canonicalize`
+/// and `sort_key` and 1 for `canonicalize_strict`, all of them the #862 rows that put
+/// `U+0489` between two copies of one mark (`a\u{308}\u{308}\u{489}\u{308}c` keys as
+/// `\u{e4}\u{489}c`, not `\u{e4}\u{489}\u{308}c`); `canonicalize_strict` moves on one of
+/// them only, because it strips `U+0489` from a Latin base before either count runs.
+/// `search_key`, `catalog_key` and `strip_obfuscation` remove every mark and do not move.
 pub const KEY_SCHEMA_VERSION: u32 = 10;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
@@ -332,7 +346,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "7ff458bc43283deda49c910af3a0072d6b11d603eb65a5a63b154571c7e96ff4";
+    "384c0742f9188dd2c1ddf13080326f1d4c55498f2a856a5c886a732c0e87536c";
 
 /// The key-schema counter, as a function (#645).
 ///

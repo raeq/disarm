@@ -1,8 +1,8 @@
 name: Coverage
 
 # Line, branch and function coverage of the Rust core under the Tier-1 Rust suite
-# (`cargo test --no-default-features`), measured with cargo-llvm-cov. See CONTRIBUTING.md,
-# "Coverage".
+# (`cargo test --no-default-features`), measured with cargo-llvm-cov. See
+# docs/contributing/testing.md, "Coverage".
 #
 # REPORT ONLY. The numbers go to the job summary, lowest-covered module first, and the
 # lcov file is uploaded as an artifact; nothing compares them against a threshold yet. The

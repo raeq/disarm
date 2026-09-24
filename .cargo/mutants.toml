@@ -1,5 +1,5 @@
 # cargo-mutants configuration, read automatically by `cargo mutants` at the repository
-# root. Used by .github/workflows/mutants.yml; see CONTRIBUTING.md, "Mutation testing".
+# root. Used by .github/workflows/mutants.yml; see docs/contributing/testing.md, "Mutation testing".
 #
 # cargo itself never reads this file (it reads .cargo/config.toml), so it changes no
 # ordinary build.

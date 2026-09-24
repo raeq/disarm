@@ -1107,9 +1107,12 @@ def fold_case(text: str) -> str:
     and all Latin ligature expansions (ﬁ→fi, ﬂ→fl, ﬀ→ff, ﬃ→ffi,
     ﬄ→ffl, ﬅ→st, ﬆ→st).
 
-    Equivalent to ``str.casefold()`` but executed in Rust via a
-    compile-time PHF (perfect hash function) table.  Pure-ASCII strings
-    take a branchless fast path with no table lookup.
+    Equivalent to ``str.casefold()`` on a Python whose ``unicodedata`` is also
+    Unicode 16.0 (Python 3.14), but executed in Rust via a compile-time PHF (perfect
+    hash function) table.  The table is disarm's, not the host's: on an older Python
+    the two differ on the cased letters added since that Python's Unicode version
+    (``U+1C89``, ``U+A7CB``, Garay, ...).  Pure-ASCII strings take a branchless fast
+    path with no table lookup.
 
     Note:
         **Stability.** A patch upgrade never changes this function's output; a
@@ -1148,10 +1151,11 @@ casefold = fold_case
 def is_case_fold_stable(text: str) -> bool:
     """True if ``text`` is a stable identity key under case folding.
 
-    Answers ``fold_case(text) == text.lower()``.  A ``False`` result says some
-    *other* string folds to the same value, so a table keyed on this one can
-    collide — ``groß.txt`` and ``gross.txt`` are the pair node-tar collided on
-    (CVE-2026-23950), and ``ſtraße``/``straße`` and ``ﬁle``/``file`` are the same
+    Answers whether `fold_case` and a simple lowercase agree on ``text`` (which
+    lowercase is below).  A ``False`` result says some *other* string folds to the
+    same value, so a table keyed on this one can collide — ``groß.txt`` and
+    ``gross.txt`` are the pair node-tar collided on (CVE-2026-23950),
+    and ``ſtraße``/``straße`` and ``ﬁle``/``file`` are the same
     shape.  Roughly 2,000 code points behave this way, including every Latin
     ligature, ``ẛ``, the micro sign, and all of Cherokee (whose fold direction
     runs small→capital, so both cases move).
@@ -1166,9 +1170,18 @@ def is_case_fold_stable(text: str) -> bool:
     not: casefolding performs the very transform under test, so a predicate
     written against it is ``True`` everywhere.
 
-    Answers about disarm's own folding table (Unicode 16.0), so it also reports
-    ``False`` for characters your Python's ``str.lower()`` knows about and that
-    table does not — which is a collision hazard for the same reason.
+    **Both sides are compiled into disarm; neither is your Python's.**  The fold is
+    disarm's own table (Unicode 16.0), and the lowercase is the Rust toolchain's that
+    built the wheel (``to_lowercase``, Unicode 17.0 on a current toolchain; see
+    ``docs/provenance.md``).  So this is ``fold_case(text) == text.lower()`` only where
+    all three know the same letters.  It is not, on letters one side knows and another
+    does not: the 28 cased letters Unicode 17 added (``U+A7CE``, ``U+A7D2``,
+    ``U+A7D4``, ``U+16EA0``-``U+16EB8``) read ``False`` here on every current Python,
+    where ``fold_case(c) == c.lower()`` holds, and the cased letters Unicode 16 added
+    (``U+1C89``, ``U+A7CB``, Garay, ...) read ``True`` here, where that comparison fails
+    on Python 3.13 and older.  A ``False`` for a letter one side does not know is a
+    collision hazard for the same reason as any other: two functions that disagree
+    build two keys that disagree.
 
     A ``True`` result is **not** a uniqueness guarantee: two distinct stable
     strings can still collide under some *other* normalization.
@@ -1260,13 +1273,16 @@ def strip_zero_width_chars(text: str) -> str:
     """Remove zero-width characters.
 
     Deletes the zero-width set, which renders as nothing and is used to fragment a
-    token so it evades a denylist while looking unchanged. The set is exactly:
+    token so it evades a denylist while looking unchanged. The set is exactly these
+    22 code points:
 
     - ``U+200B``–``U+200D`` — ZWSP, ZWNJ, ZWJ
     - ``U+2060``–``U+2064`` — word joiner and the invisible operators
     - ``U+FEFF`` — BOM / zero-width no-break space
     - ``U+180E`` — Mongolian vowel separator (reclassified ``Zs`` → ``Cf`` in
       Unicode 6.3, so it is a format character despite the name)
+    - ``U+1BCA0``–``U+1BCA3`` — the Duployan shorthand format controls (#813)
+    - ``U+1D173``–``U+1D17A`` — the musical symbol format controls (#813)
 
     Args:
         text: Input string.
@@ -1563,7 +1579,9 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
     not pixels or font metrics. Wide/fullwidth characters and emoji-presented
     clusters are 2 columns; combining marks, controls, and zero-width characters
     are 0 — including tab (U+0009) and other C0/C1 control characters, which each
-    contribute **0 columns** (they are not expanded to tab stops). Newlines are
+    contribute **0 columns** (they are not expanded to tab stops). A zero-width
+    character that opens a cluster does not hide the one it attaches to:
+    ``"\\u0600" + "1"`` is one cluster and 1 column. Newlines are
     not modelled either; layout that depends on tab stops or wrapping is the
     caller's responsibility.
 
@@ -1590,13 +1608,16 @@ def terminal_width(text: str, *, ambiguous_wide: bool = False) -> int:
 def grapheme_width(cluster: str, *, ambiguous_wide: bool = False) -> int:
     """Column width of a single grapheme cluster (see `terminal_width`).
 
-    Pass a single grapheme cluster. The width is that of the **first scalar**
-    (the base): 0 for a combining/zero-width base, 2 for a wide or
-    emoji-presentation base, otherwise 1. Trailing scalars are then inspected for
-    presentation selectors that adjust this — a variation selector U+FE0F (or a
+    Pass a single grapheme cluster. The width is that of the **base**: the first
+    scalar, after any zero-width ``Grapheme_Cluster_Break=Prepend`` prefix such as
+    ``U+0600 ARABIC NUMBER SIGN``, which UAX #29 attaches to the character after it.
+    It is 0 for a combining/zero-width base, 2 for a wide or emoji-presentation
+    base, otherwise 1. Trailing scalars are then inspected for presentation
+    selectors that adjust this — a variation selector U+FE0F on an emoji base (or a
     keycap ``U+20E3`` on a ``0``–``9``/``#``/``*`` base) forces emoji
     presentation (width 2), and U+FE0E forces text presentation (width 1 for an
-    emoji base).
+    emoji base). A stray selector of either kind on a base that is not an emoji,
+    such as ``"a\\ufe0f"``, is ignored and the base's own width applies.
 
     It does **not** segment or sum grapheme clusters. If ``cluster`` contains
     more than the leading cluster, the extra scalars are *not* added to the

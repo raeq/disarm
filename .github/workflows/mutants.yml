@@ -3,8 +3,8 @@ name: Mutation testing
 # cargo-mutants over the security-critical modules of the Rust core: it makes small
 # changes to the code (a `<` for a `<=`, a `true` for a condition, a function body
 # replaced by a default) and checks that the Tier-1 Rust suite fails on each. A mutant the
-# suite still passes on is a line nothing asserts. See CONTRIBUTING.md, "Mutation
-# testing".
+# suite still passes on is a line nothing asserts. See
+# docs/contributing/testing.md, "Mutation testing".
 #
 # REPORT ONLY, weekly and on demand. Each module's outcomes (caught / missed / timeout /
 # unviable) go to the job summary and mutants.out/ is uploaded; the job fails only when

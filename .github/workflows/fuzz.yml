@@ -3,7 +3,7 @@ name: Fuzz
 # cargo-fuzz over the Rust core: the targets in fuzz/fuzz_targets/, each asserting the
 # documented properties of its surface (idempotence, detector agreement, the sanitizer
 # postconditions, round trips) rather than only the absence of a panic. See
-# CONTRIBUTING.md, "Fuzzing".
+# docs/contributing/testing.md, "Fuzzing".
 #
 # Two shapes:
 #

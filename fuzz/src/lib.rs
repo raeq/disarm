@@ -214,8 +214,8 @@ pub fn nfd(s: &str) -> String {
 /// the cluster's start, and a composed character that never appeared in the input (even
 /// a composition exclusion such as U+FB49, which no normalization form produces), and
 /// `find_untranslatable` reports a selector at the offset of its base. Found by this
-/// fuzzer; see CONTRIBUTING.md, "Fuzzing". Tighten this to `s[offset..].starts_with(ch)`
-/// once that is fixed.
+/// fuzzer; see docs/contributing/testing.md, "Fuzzing". Tighten this to
+/// `s[offset..].starts_with(ch)` once that is fixed.
 pub fn located(s: &str, offset: usize, ch: char) -> bool {
     let Some(rest) = s.get(offset..) else {
         return false;

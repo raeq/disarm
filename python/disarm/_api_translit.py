@@ -1,5 +1,8 @@
-"""Transliteration and slugs: `transliterate`, `find_untranslatable`, `slugify`,
-reverse transliteration, and the language and script profiles."""
+"""Transliteration helpers: `find_untranslatable`, the keyword builder `slugify` uses,
+the reverse-transliteration languages, and the language and script profiles.
+
+`transliterate` and `slugify` themselves stay in `disarm._api`, with their `@overload`
+stubs, because `typing` records overloads under the module that defines them."""
 
 from __future__ import annotations
 

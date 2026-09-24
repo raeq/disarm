@@ -81,7 +81,7 @@ jobs:
         shell: bash
         run: printf '\n[patch.crates-io]\ndisarm = { path = "../.." }\n' >> Cargo.toml
 
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1.4.4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           ruby-version: ${{ matrix.ruby }}
           rustup-toolchain: stable
@@ -141,7 +141,7 @@ jobs:
       # `workflow_dispatch:` on main — the per-registry patch lane RELEASING.md
       # documents — which resolves the OLD published core and used to die deep in a
       # per-platform matrix with a bare E0425/E0609 rather than here, with a reason.
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1.4.4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           ruby-version: "3.3"
           # NOT `bundler-cache: true`. It runs at the repo root, which has no Gemfile —
@@ -192,11 +192,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1.4.4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
-      - uses: oxidize-rb/actions/cross-gem@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1.4.4
+      - uses: oxidize-rb/actions/cross-gem@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           platform: ${{ matrix.platform }}
           # Every ABI the gem claims support for must be built (#699). A version
@@ -230,7 +230,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: oxidize-rb/actions/setup-ruby-and-rust@e5f9a49a7812a078584072f6e3f657ad247c8771  # v1.4.4
+      - uses: oxidize-rb/actions/setup-ruby-and-rust@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
@@ -299,7 +299,7 @@ jobs:
           pattern: cross-gem-*
           merge-multiple: true
           path: pkg
-      - uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b  # v1.321.0
+      - uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073  # v1.324.0
         with:
           ruby-version: "3.3"
       - name: Configure RubyGems credentials (OIDC trusted publishing)

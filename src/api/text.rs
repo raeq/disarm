@@ -4,6 +4,7 @@
 
 use std::borrow::Cow;
 
+use crate::api::OnUnknown;
 use crate::Error;
 
 // ── Terminal width (UAX #11 / UAX #29) ───────────────────────────────────────
@@ -126,8 +127,25 @@ pub fn strip_pua(text: &str) -> String {
 
 // ── Zalgo (combining-mark abuse) ─────────────────────────────────────────────
 
+/// The default `threshold` of [`is_zalgo`]: a base carrying more than this many
+/// stacked combining marks is zalgo. Vietnamese `ệ` carries two in NFD.
+///
+/// Every binding that gives `is_zalgo` a default takes it from here, so they cannot
+/// drift from the core.
+pub const DEFAULT_ZALGO_THRESHOLD: usize = crate::zalgo::DEFAULT_THRESHOLD;
+
+/// The default `max_marks` of [`strip_zalgo`], equal to [`DEFAULT_ZALGO_THRESHOLD`] on
+/// purpose (#788): with a lower cap the transform removed marks from text the predicate
+/// had just declined to flag, such as pointed and cantillated Hebrew.
+///
+/// Every binding that gives `strip_zalgo` a default takes it from here. Node and Ruby
+/// had kept the old cap of 2 as a literal of their own after #788 raised it
+/// (`formal/bindings`, B1).
+pub const DEFAULT_ZALGO_MAX_MARKS: usize = crate::zalgo::DEFAULT_MAX_MARKS;
+
 /// True if any base character carries more than `threshold` consecutive
-/// combining marks in NFD (zalgo-style abuse). A sane default is 3.
+/// combining marks in NFD (zalgo-style abuse). The default the bindings use is
+/// [`DEFAULT_ZALGO_THRESHOLD`] (3).
 #[must_use]
 pub fn is_zalgo(text: &str, threshold: usize) -> bool {
     crate::zalgo::is_zalgo(text, threshold)
@@ -135,7 +153,8 @@ pub fn is_zalgo(text: &str, threshold: usize) -> bool {
 
 /// Cap combining marks at `max_marks` per base character (recomposed to NFC),
 /// stripping zalgo stacking while preserving legitimate diacritics. `max_marks`
-/// of 0 strips all combining marks.
+/// of 0 strips all combining marks. The default the bindings use is
+/// [`DEFAULT_ZALGO_MAX_MARKS`] (3).
 #[must_use]
 pub fn strip_zalgo(text: &str, max_marks: usize) -> String {
     crate::zalgo::strip_zalgo(text, max_marks)
@@ -460,15 +479,32 @@ pub use crate::slugify::SlugConfig;
 /// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
-/// unknown language code is treated as "best effort" and falls back to the
-/// default transliterator (the same lenient behaviour as the underlying engine),
-/// rather than erroring. The Python `slugify` wrapper treats `lang` the same way
-/// — it forwards the code unvalidated and silently falls back, so neither
-/// binding raises on an unknown slug `lang`. If you need strict validation,
-/// check the code against [`list_langs`](crate::api::list_langs) before building the config.
+/// unknown language code falls back to the default transliterator. Prefer
+/// [`try_slugify`], which rejects it the way Python's `slugify` and every other
+/// binding do.
 #[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
+}
+
+/// [`slugify`], rejecting a `config.lang` that [`validate_lang`](crate::api::validate_lang)
+/// does not accept instead of falling back to the default tables. What every binding's
+/// `slugify` calls (`formal/bindings`, B2).
+///
+/// # Errors
+///
+/// [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) for an unknown
+/// `config.lang`.
+///
+/// ```
+/// use disarm::api::{try_slugify, SlugConfig};
+/// let de = SlugConfig::default().with_lang("de");
+/// assert_eq!(try_slugify("M\u{fc}nchen", &de).unwrap(), "muenchen");
+/// assert!(try_slugify("M\u{fc}nchen", &SlugConfig::default().with_lang("dee")).is_err());
+/// ```
+pub fn try_slugify(text: &str, config: &SlugConfig) -> Result<String, crate::Error> {
+    crate::transliterate::validate_lang(config.lang.as_deref())?;
+    Ok(crate::slugify::slugify_impl(text, config))
 }
 
 // ── Emoji ────────────────────────────────────────────────────────────────────
@@ -479,12 +515,42 @@ pub fn slugify(text: &str, config: &SlugConfig) -> String {
 /// `strip_modifiers` drops the modifier suffix (`": light skin tone"`, etc.) from
 /// each name. Pure-ASCII input is returned unchanged.
 ///
+/// An emoji the CLDR table cannot name becomes `[?]`, the sentinel
+/// [`transliterate`](crate::api::transliterate) writes for a character it cannot
+/// romanize: as bundled, the 26 regional indicators standing alone (CLDR names them
+/// only in pairs) and the 96 Plane 14 tag characters standing alone.
+/// [`demojize_with`] picks another policy. It was dropped here and in every binding
+/// but Python, whose documented default is the sentinel, so the same call gave `""`
+/// in one language and `"[?]"` in another (`formal/bindings`, D1).
+///
 /// This uses the **built-in CLDR data** (latest English). The custom Python
 /// `EmojiProvider` override exposed by the `disarm` package is binding-layer-only
 /// (Python-only) and is intentionally **not** part of the Rust surface.
+///
+/// ```
+/// use disarm::api::demojize;
+/// assert_eq!(demojize("\u{1F600}!", false), "grinning face!");
+/// assert_eq!(demojize("x\u{1F1E6}!", false), "x[?]!");
+/// ```
 #[must_use]
 pub fn demojize(text: &str, strip_modifiers: bool) -> String {
-    crate::emoji::demojize_rust(text, strip_modifiers)
+    demojize_with(text, strip_modifiers, &OnUnknown::default())
+}
+
+/// [`demojize`] with a policy for an emoji the CLDR table cannot name — the same
+/// [`OnUnknown`] [`Transliterate`](crate::api::Transliterate) takes, and Python's
+/// `errors=` / `replace_with=`: [`OnUnknown::Replace`] writes the string (the default is
+/// `[?]`), [`OnUnknown::Ignore`] drops the emoji, [`OnUnknown::Preserve`] keeps it.
+///
+/// ```
+/// use disarm::api::{demojize_with, OnUnknown};
+/// assert_eq!(demojize_with("x\u{1F1E6}!", false, &OnUnknown::Ignore), "x!");
+/// assert_eq!(demojize_with("x\u{1F1E6}!", false, &OnUnknown::Preserve), "x\u{1F1E6}!");
+/// ```
+#[must_use]
+pub fn demojize_with(text: &str, strip_modifiers: bool, on_unknown: &OnUnknown) -> String {
+    let (mode, replace_with) = on_unknown.parts();
+    crate::emoji::demojize_named(text, strip_modifiers, mode, replace_with)
 }
 
 /// Replace every emoji in `text` with `replacement`, verbatim (#972).

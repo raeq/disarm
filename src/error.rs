@@ -660,13 +660,14 @@ impl From<ErrorRepr> for pyo3::PyErr {
                 crate::ResourceLimitError::new_err(msg)
             }
 
-            // UnsupportedError — a requested feature is unavailable.
+            // UnsupportedError — a requested feature is unavailable, including a
+            // registration once the tables are sealed (see `Error::kind`).
             ErrorRepr::UnsupportedAutoEncoding { .. }
-            | ErrorRepr::ReverseUnsupportedLang { .. } => crate::UnsupportedError::new_err(msg),
+            | ErrorRepr::ReverseUnsupportedLang { .. }
+            | ErrorRepr::Sealed { .. } => crate::UnsupportedError::new_err(msg),
 
             // Base DisarmError — state / data errors that fit no category above.
-            ErrorRepr::Sealed { .. }
-            | ErrorRepr::ContextDictNotFound { .. }
+            ErrorRepr::ContextDictNotFound { .. }
             | ErrorRepr::ContextDictCorrupt { .. }
             | ErrorRepr::EncodingConfidenceTooLow { .. }
             | ErrorRepr::Untranslatable { .. }
@@ -761,11 +762,18 @@ impl Error {
             | ErrorRepr::RegexTooLong { .. }
             | ErrorRepr::UniqueSlugAttemptsExceeded { .. } => ErrorKind::ResourceLimit,
 
+            // A registration after `seal_registrations()` is an operation this process
+            // has switched off, which is what `Unsupported` means, and what the Rust
+            // API documented on all four registration functions while this arm said
+            // `Other` (`formal/bindings`, E2). `Other` is documented as open to exactly
+            // this reclassification; Python's class moves from the base `DisarmError`
+            // to its `UnsupportedError` subclass, so an `except DisarmError` still
+            // catches it.
             ErrorRepr::UnsupportedAutoEncoding { .. }
-            | ErrorRepr::ReverseUnsupportedLang { .. } => ErrorKind::Unsupported,
+            | ErrorRepr::ReverseUnsupportedLang { .. }
+            | ErrorRepr::Sealed { .. } => ErrorKind::Unsupported,
 
-            ErrorRepr::Sealed { .. }
-            | ErrorRepr::ContextDictNotFound { .. }
+            ErrorRepr::ContextDictNotFound { .. }
             | ErrorRepr::ContextDictCorrupt { .. }
             | ErrorRepr::EncodingConfidenceTooLow { .. }
             | ErrorRepr::Untranslatable { .. }
@@ -852,6 +860,13 @@ mod tests {
                 },
                 ErrorKind::Unsupported,
                 "reverse_unsupported_lang",
+            ),
+            (
+                ErrorRepr::Sealed {
+                    op: "register_replacements".into(),
+                },
+                ErrorKind::Unsupported,
+                "sealed",
             ),
             (
                 ErrorRepr::Untranslatable {

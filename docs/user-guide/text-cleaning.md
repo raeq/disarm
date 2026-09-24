@@ -76,7 +76,7 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     assert strip_zalgo("café") == "café"
     assert strip_zalgo("Việt Nam") == "Việt Nam"
 
-    # Zalgo stacking is stripped to max_marks (default: 2)
+    # Zalgo stacking is stripped to max_marks (default: 3, is_zalgo's threshold)
     is_zalgo("café")  # False
     is_zalgo("ḧ̸̡̢̧̛̗̱́̑̾̊̿̏̒̓̕ě̵̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕l̸̡̢̧̛̗̱̈́̑̾̊̿̏̒̓̕o")  # True
     ```
@@ -87,11 +87,12 @@ Remove excessive combining marks (zalgo text abuse) while preserving legitimate 
     use disarm::api;
 
     // Legitimate diacritics are preserved
-    assert_eq!(api::strip_zalgo("café", 2), "café");
-    assert_eq!(api::strip_zalgo("Việt Nam", 2), "Việt Nam");
+    assert_eq!(api::strip_zalgo("café", api::DEFAULT_ZALGO_MAX_MARKS), "café");
+    assert_eq!(api::strip_zalgo("Việt Nam", api::DEFAULT_ZALGO_MAX_MARKS), "Việt Nam");
 
-    // Zalgo stacking is stripped to max_marks (default: 2)
-    assert_eq!(api::is_zalgo("café", 3), false);
+    // Zalgo stacking is stripped to max_marks; the default every binding uses is
+    // DEFAULT_ZALGO_MAX_MARKS (3), equal to is_zalgo's DEFAULT_ZALGO_THRESHOLD
+    assert_eq!(api::is_zalgo("café", api::DEFAULT_ZALGO_THRESHOLD), false);
     ```
 
 === "Ruby"

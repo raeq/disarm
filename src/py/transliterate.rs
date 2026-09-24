@@ -220,44 +220,33 @@ pub fn _transliterate<'py>(
     crate::transliterate::validate_lang(lang)?;
     let py = text.py();
     let s = text.to_str()?;
-    // `errors` is validated below (after the strict short-circuit, since "strict"
-    // is not an ErrorMode value but a separate mode handled here, #184).
-    // Apply global pre-transliteration replacements (no-op unless any are
-    // registered). Runs before transliterate_impl — and thus before its ASCII
-    // fast path — so ASCII-keyed replacements take effect too. The output of the
-    // replacement pre-pass is bounded (amplification guard); raw input size is
-    // not capped (#80).
-    let replaced = crate::transliterate::apply_replacements_bounded(s)?;
-    if errors == "strict" {
-        return Ok(PyString::new(
-            py,
-            &crate::transliterate::transliterate_strict(
-                &replaced,
-                lang,
-                strict_iso9,
-                gost7034,
-                tones,
-            )?,
-        ));
-    }
-    let error_mode = ErrorMode::parse(errors)?;
-    let out = crate::transliterate::transliterate_impl(
-        &replaced,
+    // "strict" is not an ErrorMode value but a separate mode (#184): `None` below.
+    let on_unknown = if errors == "strict" {
+        None
+    } else {
+        Some(ErrorMode::parse(errors)?)
+    };
+    // The registered replacement pre-pass, then the engine: the one body the Rust
+    // API's `Transliterate::try_run` runs too (`formal/bindings`, E1). The pre-pass
+    // runs before the engine's ASCII fast path, so ASCII-keyed replacements take
+    // effect; its output is bounded (amplification guard); raw input size is not
+    // capped (#80).
+    let out = crate::transliterate::transliterate_after_replacements(
+        s,
         lang,
-        error_mode,
+        on_unknown,
         replace_with,
         strict_iso9,
         gost7034,
         tones,
-    );
-    // #277 lever 4: both pre-pass and engine returned `Cow::Borrowed`, which is
-    // their documented "output is byte-identical to input" contract (the engine
-    // borrows only for pure-ASCII input; the pre-pass borrows only when no
-    // replacement fired). Returning the original object is then observationally
-    // identical for an immutable `str` — and zero-alloc.
-    match (&replaced, &out) {
-        (Cow::Borrowed(_), Cow::Borrowed(_)) => Ok(text.clone()),
-        _ => Ok(PyString::new(py, &out)),
+    )?;
+    // #277 lever 4: a borrowed result is the documented "output is byte-identical to
+    // input" contract (the pre-pass borrows only when no replacement fired, the engine
+    // only for pure-ASCII input). Returning the original object is then
+    // observationally identical for an immutable `str` — and zero-alloc.
+    match out {
+        Cow::Borrowed(_) => Ok(text.clone()),
+        Cow::Owned(out) => Ok(PyString::new(py, &out)),
     }
 }
 
@@ -330,14 +319,15 @@ pub fn _find_untranslatable(
         return Err(crate::ErrorRepr::MutuallyExclusiveBare.into());
     }
     crate::transliterate::validate_lang(lang)?;
-    let text = crate::transliterate::apply_replacements_bounded(text)?;
-    Ok(crate::transliterate::find_untranslatable_impl(
-        &text,
-        lang,
-        strict_iso9,
-        gost7034,
-        tones,
-    ))
+    Ok(
+        crate::transliterate::find_untranslatable_after_replacements(
+            text,
+            lang,
+            strict_iso9,
+            gost7034,
+            tones,
+        )?,
+    )
 }
 
 /// Context-aware transliteration using dictionary-based vowel restoration.
@@ -403,12 +393,11 @@ pub fn _transliterate_batch(
     }
     crate::transliterate::validate_lang(lang)?;
     // `errors="strict"` (#184) raises on the first untranslatable character of
-    // the first item that has one; otherwise the mode is the parsed ErrorMode.
-    let strict = errors == "strict";
-    let error_mode = if strict {
-        ErrorMode::Ignore
+    // the first item that has one (`None`); otherwise the mode is the parsed ErrorMode.
+    let on_unknown = if errors == "strict" {
+        None
     } else {
-        ErrorMode::parse(errors)?
+        Some(ErrorMode::parse(errors)?)
     };
     // Own the borrowed args so the compute loop holds no Python-borrowed data.
     let lang = lang.map(str::to_owned);
@@ -434,29 +423,18 @@ pub fn _transliterate_batch(
             chunk
                 .iter()
                 .map(|text| -> PyResult<String> {
-                    // Global pre-transliteration replacements (no-op unless
-                    // registered), applied per item before transliterate_impl —
-                    // parity with the scalar path, including the replacement-output
-                    // amplification bound.
-                    let replaced = crate::transliterate::apply_replacements_bounded(text)?;
-                    if strict {
-                        return Ok(crate::transliterate::transliterate_strict(
-                            &replaced,
-                            lang.as_deref(),
-                            strict_iso9,
-                            gost7034,
-                            tones,
-                        )?);
-                    }
-                    Ok(crate::transliterate::transliterate_impl(
-                        &replaced,
+                    // The scalar path's body per item: the registered replacements
+                    // (no-op unless any are registered, output-bounded), then the
+                    // engine. `lang` was validated once, above.
+                    Ok(crate::transliterate::transliterate_after_replacements(
+                        text,
                         lang.as_deref(),
-                        error_mode,
+                        on_unknown,
                         &replace_with,
                         strict_iso9,
                         gost7034,
                         tones,
-                    )
+                    )?
                     .into_owned())
                 })
                 .collect()

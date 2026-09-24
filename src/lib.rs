@@ -374,6 +374,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("_UNICODE_VERSION", api::UNICODE_VERSION)?;
     m.add("_KEY_SCHEMA_VERSION", api::KEY_SCHEMA_VERSION)?;
 
+    // The zalgo defaults, read by the Python wrapper so no binding restates them: Node
+    // and Ruby each kept a literal 2 after #788 raised the core's cap to 3
+    // (`formal/bindings`, B1).
+    m.add("_DEFAULT_ZALGO_THRESHOLD", api::DEFAULT_ZALGO_THRESHOLD)?;
+    m.add("_DEFAULT_ZALGO_MAX_MARKS", api::DEFAULT_ZALGO_MAX_MARKS)?;
+
     Ok(())
 }
 

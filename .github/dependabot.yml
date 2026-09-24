@@ -49,6 +49,9 @@ updates:
       - "/bindings/ruby"
       - "/bindings/java/rust"
       - "/bindings/cabi"
+      # The cargo-fuzz crate (libfuzzer-sys, arbitrary). Not shipped, but fuzz.yml
+      # builds it on every pull request that touches the core.
+      - "/fuzz"
     schedule:
       interval: "weekly"
     cooldown:

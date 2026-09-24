@@ -1,0 +1,100 @@
+name: Mutation testing
+
+# cargo-mutants over the security-critical modules of the Rust core: it makes small
+# changes to the code (a `<` for a `<=`, a `true` for a condition, a function body
+# replaced by a default) and checks that the Tier-1 Rust suite fails on each. A mutant the
+# suite still passes on is a line nothing asserts. See
+# docs/contributing/testing.md, "Mutation testing".
+#
+# REPORT ONLY, weekly and on demand. Each module's outcomes (caught / missed / timeout /
+# unviable) go to the job summary and mutants.out/ is uploaded; the job fails only when
+# cargo-mutants itself cannot run (the unmutated tree fails its tests, or a usage error),
+# never on a missed mutant. The baseline is in docs/architecture/testing-guarantees.md.
+#
+# Scoped to six modules because the whole crate is thousands of mutants and every one
+# rebuilds the library and relinks two dozen test binaries. One job per module, so they
+# run in parallel and a slow one does not hold the others. Exclusions and timeouts live
+# in .cargo/mutants.toml.
+on:
+  schedule:
+    # Sundays 04:23 UTC: off the hour, and clear of the weekday nightlies.
+    - cron: "23 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutants
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_MUTANTS_VERSION: "27.1.0"
+
+jobs:
+  mutants:
+    name: Mutants (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [anomalies, invisibles, confusables, filename, smuggled, hostname]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+
+      - name: Install cargo-mutants (pinned)
+        run: cargo install cargo-mutants --version "$CARGO_MUTANTS_VERSION" --locked
+
+      - name: Mutate src/${{ matrix.module }}.rs
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          # Exit 2 (missed mutants) and 3 (timeouts) are the report, not a failure.
+          set +e
+          cargo mutants --file "src/${MODULE}.rs" --jobs 2 --no-shuffle
+          status=$?
+          set -e
+          echo "cargo-mutants exited $status"
+          case "$status" in 0|2|3) exit 0 ;; *) exit "$status" ;; esac
+
+      - name: Write the job summary
+        if: always()
+        env:
+          MODULE: ${{ matrix.module }}
+        run: |
+          out=mutants.out
+          [ -d "$out" ] || exit 0
+          count() {
+            if [ -f "$out/$1.txt" ]; then wc -l < "$out/$1.txt"; else echo 0; fi
+          }
+          {
+            echo "## Mutants: src/${MODULE}.rs (report only)"
+            echo
+            echo "| caught | missed | timeout | unviable |"
+            echo "|---:|---:|---:|---:|"
+            echo "| $(count caught) | $(count missed) | $(count timeout) | $(count unviable) |"
+            echo
+            if [ -s "$out/missed.txt" ]; then
+              echo "<details><summary>Missed mutants</summary>"
+              echo
+              echo '```'
+              cat "$out/missed.txt"
+              echo '```'
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload mutants.out
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: mutants-${{ matrix.module }}
+          path: mutants.out/
+          if-no-files-found: ignore

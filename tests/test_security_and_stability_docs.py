@@ -130,7 +130,7 @@ def test_every_watched_function_carries_a_stability_note() -> None:
     documented: dict[str, bool] = {}
     for path in (
         ROOT / "python" / "disarm" / "_presets.py",
-        ROOT / "python" / "disarm" / "_api.py",
+        *sorted((ROOT / "python" / "disarm").glob("_api*.py")),
     ):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

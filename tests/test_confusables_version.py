@@ -161,7 +161,7 @@ def test_no_source_claims_a_missing_accessor_that_now_exists() -> None:
         root / "docs" / "provenance.md",
         root / "src" / "api" / "text.rs",
         root / "src" / "api" / "metadata.rs",
-        root / "python" / "disarm" / "_api.py",
+        *sorted((root / "python" / "disarm").glob("_api*.py")),
         root / "python" / "disarm" / "__init__.py",
     ]
     offenders = []

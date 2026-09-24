@@ -1,7 +1,7 @@
 """The `Script` enum must be able to name every script the core resolves (#775).
 
 `detect_scripts` maps each name the Rust core returns onto a `Script` member. When the
-enum has no member for it, `python/disarm/_api.py` warns — telling the user to report a
+enum has no member for it, `python/disarm/_api_scripts.py` warns — telling the user to report a
 bug — and **drops the script from the result**. Non-empty input, empty list:
 
     >>> disarm.detect_scripts("ᯀᯁ")          # BATAK LETTER A, BATAK SIMALUNGUN A

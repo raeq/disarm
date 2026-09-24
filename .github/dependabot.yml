@@ -3,7 +3,8 @@ version: 2
 # Policy (see DEPENDENCY_UPGRADES.md for the full methodology):
 #
 #  * Soak window via `cooldown` — a release is not even proposed until it has aged
-#    (patch 2d / minor 7d / major 14d), so upstream point-fixes land and others surface
+#    (patch 2d / minor 7d / major 14d; a flat 7d for GitHub Actions, which Dependabot
+#    allows no per-semver window), so upstream point-fixes land and others surface
 #    regressions first. We are never the beta tester.
 #  * Grouping — each group is restricted to `minor` + `patch`, so routine low-risk bumps
 #    arrive batched (low noise) while every *major* is left ungrouped and opens its own
@@ -24,11 +25,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Dependabot rejects the per-semver cooldown keys for github-actions, so actions get
+    # the flat soak window alone.
     cooldown:
       default-days: 7
-      semver-major-days: 14
-      semver-minor-days: 7
-      semver-patch-days: 2
     groups:
       actions:
         patterns: ["*"]

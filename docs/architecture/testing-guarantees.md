@@ -235,6 +235,25 @@ holds for `strip_variation_selectors`, which can return `"xyzzy"` unnoticed, for
 `is_default_ignorable_format`, and for the IPv6-literal parser. Every other binding calls
 this code through the Rust core, so each miss is a Rust test worth writing.
 
+`tests/hostname_and_invisibles.rs` writes them, through the public API: one character of
+every invisible class and of both compatibility shapes through the hostname screen, the
+IPv6-literal boundaries (seven colons and eight, one zone ID and two, the characters a
+literal may hold), `strip_variation_selectors`, the default-ignorable formats, and a
+subdivision flag skipped whole. Re-measured on 2026-09-24 with the same tool and options:
+
+| Module | Mutants | Caught | Missed | Timeout | Unviable |
+|---|---:|---:|---:|---:|---:|
+| `src/invisibles.rs` | 69 | 68 | 0 | 1 | 0 |
+| `src/hostname.rs` | 52 | 48 | 2 | 0 | 2 |
+
+The timeout is the same hang, caught. The two misses are equivalent mutants, which no test
+can kill: each turns one `||` of `is_invisible_in_hostname` into `&&`, removing the
+zero-width and tag classes (`is_zero_width && is_tag`) or the tag and variation-selector
+classes (`is_tag && is_variation_selector`) from the union. Every character of those three classes
+is also `Default_Ignorable_Code_Point` and none is a bidi control, so the union's last
+clause, added for the Lean model's Detection finding 8, still flags each one and the
+function is unchanged on every scalar.
+
 ---
 
 ## CI matrix

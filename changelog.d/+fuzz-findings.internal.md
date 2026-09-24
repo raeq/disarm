@@ -12,3 +12,13 @@
   separator without `&`, since one ending in `&#` before a word of digits spells an
   entity the next call decodes. `docs/architecture/testing-guarantees.md` lists the
   findings and how each was resolved.
+- **The hostname screen and the invisible-class helpers are asserted from Rust (#1040's
+  mutation baseline).** cargo-mutants left 20 of `src/hostname.rs`'s 52 mutants and 5 of
+  `src/invisibles.rs`'s 69 alive: the hostname screen's invisible-class,
+  compatibility-form and IPv6-literal checks, `strip_variation_selectors`, the
+  default-ignorable formats and the subdivision-flag length were asserted only by the
+  Python suite, which the Node, Ruby, Java and C bindings never run.
+  `tests/hostname_and_invisibles.rs` asserts them through the public API, and the misses
+  are down to two in `src/hostname.rs`, both equivalent mutants: the default-ignorable
+  clause of `is_invisible_in_hostname` subsumes the zero-width, tag and
+  variation-selector classes whose `||` they turn into `&&`, which a unit test now pins.

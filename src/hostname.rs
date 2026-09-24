@@ -28,6 +28,11 @@ use crate::{confusables, invisibles, scripts};
 /// Mongolian free variation selectors, U+17B4-U+17B5, U+206A-U+206F, the shorthand format
 /// controls and the musical-symbol formats — so `ev\u{AD}il.com` screened clean and
 /// resolved to `evil.com` (Lean model, `formal/lean/Detection`, finding 8).
+///
+/// That last clause subsumes three of the others: every zero-width, tag and
+/// variation-selector character is default-ignorable and none is a bidi control. They
+/// stay listed because they are the classes #605 and #610 name, and cargo-mutants
+/// reports turning their `||` into `&&` as a mutant no test can kill (#1040).
 fn is_invisible_in_hostname(ch: char) -> bool {
     invisibles::is_zero_width(ch)
         || invisibles::is_tag(ch)
@@ -569,6 +574,21 @@ pub(crate) fn is_suspicious_hostname_opts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The subsumption `is_invisible_in_hostname`'s doc comment states, which is why
+    /// cargo-mutants' two surviving mutants there are equivalent (#1040).
+    #[test]
+    fn default_ignorable_covers_the_zero_width_tag_and_selector_classes() {
+        for ch in (0..=0x10_FFFF).filter_map(char::from_u32) {
+            if invisibles::is_zero_width(ch)
+                || invisibles::is_tag(ch)
+                || invisibles::is_variation_selector(ch)
+            {
+                assert!(is_default_ignorable(ch), "U+{:04X}", ch as u32);
+                assert!(!scripts::is_bidi_control(ch), "U+{:04X}", ch as u32);
+            }
+        }
+    }
 
     #[test]
     fn test_clean_hostname_not_suspicious() {

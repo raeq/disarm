@@ -11,10 +11,10 @@ finding is about.
 
 > **Status.** Every finding below was reproduced on the built library at the baseline.
 > C1 is fixed and C2 and C3 documented in the C ABI contract (#1020). J1, R1, B1, B2, S1,
-> D1, E1, E2, N1, N2 and J2 are fixed and E3 documented (#PR): the rule or default each
+> D1, E1, E2, N1, N2 and J2 are fixed and E3 documented (#1046): the rule or default each
 > one is about now lives in the core, and every binding reads it from there. D1 kept
 > Python's documented `[?]` and moved the other bindings to it; E2 kept the documented
-> `ErrorKind::Unsupported` and moved the code. Re-run after #PR on the cases these
+> `ErrorKind::Unsupported` and moved the code. Re-run after #1046 on the cases these
 > findings touch (`tr`, `tr_de`, `tr_uk`, `tr_auto`, `tr_bad`, `sa`, `dj`, `dj_sm`, `fu`,
 > `slug`, `zs`, `zs_def`, `zi_def`, `nc_ara`, `nc_heb`, `fc`, `re_empty`; `zs_def` and
 > `zi_def` are new and call each binding's own default): 89,860,992 comparisons, no

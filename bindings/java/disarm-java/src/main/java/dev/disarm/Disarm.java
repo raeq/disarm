@@ -35,7 +35,10 @@ public final class Disarm {
         return Native.transliterate(req(text));
     }
 
-    /** Unicode → ASCII with an explicit scheme and/or language profile. */
+    /**
+     * Unicode → ASCII with an explicit scheme and/or language profile. An unknown
+     * language code throws {@link DisarmInvalidArgumentException}, as in every binding.
+     */
     public static String transliterate(String text, TransliterateOptions options) {
         req(text);
         Objects.requireNonNull(options, "options");
@@ -135,7 +138,11 @@ public final class Disarm {
         return demojize(text, false);
     }
 
-    /** Replace emoji with their plain names; {@code stripModifiers} drops skin-tone marks. */
+    /**
+     * Replace emoji with their plain names; {@code stripModifiers} drops skin-tone marks.
+     * An emoji CLDR cannot name (a regional indicator or a Plane 14 tag character
+     * standing alone) becomes {@code "[?]"}, as in every binding.
+     */
     public static String demojize(String text, boolean stripModifiers) {
         return Native.demojize(req(text), stripModifiers);
     }
@@ -233,7 +240,10 @@ public final class Disarm {
         return slugify(text, SlugOptions.builder().build());
     }
 
-    /** Generate a URL-safe slug with explicit options. */
+    /**
+     * Generate a URL-safe slug with explicit options. An unknown language code throws
+     * {@link DisarmInvalidArgumentException}.
+     */
     public static String slugify(String text, SlugOptions options) {
         req(text);
         Objects.requireNonNull(options, "options");

@@ -27,32 +27,40 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 CONFTEST = DOCS / "conftest.py"
 
-#: A fenced ``python`` block. Deliberately not matching ``pycon`` or ``py``:
-#: Sybil's PythonCodeBlockParser reads ``python`` only, so a page whose blocks
-#: are all ``pycon`` genuinely has nothing for it to run.
-PY_BLOCK = re.compile(r"^```python\s*$", re.MULTILINE)
+#: A fenced ``python`` block, matched against the line with its indentation
+#: stripped. Deliberately not matching ``pycon`` or ``py``: Sybil's
+#: PythonCodeBlockParser reads ``python`` only, so a page whose blocks are all
+#: ``pycon`` genuinely has nothing for it to run.
+PY_BLOCK = re.compile(r"^```python\s*$")
 
 #: An opening or closing fence of three or more backticks, then an info string.
 FENCE = re.compile(r"^(`{3,})(.*)$")
 
 
 def _has_python_block(text: str) -> bool:
-    """A top-level ``python`` block, not one quoted inside a longer fence.
+    """A ``python`` block at any indentation, not one quoted inside a longer fence.
+
+    Indented fences count. A block nested in a ``===`` tab (pymdownx.tabbed) or a
+    ``!!!`` admonition is indented by four spaces, and Sybil's Markdown lexer strips
+    that prefix and runs it like any other block; see
+    ``test_sybil_runs_an_indented_block_from_its_real_line`` below. A column-0-only
+    match missed those, so ``upgrading.md`` held an example nothing was required to run.
 
     The recipe template in ``docs/contributing/documentation.md`` shows a ```python
     block inside a ````markdown one: it is an example of how to write a recipe, not a
     recipe, and running it would execute its illustrative ``make_fixture()``. Fence
     length is tracked the way ``scripts/check_doc_claims.py`` tracks it for the same
-    template, so a shorter fence inside a longer block is content.
+    template, so a shorter fence inside a longer block is content, at any indentation.
     """
     fence = 0
     for line in text.splitlines():
-        m = FENCE.match(line.strip())
+        stripped = line.strip()
+        m = FENCE.match(stripped)
         if not m:
             continue
         ticks, info = len(m.group(1)), m.group(2).strip()
         if fence == 0:
-            if PY_BLOCK.match(line):
+            if PY_BLOCK.match(stripped):
                 return True
             fence = ticks
         elif ticks >= fence and not info:
@@ -160,3 +168,87 @@ def test_a_python_block_quoted_in_a_longer_fence_is_not_a_recipe() -> None:
     assert _has_python_block(template + "\n```python\nassert f() == 1\n```\n")
     assert _has_python_block("```python\nx = 1\n```\n")
     assert not _has_python_block("```pycon\n>>> x = 1\n```\n")
+
+
+def test_an_indented_python_block_is_a_recipe() -> None:
+    """An admonition's body is indented; its block is still a runnable example."""
+    admonition = '!!! danger "Heads up"\n    ```python\n    assert f() == 1\n    ```\n'
+    assert _has_python_block(admonition)
+    assert not _has_python_block(admonition.replace("```python", "```pycon"))
+
+
+def test_a_python_block_nested_in_a_tab_is_a_recipe() -> None:
+    """pymdownx.tabbed content, including a tab that opens with prose."""
+    tabs = (
+        '=== "Before"\n\n    Some prose.\n\n    ```text\n    old\n    ```\n\n'
+        '=== "After"\n\n    ```python\n    assert f() == 1\n    ```\n'
+    )
+    # The ```text block in the first tab opens and closes at the same indentation, so
+    # the fence tracking is back at the top level by the time the python block starts.
+    assert _has_python_block(tabs)
+    assert not _has_python_block(tabs.replace("```python", "```pycon"))
+
+
+def test_a_quoted_python_block_is_not_a_recipe_at_any_indentation() -> None:
+    """Quoting is about fence length, not column: an indented template is content too.
+
+    Covers both fences indented to the same depth inside a tab, the inner fence
+    indented further than the outer, and the outer at column 0 with the inner
+    indented, so no mix of indentation turns quoted content back into a recipe. Each
+    case is also checked to flip once a real block follows, so the tracking cannot
+    pass by never matching.
+    """
+    real = '\n=== "Tab"\n\n    ```python\n    assert f() == 1\n    ```\n'
+    quoted = [
+        # Outer and inner fences both indented, inside a tab.
+        '=== "Template"\n\n    ````markdown\n    ```python\n    assert f() == 1\n'
+        "    ```\n    ````\n",
+        # Outer indented, inner indented further.
+        "!!! example\n    ````markdown\n        ```python\n        assert f() == 1\n"
+        "        ```\n    ````\n",
+        # Outer at column 0, inner indented.
+        "````markdown\n    ```python\n    assert f() == 1\n    ```\n````\n",
+    ]
+    for text in quoted:
+        assert not _has_python_block(text), text
+        assert _has_python_block(text + real), text
+
+
+def test_sybil_runs_an_indented_block_from_its_real_line(tmp_path: Path) -> None:
+    """The premise of counting indented blocks: Sybil executes them, dedented.
+
+    Checked against the installed Sybil rather than asserted in a comment, because
+    the gate above is only honest while this holds. Sybil's Markdown fence lexer
+    captures the indentation as a ``prefix``, strips it from every line of the
+    block, and anchors the example at the fence's own line, so a failure inside a
+    tab reports the line an author would open. If a Sybil upgrade stopped doing
+    that, indented examples would quietly stop running and this would say so.
+    """
+    from sybil import Sybil
+    from sybil.parsers.markdown import PythonCodeBlockParser
+
+    page = tmp_path / "page.md"
+    page.write_text(
+        "# Page\n"
+        "\n"
+        '=== "Tab"\n'
+        "\n"
+        "    ```python\n"  # line 5
+        "    x = 1\n"
+        "\n"
+        "    assert x == 1\n"
+        "    ```\n"
+        "\n"
+        '!!! note "Admonition"\n'
+        "    ```python\n"  # line 12
+        "    y = 2\n"
+        "    ```\n",
+        encoding="utf-8",
+    )
+    document = Sybil(parsers=[PythonCodeBlockParser()]).parse(page)
+    examples = list(document)
+    assert [e.line for e in examples] == [5, 12]
+    assert [e.parsed for e in examples] == ["x = 1\n\nassert x == 1\n", "y = 2\n"]
+    for example in examples:
+        example.evaluate()
+    assert document.namespace["y"] == 2

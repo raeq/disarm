@@ -235,6 +235,6 @@ class TestI7OutputLengthBound:
         result = disarm.transliterate(text, errors="ignore")
         bound = self._bound(text)
         assert len(result.encode("utf-8")) <= bound, (
-            f"Output length {len(result)} exceeds bound {bound} "
+            f"Output length {len(result.encode('utf-8'))} bytes exceeds bound {bound} "
             f"for input of {len(text)} chars / {len(text.encode('utf-8'))} bytes"
         )

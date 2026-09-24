@@ -54,6 +54,7 @@ pub(crate) fn composed(text: &str) -> Composed<'_> {
         pending: VecDeque::new(),
         scratch: String::new(),
         inputs: Vec::new(),
+        by_char: Vec::new(),
     }
 }
 
@@ -154,6 +155,9 @@ pub(crate) struct Composed<'a> {
     /// Reused buffer for a changed cluster's input characters, as `(offset, char,
     /// claimed)`, while [`Composed::attribute`] points each output character at one.
     inputs: Vec<(usize, char, bool)>,
+    /// Reused buffer for [`Composed::attribute`]'s lookup: `(char, input index, cursor)`,
+    /// sorted, the cursor kept on the first entry of each character's run.
+    by_char: Vec<(char, usize, usize)>,
 }
 
 // Conjoining Hangul jamo composition (#483). The L/V/T ranges and the syllable formula
@@ -270,12 +274,6 @@ impl Iterator for Composed<'_> {
     }
 }
 
-/// How far past the first unclaimed input character [`Composed::attribute`] looks for
-/// an output character's literal match. Canonical reordering moves a mark only past
-/// marks of a higher class, so a match is almost always within a few places; the bound
-/// keeps a cluster of thousands of marks linear rather than quadratic.
-const ATTRIBUTION_WINDOW: usize = 32;
-
 impl Composed<'_> {
     /// Point each character of the cluster `text[start..end]` just queued on `pending`
     /// at the input character it came from (#1040).
@@ -289,6 +287,14 @@ impl Composed<'_> {
     /// `\u{456}\u{308}`). A cluster with more output characters than input ones (NFC
     /// splitting a precomposed letter around a mark that sorts between its parts) puts
     /// the extras at the cluster start.
+    ///
+    /// Pass 1 takes, for each output character, the earliest unclaimed input holding the
+    /// same character. Canonical reordering is a stable sort, so equal characters keep
+    /// their order and earliest-first pairs them correctly. It looks them up in the
+    /// inputs sorted by `(char, index)`, with a cursor per distinct character, so a
+    /// cluster of any length is matched in `O(n log n)`, with no window a long cluster
+    /// could run past (#1048 review: a window anchored at the first unclaimed input
+    /// stuck on a base that composed, and misplaced every mark beyond it).
     fn attribute(&mut self, start: usize, end: usize) {
         let cluster = &self.text[start..end];
         if self.pending.iter().map(|&(c, _)| c).eq(cluster.chars()) {
@@ -300,26 +306,32 @@ impl Composed<'_> {
         let mut inputs = std::mem::take(&mut self.inputs);
         inputs.clear();
         inputs.extend(cluster.char_indices().map(|(i, c)| (start + i, c, false)));
+        // Pass 1: output characters the input holds as they are.
+        let mut by_char = std::mem::take(&mut self.by_char);
+        by_char.clear();
+        by_char.extend(inputs.iter().enumerate().map(|(j, &(_, c, _))| (c, j, 0)));
+        by_char.sort_unstable();
+        for slot in &mut self.pending {
+            slot.1 = usize::MAX;
+            // The run of inputs holding `slot.0`; its first entry keeps the run's cursor.
+            let run = by_char.partition_point(|&(c, _, _)| c < slot.0);
+            if by_char.get(run).is_some_and(|&(c, _, _)| c == slot.0) {
+                let k = run + by_char[run].2;
+                if by_char.get(k).is_some_and(|&(c, _, _)| c == slot.0) {
+                    by_char[run].2 += 1;
+                    let j = by_char[k].1;
+                    inputs[j].2 = true;
+                    slot.1 = inputs[j].0;
+                }
+            }
+        }
+        self.by_char = by_char;
         // The lowest unclaimed input: everything before it is claimed.
         let first_unclaimed = |inputs: &[(usize, char, bool)], from: usize| {
             (from..inputs.len())
                 .find(|&j| !inputs[j].2)
                 .unwrap_or(inputs.len())
         };
-        // Pass 1: output characters the input holds as they are.
-        let mut lo = 0;
-        for slot in &mut self.pending {
-            slot.1 = usize::MAX;
-            lo = first_unclaimed(&inputs, lo);
-            let window = lo..inputs.len().min(lo + ATTRIBUTION_WINDOW);
-            if let Some(j) = window
-                .into_iter()
-                .find(|&j| !inputs[j].2 && inputs[j].1 == slot.0)
-            {
-                inputs[j].2 = true;
-                slot.1 = inputs[j].0;
-            }
-        }
         // Pass 2: characters composition made, in order, onto what is left.
         let mut lo = 0;
         for slot in &mut self.pending {
@@ -437,6 +449,30 @@ mod tests {
         // Every offset is a boundary of the input, whatever the cluster's length.
         let long = format!("a{}", "\u{301}\u{323}".repeat(500));
         assert!(composed(&long).all(|(_, o)| long.is_char_boundary(o) && o < long.len()));
+    }
+
+    /// #1048 review: a composing base stays unclaimed while the marks are matched, so a
+    /// search window anchored at the first unclaimed input never moved past it, and the
+    /// marks beyond the window fell through to the composition pass, which put them on
+    /// the composed mark's offset. `e` + U+0301 composes; the U+0335 overlays (ccc 1)
+    /// sort before U+0301 without blocking it, so each comes out unchanged and must be
+    /// located on itself, however many there are.
+    #[test]
+    fn a_long_cluster_behind_a_composing_base_locates_every_mark() {
+        for n in [1, 31, 32, 33, 40, 500] {
+            let text = format!("e\u{301}{}", "\u{335}".repeat(n));
+            let got: Vec<_> = composed(&text).collect();
+            assert_eq!(got.len(), n + 1, "n = {n}");
+            assert_eq!(got[0], ('\u{E9}', 0), "n = {n}");
+            for &(c, o) in &got[1..] {
+                assert_eq!(c, '\u{335}', "n = {n}");
+                assert_eq!(input_char_at(&text, o, c), c, "n = {n}: offset {o}");
+            }
+            // One output character per input overlay: no two share an offset.
+            let mut offsets: Vec<_> = got[1..].iter().map(|&(_, o)| o).collect();
+            offsets.dedup();
+            assert_eq!(offsets.len(), n, "n = {n}");
+        }
     }
 
     #[test]

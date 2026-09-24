@@ -1,0 +1,15 @@
+- **`demojize` writes `[?]` for an emoji it cannot name, in every binding (`formal/bindings`
+  D1; #PR).** The Rust API, Node, Ruby, Java and the C ABI dropped a lone regional
+  indicator or Plane 14 tag character; Python, whose documented default is
+  `errors="replace", replace_with="[?]"`, wrote the sentinel, so the same call disagreed
+  on 3,105 inputs. The documented Python behaviour is kept and the others follow it:
+  `api::demojize("x\u{1F1E6}!", false)` is now `"x[?]!"`, where it was `"x!"`. The new
+  `api::demojize_with` takes the policy as an `OnUnknown`, the type `Transliterate`
+  already uses, and Python's `demojize` runs the same core code whenever no
+  `EmojiProvider` is in play. The pipeline and preset steps still drop such an emoji, as
+  they did.
+- **A registration after `seal_registrations()` is `ErrorKind::Unsupported` (E2; #PR).**
+  The Rust API documented `Unsupported` on all four mutators and `kind()` returned
+  `Other`; the code now agrees with the docs. In Python the exception moves from the base
+  `DisarmError` to its subclass `UnsupportedError`, so `except DisarmError` still catches
+  it.

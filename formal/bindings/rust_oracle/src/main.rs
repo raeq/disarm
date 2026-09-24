@@ -101,7 +101,9 @@ fn tr(text: &str, scheme: Option<api::Scheme>, lang: Option<&str>) -> R {
     if let Some(l) = lang {
         b = b.lang(l);
     }
-    Ok(s(b.run(text)))
+    // `try_run`, not `run`: it is what every binding calls, so an unknown `lang` is an
+    // InvalidArgument here as there (B2), and registered replacements apply (E1).
+    Ok(s(b.try_run(text)?))
 }
 
 fn nc(text: &str, target: &str, policy: &str) -> R {
@@ -231,13 +233,16 @@ fn run_case(case: &str, t: &str) -> Option<R> {
         "ia" => Ok(anomalies(&api::inspect_anomalies(t, &api::lexicon(Vec::<String>::new())))),
         "ha" => Ok(Val::B(api::has_anomalies(t, &api::lexicon(Vec::<String>::new())))),
         "ed" => Ok(Val::I(api::edit_distance(t, "paypal") as i128)),
-        "fu" => Ok(Val::L(
-            api::Transliterate::new()
-                .find_untranslatable(t)
-                .into_iter()
-                .map(|u| Val::R(vec![s(u.ch.to_string()), Val::I(u.offset as i128)]))
-                .collect(),
-        )),
+        "fu" => api::Transliterate::new()
+            .try_find_untranslatable(t)
+            .map(|found| {
+                Val::L(
+                    found
+                        .into_iter()
+                        .map(|u| Val::R(vec![s(u.ch.to_string()), Val::I(u.offset as i128)]))
+                        .collect(),
+                )
+            }),
         "fuc" => Ok(Val::L(
             api::find_unmapped_confusables(t, api::TargetScript::Latin)
                 .into_iter()
@@ -248,9 +253,12 @@ fn run_case(case: &str, t: &str) -> Option<R> {
             let l: api::ReverseLang = case[3..].parse().unwrap();
             Ok(s(api::reverse_transliterate(t, l)))
         }
-        "slug" => Ok(s(api::slugify(t, &api::SlugConfig::default()))),
+        "slug" => api::try_slugify(t, &api::SlugConfig::default()).map(s),
         "zs" => Ok(s(api::strip_zalgo(t, 3))),
         "zi" => Ok(Val::B(api::is_zalgo(t, 3))),
+        // B1: each binding's own default, against the core's.
+        "zs_def" => Ok(s(api::strip_zalgo(t, api::DEFAULT_ZALGO_MAX_MARKS))),
+        "zi_def" => Ok(Val::B(api::is_zalgo(t, api::DEFAULT_ZALGO_THRESHOLD))),
         "isconf" => Ok(Val::B(api::is_confusable(t, api::TargetScript::Latin))),
         _ => return None,
     })

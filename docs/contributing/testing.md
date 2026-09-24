@@ -284,7 +284,7 @@ findings' witnesses) and writes the corpus it grows and any failing input under
 then reproduce it through the public API before calling it a bug. An oracle that turns
 out to overclaim is weakened in its target with a comment naming the finding, never
 deleted silently. `fuzz.yml` runs every target for 60 s on a pull
-request that touches `src/`, `build.rs`, `Cargo.toml` or `fuzz/`, and for 15 minutes each
+request that touches `src/`, `build.rs`, `codegen/`, `Cargo.toml` or `fuzz/`, and for 15 minutes each
 nightly, uploading `fuzz/artifacts/` when one fails.
 
 ### Coverage

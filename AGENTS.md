@@ -31,7 +31,7 @@ bindings drifting from each other. The rules that follow from that:
 - `src/tables/` — generated lookup tables; `src/tables/data/*.tsv` are the
   **source** TSVs that `build.rs` compiles into PHF tables at build time
 - `build.rs` — generates the PHF tables from the TSVs and runs compile-time
-  assertions
+  assertions; the TSV readers and table emitters it calls live in `codegen/`
 - `python/disarm/` — Python binding (package + type stubs); `_core.abi3.so` is
   the built extension. Future language bindings get their own sibling top-level
   dir (e.g. `node/`, `ruby/`), each a thin surface over the same Rust core.

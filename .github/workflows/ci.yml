@@ -66,12 +66,13 @@ jobs:
             # The Ruby binding must rebuild when ITS OWN code changes AND when the
             # CORE it wraps changes (#374): a core API change (e.g. the 0.10
             # tuple→struct return) can break the gem, and that break must surface
-            # on the same PR — not at release. Core = src/**, build.rs, the crate
+            # on the same PR — not at release. Core = src/**, build.rs + codegen/**, the crate
             # manifests; binding = bindings/ruby/**.
             ruby:
               - 'bindings/ruby/**'
               - 'src/**'
               - 'build.rs'
+              - 'codegen/**'
               - 'Cargo.toml'
               - '.github/workflows/ci.yml'
               # `docs/**` matches the Node filter below: the Ruby `# =>` doc
@@ -90,6 +91,7 @@ jobs:
               - 'bindings/node/**'
               - 'src/**'
               - 'build.rs'
+              - 'codegen/**'
               - 'Cargo.toml'
               - 'docs/**'
               - 'scripts/check_doc_node_examples.mjs'
@@ -101,6 +103,7 @@ jobs:
               - 'bindings/java/**'
               - 'src/**'
               - 'build.rs'
+              - 'codegen/**'
               - 'Cargo.toml'
               - '.github/workflows/ci.yml'
             # The C-ABI substrate (safer-ffi) wraps the same core; drift-gate it too.
@@ -108,6 +111,7 @@ jobs:
               - 'bindings/cabi/**'
               - 'src/**'
               - 'build.rs'
+              - 'codegen/**'
               - 'Cargo.toml'
               - '.github/workflows/ci.yml'
 

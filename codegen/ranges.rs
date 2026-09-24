@@ -8,8 +8,9 @@ use std::path::Path;
 use super::readers::parse_hex;
 
 /// Generate `BIDI_STRONG_RANGES: &[(u32, u32, u8)]` from `bidi_strong_ranges.tsv`.
-/// Class encoding: 0 = strong LTR (`Bidi_Class L`), 1 = strong RTL (`R` or `AL`). A code
-/// point absent from the table has no strong direction (#773).
+/// Class encoding: 0 = strong LTR (`Bidi_Class L`), 1 = strong RTL (`Bidi_Class R` or
+/// `AL`, both written `R` in the TSV, which accepts only `L` and `R`). A code point
+/// absent from the table has no strong direction (#773).
 pub(crate) fn generate_bidi_strong_ranges(tsv_path: &Path, out_path: &Path) {
     let content = fs::read_to_string(tsv_path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));

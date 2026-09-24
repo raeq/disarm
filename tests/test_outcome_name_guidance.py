@@ -1,9 +1,9 @@
 """#654 — a reader who asks for `disarm.clean` gets the naming rule, not a bare error.
 
-CONTRIBUTING.md's rule is that a public name describes the operation and never the
-outcome, so `clean`, `sanitize` and `safe` will never exist. That leaves the reader who
-reaches for one holding an `AttributeError` at exactly the moment they are asking the
-question the threat model answers.
+The naming rule (`docs/contributing/conventions.md`) is that a public name describes the
+operation and never the outcome, so `clean`, `sanitize` and `safe` will never exist. That
+leaves the reader who reaches for one holding an `AttributeError` at exactly the moment
+they are asking the question the threat model answers.
 
 The hook refuses and explains in the same breath. It promises nothing, so it is compatible
 with the rule it teaches.

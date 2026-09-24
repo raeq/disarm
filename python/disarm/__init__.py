@@ -524,11 +524,11 @@ __all__ = [
 #: Names a reader reaches for when they want an outcome rather than an operation, and
 #: what to point them at instead (#654).
 #:
-#: CONTRIBUTING.md's naming rule says a public name may describe the operation and never
-#: the outcome, so none of these will ever exist. That leaves a reader who searches for
-#: one with a bare ``AttributeError`` at exactly the moment they are asking the question
-#: the threat model answers. The hook below refuses and explains in the same breath —
-#: which is compatible with the rule, because it promises nothing.
+#: The naming rule (docs/contributing/conventions.md) says a public name may describe
+#: the operation and never the outcome, so none of these will ever exist. That leaves a
+#: reader who searches for one with a bare ``AttributeError`` at exactly the moment they
+#: are asking the question the threat model answers. The hook below refuses and explains
+#: in the same breath — which is compatible with the rule, because it promises nothing.
 _OUTCOME_NAMES = frozenset(
     {"clean", "sanitize", "sanitise", "safe", "secure", "escape", "is_safe", "make_safe"}
 )

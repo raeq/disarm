@@ -32,9 +32,38 @@ CONFTEST = DOCS / "conftest.py"
 #: are all ``pycon`` genuinely has nothing for it to run.
 PY_BLOCK = re.compile(r"^```python\s*$", re.MULTILINE)
 
+#: An opening or closing fence of three or more backticks, then an info string.
+FENCE = re.compile(r"^(`{3,})(.*)$")
+
+
+def _has_python_block(text: str) -> bool:
+    """A top-level ``python`` block, not one quoted inside a longer fence.
+
+    The recipe template in ``docs/contributing/documentation.md`` shows a ```python
+    block inside a ````markdown one: it is an example of how to write a recipe, not a
+    recipe, and running it would execute its illustrative ``make_fixture()``. Fence
+    length is tracked the way ``scripts/check_doc_claims.py`` tracks it for the same
+    template, so a shorter fence inside a longer block is content.
+    """
+    fence = 0
+    for line in text.splitlines():
+        m = FENCE.match(line.strip())
+        if not m:
+            continue
+        ticks, info = len(m.group(1)), m.group(2).strip()
+        if fence == 0:
+            if PY_BLOCK.match(line):
+                return True
+            fence = ticks
+        elif ticks >= fence and not info:
+            fence = 0
+    return False
+
+
 #: Dated records rather than instructions — the same set the docs-vs-release gate
-#: skips, and for the same reason.
-EXCLUDED_DIRS = frozenset({"reviews", "plans", "__pycache__"})
+#: skips, and for the same reason. ``changelog`` is the archive of old release
+#: sections, moved verbatim out of ``CHANGELOG.md``.
+EXCLUDED_DIRS = frozenset({"reviews", "plans", "changelog", "__pycache__"})
 
 
 def _list(name: str) -> list[str]:
@@ -50,9 +79,11 @@ def _list(name: str) -> list[str]:
 def _pages_with_python_blocks() -> set[str]:
     found: set[str] = set()
     for path in DOCS.rglob("*.md"):
-        if path.is_symlink() or EXCLUDED_DIRS.intersection(path.parts):
+        # Relative to docs/: an absolute path would drop every page of a checkout
+        # that happens to live under a directory called, say, `changelog`.
+        if path.is_symlink() or EXCLUDED_DIRS.intersection(path.relative_to(DOCS).parts):
             continue
-        if PY_BLOCK.search(path.read_text(encoding="utf-8")):
+        if _has_python_block(path.read_text(encoding="utf-8")):
             found.add(str(path.relative_to(DOCS)))
     return found
 
@@ -117,3 +148,15 @@ def test_the_scan_finds_every_listed_page() -> None:
         "test_every_page_with_python_blocks_is_executed vacuous — or these pages "
         "no longer have runnable examples and should come off the list."
     )
+
+
+def test_a_python_block_quoted_in_a_longer_fence_is_not_a_recipe() -> None:
+    """The recipe template's nested block is content; a real block still counts.
+
+    Both halves, so the fence tracking cannot pass by never finding anything.
+    """
+    template = "````markdown\n```python\nassert f() == 1\n```\n````\n"
+    assert not _has_python_block(template)
+    assert _has_python_block(template + "\n```python\nassert f() == 1\n```\n")
+    assert _has_python_block("```python\nx = 1\n```\n")
+    assert not _has_python_block("```pycon\n>>> x = 1\n```\n")

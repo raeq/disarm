@@ -109,7 +109,12 @@ _NOT_ATTRIBUTES = frozenset(
 #: are dated snapshots of a past review, and correcting the API names in them to
 #: match today's package would falsify the record. Neither is in ``mkdocs.yml``'s
 #: nav, so no reader is routed to them for guidance.
-_EXCLUDED_DIRS = frozenset({"reviews", "plans", "__pycache__"})
+#:
+#: ``changelog/`` is the archive of old release sections, moved verbatim out of
+#: ``CHANGELOG.md``. It is in the nav, but as history: it names what each release
+#: shipped, including names later removed, and the recent part it came from was
+#: never scanned either (``docs/CHANGELOG.md`` is a symlink, skipped below).
+_EXCLUDED_DIRS = frozenset({"reviews", "plans", "changelog", "__pycache__"})
 
 #: Known gaps, each with the issue that closes it. A gate whose first run is red
 #: gets switched off, so the ratchet is: a name may sit here only while an issue

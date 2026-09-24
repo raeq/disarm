@@ -49,6 +49,33 @@ fn is_regional_indicator(c: char) -> bool {
     ('\u{1F1E6}'..='\u{1F1FF}').contains(&c)
 }
 
+/// `Grapheme_Cluster_Break=Prepend` scalars that take no cell themselves (W1,
+/// `formal/lean/Text`).
+///
+/// UAX #29 GB9b attaches a `Prepend` to the character *after* it, so `U+0600 ARABIC NUMBER
+/// SIGN` + `1` is one cluster whose first scalar is a zero-width format character. Taking
+/// that scalar as the base measured the whole cluster as 0, and the digit's cell vanished:
+/// `terminal_width(("\u{0600}" + "A") * 100)` was 0. These are skipped before the base is
+/// chosen. The other fourteen `Prepend` scalars (`U+0D4E`, `U+111C2`, ...) are letters that
+/// take a cell of their own, so they stay the base.
+///
+/// Thirteen scalars, so a `matches!` rather than a generated table.
+/// `zero_width_prepend_matches_the_segmenter` checks the list against the segmenter this
+/// module shares with `grapheme_split` over every scalar, so a `unicode-segmentation`
+/// upgrade that adds one fails a test rather than a terminal.
+fn is_zero_width_prepend(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0600}'..='\u{0605}'
+            | '\u{06DD}'
+            | '\u{070F}'
+            | '\u{0890}'..='\u{0891}'
+            | '\u{08E2}'
+            | '\u{110BD}'
+            | '\u{110CD}'
+    )
+}
+
 fn resolve(class: u8, ambiguous_wide: bool) -> usize {
     match class {
         0 => 0,
@@ -63,9 +90,16 @@ fn resolve(class: u8, ambiguous_wide: bool) -> usize {
 /// This is the workhorse; [`grapheme_width`] is the `ambiguous_wide = false` form.
 pub(crate) fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize {
     let mut rest = cluster.chars();
-    let Some(base) = rest.next() else {
+    let Some(mut base) = rest.next() else {
         return 0;
     };
+    // W1: a zero-width `Prepend` belongs to the scalar after it, which is the base.
+    while is_zero_width_prepend(base) {
+        let Some(next) = rest.next() else {
+            return 0;
+        };
+        base = next;
+    }
 
     // H-P5: a single-char ASCII cluster — the dominant input (identifiers, URLs,
     // usernames) — can never be wide, ambiguous, emoji, or a combining sequence,
@@ -111,7 +145,12 @@ pub(crate) fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize 
             resolve(base_class, ambiguous_wide)
         };
     }
-    if has_vs16 || base_emoji || (has_keycap && is_keycap_base) {
+    // VS16 forces emoji presentation only on a base that has one (W2, `formal/lean/Text`).
+    // UTS #51 defines emoji presentation sequences for emoji bases alone, so `a` + `U+FE0F`
+    // renders as `a`; honouring the stray selector made it 2 columns, while the symmetric
+    // stray VS15 above was already ignored.
+    let vs16_applies = has_vs16 && crate::tables::is_emoji_property(base);
+    if vs16_applies || base_emoji || (has_keycap && is_keycap_base) {
         return 2;
     }
 
@@ -263,6 +302,71 @@ mod tests {
         for _ in 0..5 {
             assert_eq!(terminal_width(s), first);
         }
+    }
+
+    /// W1 (`formal/lean/Text`): a zero-width `Prepend` opening a cluster hid the scalar it
+    /// attaches to, so the whole cluster measured 0.
+    #[test]
+    fn zero_width_prepend_does_not_hide_its_base() {
+        assert_eq!(crate::grapheme::grapheme_len("\u{0600}1"), 1, "one cluster");
+        assert_eq!(terminal_width("\u{0600}1"), 1);
+        assert_eq!(terminal_width("\u{0600}123"), 3);
+        assert_eq!(terminal_width(&"\u{0600}A".repeat(100)), 100);
+        assert_eq!(terminal_width("\u{0600} ok"), 3);
+        assert_eq!(terminal_width("\u{110BD}x"), 1);
+        assert_eq!(
+            grapheme_width("\u{0600}\u{0600}\u{4E00}"),
+            2,
+            "a run of prefixes"
+        );
+        assert_eq!(
+            grapheme_width("\u{0600}\u{1F600}"),
+            2,
+            "an emoji after the prefix"
+        );
+        // Nothing after the prefix, or only more zero-width scalars: still 0.
+        assert_eq!(grapheme_width("\u{0600}"), 0);
+        assert_eq!(grapheme_width("\u{0600}\u{0301}"), 0);
+        // A `Prepend` that takes a cell is its own base, as before.
+        assert_eq!(grapheme_width("\u{0D4E}a"), 1);
+    }
+
+    /// The W1 list against the segmenter, over every scalar. A scalar joins the letter
+    /// after it into one cluster exactly when it is `Prepend` (GB9b); the zero-width ones
+    /// are the ones the list must hold.
+    #[test]
+    fn zero_width_prepend_matches_the_segmenter() {
+        let mut found = Vec::new();
+        for c in ('\0'..=char::MAX).filter(|&c| width_class(c as u32) == 0) {
+            let joined = format!("{c}a");
+            if clusters(&joined).count() == 1 {
+                found.push(c);
+            }
+        }
+        let listed: Vec<char> = ('\0'..=char::MAX)
+            .filter(|&c| is_zero_width_prepend(c))
+            .collect();
+        assert_eq!(found, listed);
+        assert_eq!(listed.len(), 13);
+    }
+
+    /// W2 (`formal/lean/Text`): a stray VS16 after a non-emoji base is ignored, as a stray
+    /// VS15 already was.
+    #[test]
+    fn stray_vs16_does_not_widen_a_non_emoji_base() {
+        assert_eq!(grapheme_width("a\u{FE0F}"), 1);
+        assert_eq!(grapheme_width("a\u{FE0E}"), 1);
+        assert_eq!(terminal_width("a\u{FE0F}b\u{FE0F}c\u{FE0F}"), 3);
+        assert_eq!(
+            grapheme_width("\u{4E00}\u{FE0F}"),
+            2,
+            "a wide base keeps its width"
+        );
+        // An emoji base still takes emoji presentation from it.
+        assert_eq!(grapheme_width("\u{263A}\u{FE0F}"), 2);
+        assert_eq!(grapheme_width("\u{00A9}\u{FE0F}"), 2);
+        assert_eq!(grapheme_width("1\u{FE0F}"), 2);
+        assert_eq!(grapheme_width("#\u{FE0F}\u{20E3}"), 2);
     }
 
     #[test]

@@ -406,7 +406,7 @@ ThreadGateSound ==
     (dec.valid /\ dec.a \notin {"STOP_MERGED", "STOP_CLOSED", "STOP_THREADS", "STOP_TRUNC"})
         => dec.rd = "ok"
 \* S6b A stuck / failure sighting counts only on a complete read: "a poll whose
-\*     read failed does not count towards the streak" (CONTRIBUTING).
+\*     read failed does not count towards the streak" (docs/contributing/pull-requests.md).
 StreakFromCompleteReads ==
     (dec.valid /\ dec.a \in {"WAIT_STUCK", "STOP_STUCK", "WAIT_RED", "STOP_FAILED"})
         => dec.rd = "ok"

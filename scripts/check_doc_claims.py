@@ -76,7 +76,7 @@ def main(argv: list[str]) -> int:
     if total:
         print(
             f"\n{total} decorative '# =>' / '# →' claim(s) found. Convert them to "
-            "asserted examples (see CONTRIBUTING.md → Doc-test recipes), or "
+            "asserted examples (see docs/contributing/documentation.md → Doc-test recipes), or "
             "skip-mark the block and drop the arrow.",
             file=sys.stderr,
         )

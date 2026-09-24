@@ -79,13 +79,23 @@ pub fn transliterate(text: String) -> String {
 }
 
 /// Transliterate with a scheme (`"default"` | `"strict_iso9"` | `"gost7034"`)
-/// and/or a language profile (`lang`), via the core's builder.
+/// and/or a language profile (`lang`), via the core's builder. An unknown `lang`
+/// throws `DisarmInvalidArgument`, as the key builders' always has.
 #[napi]
 pub fn transliterate_opts(
     text: String,
     scheme: String,
     lang: Option<String>,
 ) -> Result<String, NapiError> {
+    builder(&scheme, lang)?
+        .try_run(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+/// The core's `Transliterate` builder for a scheme token and an optional `lang`.
+/// The `lang` is checked when the builder runs (`try_run` / `try_find_untranslatable`).
+fn builder(scheme: &str, lang: Option<String>) -> Result<api::Transliterate, NapiError> {
     let mut b = api::Transliterate::new();
     if scheme != "default" {
         let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
@@ -94,7 +104,7 @@ pub fn transliterate_opts(
     if let Some(lang) = lang {
         b = b.lang(lang);
     }
-    Ok(b.run(&text).into_owned())
+    Ok(b)
 }
 
 /// Reverse-transliterate Latin → native script. `lang` is `"el"` | `"ru"` | `"uk"`.
@@ -111,15 +121,9 @@ pub fn find_untranslatable(
     scheme: String,
     lang: Option<String>,
 ) -> Result<Vec<Untranslatable>, NapiError> {
-    let mut b = api::Transliterate::new();
-    if scheme != "default" {
-        let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
-        b = b.scheme(scheme);
-    }
-    if let Some(lang) = lang {
-        b = b.lang(lang);
-    }
-    Ok(b.find_untranslatable(&text)
+    Ok(builder(&scheme, lang)?
+        .try_find_untranslatable(&text)
+        .map_err(|e| map_err(&e))?
         .into_iter()
         .map(|u| Untranslatable {
             char: u.ch.to_string(),
@@ -245,7 +249,8 @@ pub fn slugify(text: String, opts: SlugOptions) -> Result<String, NapiError> {
     config.entities = opts.entities;
     config.decimal = opts.decimal;
     config.hexadecimal = opts.hexadecimal;
-    Ok(api::slugify(&text, &config))
+    // `try_slugify` rejects an unknown `lang` rather than falling back (B2).
+    api::try_slugify(&text, &config).map_err(|e| map_err(&e))
 }
 
 // ── Canonicalization primitives ───────────────────────────────────────────────
@@ -350,7 +355,8 @@ pub fn nearest_match(
     )
 }
 
-/// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
+/// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks. An
+/// emoji CLDR cannot name becomes `[?]`, as in every binding.
 #[napi]
 pub fn demojize(text: String, strip_modifiers: bool) -> String {
     api::demojize(&text, strip_modifiers)
@@ -426,15 +432,25 @@ pub fn strip_pua(text: String) -> String {
     api::strip_pua(&text)
 }
 
+/// Cap combining marks per base at `max_marks`; omitted, the core's default
+/// (`api::DEFAULT_ZALGO_MAX_MARKS`, 3), so this binding never restates it (B1).
 #[napi]
-pub fn strip_zalgo(text: String, max_marks: i64) -> Result<String, NapiError> {
-    let max_marks = checked_size("maxMarks", max_marks)?;
+pub fn strip_zalgo(text: String, max_marks: Option<i64>) -> Result<String, NapiError> {
+    let max_marks = match max_marks {
+        Some(n) => checked_size("maxMarks", n)?,
+        None => api::DEFAULT_ZALGO_MAX_MARKS,
+    };
     Ok(api::strip_zalgo(&text, max_marks))
 }
 
+/// Whether any base carries more than `threshold` marks; omitted, the core's default
+/// (`api::DEFAULT_ZALGO_THRESHOLD`, 3).
 #[napi]
-pub fn is_zalgo(text: String, threshold: i64) -> Result<bool, NapiError> {
-    let threshold = checked_size("threshold", threshold)?;
+pub fn is_zalgo(text: String, threshold: Option<i64>) -> Result<bool, NapiError> {
+    let threshold = match threshold {
+        Some(n) => checked_size("threshold", n)?,
+        None => api::DEFAULT_ZALGO_THRESHOLD,
+    };
     Ok(api::is_zalgo(&text, threshold))
 }
 
@@ -560,9 +576,14 @@ pub fn catalog_key(
     strict_iso9: bool,
     digit_policy: String,
 ) -> Result<String, NapiError> {
-    api::catalog_key_with(&text, lang.as_deref(), strict_iso9, parse_policy(&digit_policy)?)
-        .map(std::borrow::Cow::into_owned)
-        .map_err(|e| map_err(&e))
+    api::catalog_key_with(
+        &text,
+        lang.as_deref(),
+        strict_iso9,
+        parse_policy(&digit_policy)?,
+    )
+    .map(std::borrow::Cow::into_owned)
+    .map_err(|e| map_err(&e))
 }
 
 /// ML/NLP normalization: resolve deletions → NFKC → emoji→text → transliterate →

@@ -728,3 +728,122 @@ describe('invisible / non-interchange stripping (#413)', () => {
     expect(disarm.stripObfuscation('hi\u{E0001}bye')).toBe('hibye') // deprecated language tag
   })
 })
+
+// ── The bindings harness findings (formal/bindings/README.md) ──────────────────
+
+describe('B1: the zalgo defaults are the core defaults', () => {
+  const three = 'a\u0316\u0317\u0318'
+  test('stripZalgo keeps what isZalgo declines to flag (#788)', () => {
+    expect(disarm.isZalgo(three)).toBe(false)
+    expect(disarm.stripZalgo(three)).toBe(three)
+    expect(disarm.stripZalgo(`${three}\u0319`)).toBe(three)
+    expect(disarm.isZalgo(`${three}\u0319`)).toBe(true)
+  })
+  test('an explicit value still wins', () => {
+    expect(disarm.stripZalgo(three, { maxMarks: 2 })).toBe('a\u0316\u0317')
+    expect(disarm.isZalgo(three, { threshold: 2 })).toBe(true)
+  })
+})
+
+describe('B2: an unknown lang is rejected everywhere, as searchKey always did', () => {
+  const kyiv = '\u041a\u0438\u0457\u0432'
+  test.each([
+    ['transliterate', () => disarm.transliterate(kyiv, { lang: 'UK' })],
+    ['transliterate with a scheme', () => disarm.transliterate(kyiv, { lang: 'UK', scheme: 'gost7034' })],
+    ['findUntranslatable', () => disarm.findUntranslatable(kyiv, { lang: 'UK' })],
+    ['slugify', () => disarm.slugify('M\u00fcnchen', { lang: 'dee' })],
+    ['searchKey', () => disarm.searchKey('M\u00fcnchen', { lang: 'zz' })],
+  ])('%s', (_name, fn) => {
+    expect(fn).toThrow(DisarmInvalidArgument)
+    expect(fn).toThrow(/unknown language code/)
+  })
+  test('a known lang still works', () => {
+    expect(disarm.transliterate(kyiv, { lang: 'uk' })).toBe('Kyiv')
+    expect(disarm.slugify('M\u00fcnchen', { lang: 'de' })).toBe('muenchen')
+    expect(disarm.findUntranslatable(kyiv, { lang: 'auto' })).toEqual([])
+  })
+})
+
+describe('S1: stripAccents is per character', () => {
+  test('a singleton decomposition folds alone and beside a mark', () => {
+    expect(disarm.stripAccents('\u037e')).toBe(';')
+    expect(disarm.stripAccents('\u037ee\u0301')).toBe(';e')
+    expect(disarm.stripAccents('\u2126')).toBe('\u03a9')
+  })
+})
+
+describe('D1: an emoji CLDR cannot name is the [?] sentinel', () => {
+  test('a lone regional indicator and a lone tag', () => {
+    expect(disarm.demojize('\u{1F1E6}')).toBe('[?]')
+    expect(disarm.demojize('x\u{1F1E6}!')).toBe('x[?]!')
+    expect(disarm.demojize('\u{E0041}')).toBe('[?]')
+    expect(disarm.demojize('\u{1F600}')).toBe('grinning face')
+  })
+})
+
+describe('N1: sizes are non-negative integers, not coerced', () => {
+  const bad = [Number.NaN, 0.5, 5.5, 2 ** 64, Number.POSITIVE_INFINITY, -1, '3']
+  test.each(bad)('rejects %s everywhere', (value) => {
+    const calls = [
+      () => disarm.stripZalgo('caf\u00e9', { maxMarks: value }),
+      () => disarm.isZalgo('a\u0301\u0301', { threshold: value }),
+      () => disarm.graphemeTruncate('abcdef', value),
+      () => disarm.slugify('hello world', { maxLength: value }),
+      () => disarm.sanitizeFilename('x', { maxLength: value }),
+      () => disarm.nearestMatch('a', ['b'], { maxDistance: value }),
+    ]
+    for (const fn of calls) {
+      expect(fn).toThrow(DisarmInvalidArgument)
+    }
+  })
+  test('the finding itself: NaN no longer strips the accent', () => {
+    expect(() => disarm.stripZalgo('caf\u00e9', { maxMarks: Number.NaN })).toThrow(/non-negative integer/)
+    expect(disarm.stripZalgo('caf\u00e9', { maxMarks: 0 })).toBe('cafe')
+    expect(disarm.slugify('hello world', { maxLength: 5 })).toBe('hello')
+    expect(disarm.graphemeTruncate('abcdef', 0)).toBe('')
+  })
+})
+
+describe('N2: everything disarm throws is a DisarmError', () => {
+  const nonFunctions = new Set(['DisarmError', 'DisarmInvalidArgument', 'Lexicon', 'Pipeline'])
+  const exported = Object.entries(disarm).filter(
+    ([name, value]) => typeof value === 'function' && !nonFunctions.has(name),
+  )
+  test('the surface is covered', () => {
+    expect(exported.length).toBeGreaterThan(50)
+  })
+  test.each(exported)('%s with a wrong-typed argument', (_name, fn) => {
+    for (const arg of [123, undefined, null, {}]) {
+      try {
+        fn(arg)
+      } catch (e) {
+        expect(e).toBeInstanceOf(DisarmError)
+      }
+    }
+  })
+  test('the finding itself', () => {
+    expect(() => disarm.transliterate(123)).toThrow(DisarmInvalidArgument)
+    expect(() => disarm.stripAccents(undefined)).toThrow(DisarmError)
+    expect(() => disarm.demojize(null)).toThrow(DisarmError)
+    expect(() => disarm.graphemeLen(42)).toThrow(DisarmError)
+    expect(() => disarm.hasBidiControl({})).toThrow(DisarmError)
+  })
+  test('the handles too', () => {
+    expect(() => new Lexicon(123)).toThrow(DisarmError)
+    expect(new Lexicon(['free'])).toBeInstanceOf(Lexicon)
+    const pipe = disarm.getPipeline('rag_ingest')
+    expect(() => pipe.process(123)).toThrow(DisarmInvalidArgument)
+    expect(() => pipe.withDigitPolicy('tr39')).toThrow(DisarmInvalidArgument)
+    expect(() => pipe.withDigitPolicy('tr39')).toThrow(/^digit_policy/)
+    expect(pipe).toBeInstanceOf(Pipeline)
+    expect(disarm.getPipeline('llm_guardrail').withDigitPolicy('tr39')).toBeInstanceOf(Pipeline)
+  })
+})
+
+describe('J2: the arabic and hebrew targets (#792)', () => {
+  test('are accepted', () => {
+    expect(typeof disarm.normalizeConfusables('x', { target: 'arabic' })).toBe('string')
+    expect(typeof disarm.normalizeConfusables('x', { target: 'hebrew' })).toBe('string')
+    expect(typeof disarm.isConfusable('x', { target: 'arabic' })).toBe('boolean')
+  })
+})

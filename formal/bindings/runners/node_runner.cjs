@@ -153,6 +153,8 @@ const CASES = {
   slug: (t) => d.slugify(t),
   zs: (t) => d.stripZalgo(t, { maxMarks: 3 }),
   zi: (t) => d.isZalgo(t, { threshold: 3 }),
+  zs_def: (t) => d.stripZalgo(t),
+  zi_def: (t) => d.isZalgo(t),
   isconf: (t) => d.isConfusable(t),
 }
 

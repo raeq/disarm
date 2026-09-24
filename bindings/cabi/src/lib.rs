@@ -88,6 +88,10 @@ fn disarm_transliterate(text: char_p::Ref<'_>) -> char_p::Box {
 
 /// Transliterate with a scheme (`"default"` | `"strict_iso9"` | `"gost7034"`) and an
 /// optional language profile (`lang` may be NULL).
+///
+/// An unknown `scheme` or `lang` is an error in the result's `error` half, as it is for
+/// `disarm_search_key` and in every other binding. An unknown `lang` used to fall back
+/// to the default tables with no error (`formal/bindings`, B2).
 #[ffi_export]
 fn disarm_transliterate_opts(
     text: char_p::Ref<'_>,
@@ -121,7 +125,8 @@ fn build_transliterate(
     if let Some(lang) = lang {
         b = b.lang(lang);
     }
-    Ok(b.run(text).into_owned())
+    // `try_run` rejects an unknown `lang` instead of falling back to the default tables.
+    Ok(b.try_run(text)?.into_owned())
 }
 
 // ── Confusables & normalization (fallible) ──────────────────────────────────────
@@ -204,7 +209,9 @@ fn disarm_is_case_fold_stable(text: char_p::Ref<'_>) -> bool {
     api::is_case_fold_stable(&arg(text))
 }
 
-/// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks.
+/// Replace emoji with their plain names; `strip_modifiers` drops skin-tone marks. An
+/// emoji CLDR cannot name (a regional indicator or a Plane 14 tag character standing
+/// alone) becomes `[?]`, as in every binding.
 #[ffi_export]
 fn disarm_demojize(text: char_p::Ref<'_>, strip_modifiers: bool) -> char_p::Box {
     to_c(api::demojize(&arg(text), strip_modifiers))
@@ -523,10 +530,17 @@ fn disarm_nearest_match(
 
 /// Whether `text` is already its own canonical form under `preset` (#730).
 ///
-/// Returns `1` for canonical, `0` for not, and `-1` when `preset` names neither a preset
-/// nor a profile. A tri-state rather than a `bool`, because every other predicate here is
-/// infallible and this one takes a name that can be wrong — answering `0` for an unknown
-/// preset would report "not canonical" for a question that was never asked.
+/// Returns `1` for canonical, `0` for not, and `-1` when the question could not be
+/// answered: `preset` names neither a preset nor a profile, or running the preset hit a
+/// resource limit (an input whose normalized form exceeds the output cap, #768). A
+/// tri-state rather than a `bool`, because every other predicate here is infallible and
+/// this one can fail — answering `0` would report "not canonical" for a question that was
+/// never answered. Treat `-1` as "unknown", never as either answer; the preset functions
+/// (`disarm_canonicalize` and the rest) return the reason in their `DisarmResult`.
+///
+/// `-1` used to be documented as the unknown-preset case alone (`formal/bindings`, E3).
+/// A distinct code for the resource limit was not added: a caller testing `r == -1` and
+/// otherwise treating a non-zero value as "canonical" would read a new `-2` as a yes.
 #[ffi_export]
 fn disarm_is_canonical(text: char_p::Ref<'_>, preset: char_p::Ref<'_>) -> i8 {
     match api::is_canonical(&arg(text), &arg(preset)) {

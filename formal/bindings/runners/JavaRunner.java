@@ -121,7 +121,8 @@ public final class JavaRunner {
         C.put("nc_lat_tr39", t -> Disarm.normalizeConfusables(t, TargetScript.LATIN, DigitPolicy.TR39));
         C.put("nc_lat_pres", t -> Disarm.normalizeConfusables(t, TargetScript.LATIN, DigitPolicy.PRESERVE));
         C.put("nc_cyr", t -> Disarm.normalizeConfusables(t, TargetScript.CYRILLIC));
-        // nc_ara / nc_heb: TargetScript has no ARABIC or HEBREW constant; not expressible.
+        C.put("nc_ara", t -> Disarm.normalizeConfusables(t, TargetScript.ARABIC));
+        C.put("nc_heb", t -> Disarm.normalizeConfusables(t, TargetScript.HEBREW));
         C.put("sa", t -> Disarm.stripAccents(t));
         C.put("fc", t -> Disarm.foldCase(t));
         C.put("cfs", t -> Disarm.isCaseFoldStable(t));

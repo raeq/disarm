@@ -34,7 +34,8 @@
 use std::collections::HashSet;
 
 use disarm_core::api;
-use magnus::{function, method, prelude::*, Error, RHash, Ruby};
+use magnus::encoding::EncodingCapable;
+use magnus::{function, kwargs, method, prelude::*, Error, RHash, RString, Ruby};
 
 /// Map a `disarm` error onto the closest standard Ruby exception:
 /// `InvalidArgument` → `ArgumentError`, everything else → `RuntimeError`. The
@@ -147,9 +148,30 @@ fn wtf8_to_utf8(bytes: &[u8]) -> String {
     out
 }
 
-/// A text argument decoded at the boundary with the WTF-8 → UTF-8 contract (#472).
-/// Used in place of `String` for every text parameter; `Deref<Target = str>` lets the
-/// existing `&text` call sites reach the core unchanged.
+/// A text argument decoded at the boundary by the encoding the String declares (#472,
+/// and R1 of `formal/bindings`). Used in place of `String` for every text parameter;
+/// `Deref<Target = str>` lets the existing `&text` call sites reach the core unchanged.
+///
+/// The contract, per `String#encoding`:
+///
+/// - **UTF-8**: the bytes as they are, with the WTF-8 scrub above for malformed input: a
+///   well-formed surrogate pair recombines, each lone surrogate or undecodable byte is
+///   one `U+FFFD`.
+/// - **US-ASCII**: the bytes as they are; a byte above `0x7F` is not US-ASCII and is one
+///   `U+FFFD`.
+/// - **ASCII-8BIT (BINARY)**: bytes with no declared encoding, read as UTF-8 under the
+///   same scrub as a UTF-8 String. `File.binread` and socket reads return BINARY for
+///   what is usually UTF-8, and the C ABI reads its bytes the same way (#1020).
+/// - **Any other encoding** (ISO-8859-1, Windows-1251, Shift_JIS, UTF-16LE, ...):
+///   transcoded to UTF-8 by Ruby's own `String#encode`, each invalid or unmappable
+///   sequence becoming one `U+FFFD`. An encoding Ruby cannot convert from at all (a
+///   dummy such as UTF-7) raises `Encoding::ConverterNotFoundError`, which the Ruby
+///   layer reports as `Disarm::InvalidArgument`.
+///
+/// Until R1 every String's bytes were read as UTF-8 whatever it declared, so an
+/// ISO-8859-1 `"caf\xE9"` transliterated to `"caf[?]"` and a Windows-1251 word to a row
+/// of `[?]`, while the plain `String` parameters of the same functions, which magnus
+/// converts, read the same bytes correctly.
 struct Wtf8Text(String);
 
 impl std::ops::Deref for Wtf8Text {
@@ -161,13 +183,43 @@ impl std::ops::Deref for Wtf8Text {
 
 impl magnus::TryConvert for Wtf8Text {
     fn try_convert(val: magnus::Value) -> Result<Self, Error> {
-        let s = magnus::RString::try_convert(val)?;
+        let s = RString::try_convert(val)?;
+        // GVL invariant: argument conversion runs inside a Ruby method callback.
+        #[allow(clippy::expect_used)]
+        let ruby = Ruby::get().expect("argument conversion runs while holding the Ruby GVL");
+        let encoding = s.enc_get();
+        let usascii = encoding == ruby.usascii_encindex();
+        let s =
+            if encoding == ruby.utf8_encindex() || usascii || encoding == ruby.ascii8bit_encindex()
+            {
+                s
+            } else {
+                let options = kwargs!(
+                    &ruby,
+                    "invalid" => ruby.to_symbol("replace"),
+                    "undef" => ruby.to_symbol("replace"),
+                    "replace" => "\u{FFFD}"
+                );
+                s.funcall::<_, _, RString>("encode", (ruby.utf8_encoding(), options))?
+            };
         // SAFETY: the bytes are copied out immediately; no Ruby API runs between
         // `as_slice` and `to_vec`, so the string cannot be moved or collected.
         let bytes = unsafe { s.as_slice().to_vec() };
         let decoded = match std::str::from_utf8(&bytes) {
-            Ok(valid) => valid.to_owned(),
-            Err(_) => wtf8_to_utf8(&bytes),
+            Ok(valid) if !usascii || valid.is_ascii() => valid.to_owned(),
+            // A US-ASCII String carrying a byte above 0x7F: each such byte is invalid in
+            // the encoding the String declares, and is one U+FFFD.
+            _ if usascii => bytes
+                .iter()
+                .map(|&b| {
+                    if b.is_ascii() {
+                        char::from(b)
+                    } else {
+                        '\u{FFFD}'
+                    }
+                })
+                .collect(),
+            _ => wtf8_to_utf8(&bytes),
         };
         Ok(Wtf8Text(decoded))
     }
@@ -191,6 +243,16 @@ fn transliterate_opts(
     scheme: String,
     lang: Option<String>,
 ) -> Result<String, Error> {
+    // `try_run` rejects an unknown `lang` (B2) and applies registered replacements.
+    transliterate_builder(&scheme, lang)?
+        .try_run(&text)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|e| map_err(&e))
+}
+
+/// The core's `Transliterate` builder for a scheme token and an optional `lang`; the
+/// `lang` is checked when the builder runs.
+fn transliterate_builder(scheme: &str, lang: Option<String>) -> Result<api::Transliterate, Error> {
     let mut builder = api::Transliterate::new();
     if scheme != "default" {
         let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
@@ -199,7 +261,7 @@ fn transliterate_opts(
     if let Some(lang) = lang {
         builder = builder.lang(lang);
     }
-    Ok(builder.run(&text).into_owned())
+    Ok(builder)
 }
 
 // ── Confusables (TR39) ────────────────────────────────────────────────────────
@@ -310,7 +372,7 @@ fn slugify(
     decimal: bool,
     hexadecimal: bool,
     safe_chars: String,
-) -> String {
+) -> Result<String, Error> {
     let mut config = api::SlugConfig::default()
         .with_separator(separator)
         .with_lowercase(lowercase)
@@ -328,7 +390,8 @@ fn slugify(
     config.entities = entities;
     config.decimal = decimal;
     config.hexadecimal = hexadecimal;
-    api::slugify(&text, &config)
+    // `try_slugify` rejects an unknown `lang` rather than falling back (B2).
+    api::try_slugify(&text, &config).map_err(|e| map_err(&e))
 }
 
 /// `Disarm._replace_emoji(text, replacement)` — every emoji replaced, verbatim (#972).
@@ -336,7 +399,8 @@ fn replace_emoji(text: Wtf8Text, replacement: String) -> String {
     api::replace_emoji(&text, &replacement)
 }
 
-/// `Disarm._demojize(text, strip_modifiers)`.
+/// `Disarm._demojize(text, strip_modifiers)`. An emoji CLDR cannot name becomes `[?]`,
+/// as in every binding.
 fn demojize(text: Wtf8Text, strip_modifiers: bool) -> String {
     api::demojize(&text, strip_modifiers)
 }
@@ -401,9 +465,14 @@ fn catalog_key(
     strict_iso9: bool,
     digit_policy: String,
 ) -> Result<String, Error> {
-    api::catalog_key_with(&text, lang.as_deref(), strict_iso9, parse_policy(&digit_policy)?)
-        .map(std::borrow::Cow::into_owned)
-        .map_err(|e| map_err(&e))
+    api::catalog_key_with(
+        &text,
+        lang.as_deref(),
+        strict_iso9,
+        parse_policy(&digit_policy)?,
+    )
+    .map(std::borrow::Cow::into_owned)
+    .map_err(|e| map_err(&e))
 }
 
 /// `Disarm._skeleton_key(text, digit_policy)` — the TR39 identifier skeleton plus the two
@@ -628,16 +697,9 @@ fn find_untranslatable(
     scheme: String,
     lang: Option<String>,
 ) -> Result<Vec<(String, usize)>, Error> {
-    let mut builder = api::Transliterate::new();
-    if scheme != "default" {
-        let scheme: api::Scheme = scheme.parse().map_err(|e| map_err(&e))?;
-        builder = builder.scheme(scheme);
-    }
-    if let Some(lang) = lang {
-        builder = builder.lang(lang);
-    }
-    Ok(builder
-        .find_untranslatable(&text)
+    Ok(transliterate_builder(&scheme, lang)?
+        .try_find_untranslatable(&text)
+        .map_err(|e| map_err(&e))?
         .into_iter()
         .map(|u| (u.ch.to_string(), u.offset))
         .collect())
@@ -918,6 +980,12 @@ fn get_pipeline(profile: String) -> Result<Pipeline, Error> {
 fn init(ruby: &Ruby) -> Result<(), Error> {
     let module = ruby.define_module("Disarm")?;
 
+    // The zalgo defaults, read from the core so the Ruby layer never restates them: it
+    // kept a literal cap of 2 after #788 raised the core's to 3 (`formal/bindings`, B1).
+    // Defined before `lib/disarm.rb`'s method definitions read them as defaults.
+    module.const_set("DEFAULT_ZALGO_THRESHOLD", api::DEFAULT_ZALGO_THRESHOLD)?;
+    module.const_set("DEFAULT_ZALGO_MAX_MARKS", api::DEFAULT_ZALGO_MAX_MARKS)?;
+
     // Raw, `_`-prefixed shims wrapped by the idiomatic Ruby layer (#357).
     module.define_singleton_method("_transliterate", function!(transliterate, 1))?;
     module.define_singleton_method("_transliterate_opts", function!(transliterate_opts, 3))?;
@@ -948,10 +1016,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // keeping `rescue Disarm::Error` exhaustive across the whole public surface.
     module.define_singleton_method("_strip_accents", function!(strip_accents, 1))?;
     module.define_singleton_method("_fold_case", function!(fold_case, 1))?;
-    module.define_singleton_method(
-        "_is_case_fold_stable?",
-        function!(is_case_fold_stable, 1),
-    )?;
+    module.define_singleton_method("_is_case_fold_stable?", function!(is_case_fold_stable, 1))?;
     module.define_singleton_method("_find_key_collisions", function!(find_key_collisions, 3))?;
     module.define_singleton_method("_suspicious_hostname?", function!(suspicious_hostname, 1))?;
     module.define_singleton_method("_analyze_hostname", function!(analyze_hostname, 2))?;
@@ -990,10 +1055,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         function!(reverse_transliterate, 2),
     )?;
     module.define_singleton_method("_find_untranslatable", function!(find_untranslatable, 3))?;
-    module.define_singleton_method(
-        "_unmapped_confusables",
-        function!(unmapped_confusables, 1),
-    )?;
+    module.define_singleton_method("_unmapped_confusables", function!(unmapped_confusables, 1))?;
     module.define_singleton_method(
         "_find_unmapped_confusables",
         function!(find_unmapped_confusables, 2),
@@ -1008,19 +1070,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     // Metadata introspection (#404 phase 3 parity backfill).
     module.define_singleton_method("_lang_info", function!(lang_info, 1))?;
     module.define_singleton_method("_script_info", function!(script_info, 1))?;
-    module.define_singleton_method(
-        "_confusable_coverage",
-        function!(confusable_coverage, 1),
-    )?;
-    module.define_singleton_method(
-        "_confusables_version",
-        function!(confusables_version, 0),
-    )?;
+    module.define_singleton_method("_confusable_coverage", function!(confusable_coverage, 1))?;
+    module.define_singleton_method("_confusables_version", function!(confusables_version, 0))?;
     module.define_singleton_method("_unicode_version", function!(unicode_version, 0))?;
-    module.define_singleton_method(
-        "_key_schema_version",
-        function!(key_schema_version, 0),
-    )?;
+    module.define_singleton_method("_key_schema_version", function!(key_schema_version, 0))?;
     module.define_singleton_method("_list_scripts", function!(list_scripts, 0))?;
     module.define_singleton_method("_list_context_langs", function!(list_context_langs, 0))?;
 

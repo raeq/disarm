@@ -15,6 +15,12 @@ from disarm._core import (
     _CONFUSABLES_VERSION as _CONFUSABLES_VERSION,
 )
 from disarm._core import (
+    _DEFAULT_ZALGO_MAX_MARKS as _DEFAULT_ZALGO_MAX_MARKS,
+)
+from disarm._core import (
+    _DEFAULT_ZALGO_THRESHOLD as _DEFAULT_ZALGO_THRESHOLD,
+)
+from disarm._core import (
     _KEY_SCHEMA_VERSION as _KEY_SCHEMA_VERSION,
 )
 from disarm._core import (

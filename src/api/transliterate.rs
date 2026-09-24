@@ -121,7 +121,7 @@ impl Default for OnUnknown {
 
 impl OnUnknown {
     /// The engine's `(ErrorMode, replacement)` pair.
-    fn parts(&self) -> (crate::ErrorMode, &str) {
+    pub(crate) fn parts(&self) -> (crate::ErrorMode, &str) {
         match self {
             OnUnknown::Replace(s) => (crate::ErrorMode::Replace, s.as_str()),
             OnUnknown::Ignore => (crate::ErrorMode::Ignore, ""),
@@ -165,6 +165,11 @@ impl Transliterate {
 
     /// Select a language-specific romanization table. `"auto"` enables script
     /// detection; the default (unset) uses the multi-script tables.
+    ///
+    /// The code is checked when the builder runs, not here: [`try_run`](Self::try_run)
+    /// and [`try_find_untranslatable`](Self::try_find_untranslatable) reject a code
+    /// [`validate_lang`] does not accept, and the infallible [`run`](Self::run) falls
+    /// back to the default tables.
     #[must_use]
     pub fn lang(mut self, lang: impl Into<String>) -> Self {
         self.lang = Some(lang.into());
@@ -192,8 +197,12 @@ impl Transliterate {
         self
     }
 
-    /// Transliterate `text`. Returns `Cow::Borrowed` for pure-ASCII input (zero
-    /// allocation), `Cow::Owned` otherwise. Infallible.
+    /// Transliterate `text` with the tables alone. Returns `Cow::Borrowed` for
+    /// pure-ASCII input (zero allocation), `Cow::Owned` otherwise. Infallible, and so
+    /// **lenient** in two ways [`try_run`](Self::try_run) is not: an unknown
+    /// [`lang`](Self::lang) falls back to the default tables instead of being rejected,
+    /// and the replacements registered with [`register_replacements`] are not applied.
+    /// Prefer `try_run`; it is what every binding's `transliterate` calls.
     #[must_use]
     pub fn run<'a>(&self, text: &'a str) -> Cow<'a, str> {
         // `None` = the default `Replace("[?]")`, supplied as a borrowed `'static`
@@ -214,10 +223,56 @@ impl Transliterate {
         )
     }
 
+    /// Transliterate `text` the way every binding does: reject an unknown
+    /// [`lang`](Self::lang), apply the replacements registered with
+    /// [`register_replacements`], then run the tables.
+    ///
+    /// Returns `Cow::Borrowed` only when nothing changed, so a borrowed result is the
+    /// input itself.
+    ///
+    /// # Errors
+    ///
+    /// [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument) when `lang`
+    /// names no language [`validate_lang`] accepts (the rule Python has enforced since
+    /// #68, now in the core so every binding shares it), and
+    /// [`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit) when the registered
+    /// replacements expand the text past their output cap.
+    ///
+    /// ```
+    /// use disarm::api::Transliterate;
+    /// use disarm::ErrorKind;
+    ///
+    /// let kyiv = "\u{41A}\u{438}\u{457}\u{432}";
+    /// let err = Transliterate::new().lang("UK").try_run(kyiv).unwrap_err();
+    /// assert_eq!(err.kind(), ErrorKind::InvalidArgument);
+    /// assert_eq!(Transliterate::new().lang("uk").try_run(kyiv).unwrap(), "Kyiv");
+    /// ```
+    pub fn try_run<'a>(&self, text: &'a str) -> Result<Cow<'a, str>, Error> {
+        if let Some(lang) = &self.lang {
+            validate_lang(lang)?;
+        }
+        let (error_mode, replacement) = match &self.on_unknown {
+            None => (crate::ErrorMode::Replace, "[?]"),
+            Some(on_unknown) => on_unknown.parts(),
+        };
+        let (strict_iso9, gost7034) = self.scheme.flags();
+        crate::transliterate::transliterate_after_replacements(
+            text,
+            self.lang.as_deref(),
+            Some(error_mode),
+            replacement,
+            strict_iso9,
+            gost7034,
+            self.tones,
+        )
+        .map_err(Error::from)
+    }
+
     /// Every character in `text` that has no romanization, in order of
     /// appearance — exactly the set [`run`](Self::run) would
     /// replace/ignore/preserve. (Independent of [`on_unknown`](Self::on_unknown),
-    /// which only decides what to *do* with them.)
+    /// which only decides what to *do* with them.) Lenient as `run` is: see
+    /// [`try_find_untranslatable`](Self::try_find_untranslatable).
     #[must_use]
     pub fn find_untranslatable(&self, text: &str) -> Vec<Untranslatable> {
         let (strict_iso9, gost7034) = self.scheme.flags();
@@ -232,6 +287,58 @@ impl Transliterate {
         .map(|(ch, offset)| Untranslatable { ch, offset })
         .collect()
     }
+
+    /// [`find_untranslatable`](Self::find_untranslatable) as [`try_run`](Self::try_run)
+    /// sees the text: an unknown [`lang`](Self::lang) is rejected, and the registered
+    /// replacements are applied first, so offsets are relative to the post-replacement
+    /// text (identical to the input when none are registered).
+    ///
+    /// # Errors
+    ///
+    /// As [`try_run`](Self::try_run).
+    pub fn try_find_untranslatable(&self, text: &str) -> Result<Vec<Untranslatable>, Error> {
+        if let Some(lang) = &self.lang {
+            validate_lang(lang)?;
+        }
+        let (strict_iso9, gost7034) = self.scheme.flags();
+        Ok(
+            crate::transliterate::find_untranslatable_after_replacements(
+                text,
+                self.lang.as_deref(),
+                strict_iso9,
+                gost7034,
+                self.tones,
+            )?
+            .into_iter()
+            .map(|(ch, offset)| Untranslatable { ch, offset })
+            .collect(),
+        )
+    }
+}
+
+/// Check a transliteration language code: a built-in or registered code, one of the
+/// accepted BCP-47 aliases (`nb`, `nn`, `da`), or `"auto"`.
+///
+/// Every `lang` argument in the API goes through this rule: the key builders,
+/// [`sanitize_filename`](crate::api::sanitize_filename),
+/// [`Transliterate::try_run`] and [`try_slugify`](crate::api::try_slugify). An unknown
+/// code used to fall back to the default tables silently in the Rust API and in every
+/// binding but Python (#68), so a typo (`"UK"` for `"uk"`) produced quietly wrong
+/// output (`formal/bindings`, B2).
+///
+/// # Errors
+///
+/// [`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument), with the valid
+/// codes and the closest one in the message.
+///
+/// ```
+/// use disarm::api::validate_lang;
+/// assert!(validate_lang("uk").is_ok());
+/// assert!(validate_lang("auto").is_ok());
+/// assert!(validate_lang("UK").unwrap_err().to_string().contains("did you mean"));
+/// ```
+pub fn validate_lang(lang: &str) -> Result<(), Error> {
+    crate::transliterate::validate_lang(Some(lang)).map_err(Error::from)
 }
 
 /// A character with no transliteration, located in the input — an element of
@@ -246,8 +353,10 @@ pub struct Untranslatable {
 }
 
 /// Transliterate `text` to ASCII with every default (default tables,
-/// `Replace("[?]")`, no tones). Shorthand for `Transliterate::new().run(text)`;
-/// use the [`Transliterate`] builder to choose a [`Scheme`] or [`OnUnknown`].
+/// `Replace("[?]")`, no tones). Shorthand for `Transliterate::new().run(text)`, and
+/// like it does not apply the replacements registered with [`register_replacements`];
+/// `Transliterate::new().try_run(text)` does. Use the [`Transliterate`] builder to
+/// choose a [`Scheme`] or [`OnUnknown`].
 #[must_use]
 pub fn transliterate(text: &str) -> Cow<'_, str> {
     Transliterate::new().run(text)
@@ -273,7 +382,10 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
     crate::transliterate::register_lang(code, mappings).map_err(Error::from)
 }
 
-/// Register global pre-transliteration replacements (applied before the tables).
+/// Register global pre-transliteration replacements, applied before the tables by
+/// [`Transliterate::try_run`] and [`Transliterate::try_find_untranslatable`] (and by
+/// Python's `transliterate`, which shares that code). The infallible
+/// [`transliterate`] and [`Transliterate::run`] run the tables alone.
 ///
 /// Fails ([`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit)) past the replacement cap
 /// or ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once sealed.

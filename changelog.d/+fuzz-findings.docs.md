@@ -1,0 +1,9 @@
+- **Invariant I7 is stated for `tones=False`, as I1-I3 are (fuzz finding 6 of #1040).**
+  `docs/formal-verification.md` stated the output bound, at most five bytes per input
+  byte plus one per character, for every option. With `tones=True`, U+337F gives
+  `zhu sh\u00ec hu\u00ec sh\u00e8`, 18 bytes for 3: a toned vowel is two bytes. I7 bounds
+  the ASCII normalizer, whose worst case the per-code-point exhaustion measures, and the
+  toned table is a display form outside I2 and I3 already; bounding it would take a
+  looser constant for every mode or shorter toned output. The scope now says so, counts
+  the output in bytes, and notes that a long registered replacement is outside it too.
+  The formal tier pins the tones case.

@@ -11,7 +11,10 @@ I3: Idempotence         — Applying transliterate twice yields the same as once
 I4: No Exceptions       — No valid Unicode input causes an exception.
 I5: Deterministic       — Same input always produces the same output.
 I6: No Input Size Cap   — Input of any length is accepted (#80 removed the cap).
-I7: Output Length Bound — len(output) ≤ 5 × utf8_bytes(input) + chars(input).
+I7: Output Length Bound — utf8_bytes(output) <= 5 * utf8_bytes(input) + chars(input).
+
+I1-I3 and I7 are stated for tones=False and no runtime registrations
+(docs/formal-verification.md, "Scope").
 """
 
 import string
@@ -183,7 +186,8 @@ class TestI6NoInputSizeCap:
 
 
 class TestI7OutputLengthBound:
-    """I7: For ErrorMode::Ignore, len(output) ≤ 5 × utf8_bytes(input) + chars(input).
+    """I7: For ErrorMode::Ignore and tones=False,
+    utf8_bytes(output) <= 5 * utf8_bytes(input) + chars(input).
 
     This bound arises because:
     - Each input byte maps to at most 5 output ASCII bytes. The worst case is one code
@@ -193,6 +197,11 @@ class TestI7OutputLengthBound:
       formal/lean/Transliterate). A random draw essentially never picks it, so it is
       pinned below, and the whole scalar range is swept once.
     - Spacing between CJK characters adds at most char_count spaces
+
+    Scoped to tones=False, as I1-I3 are: toned pinyin is not ASCII by design, and a
+    toned vowel is two bytes, so U+337F gives 18 bytes for 3 (found by the #1040 fuzz
+    run). The output is measured in bytes; with tones off it is ASCII, so bytes and
+    characters agree.
     """
 
     @staticmethod
@@ -202,14 +211,21 @@ class TestI7OutputLengthBound:
     def test_the_worst_code_point(self):
         result = disarm.transliterate("\u337f", errors="ignore")
         assert result == "zhu shi hui she"
-        assert len(result) == self._bound("\u337f") - 1
+        assert len(result.encode("utf-8")) == self._bound("\u337f") - 1
+
+    def test_tones_are_outside_the_scope(self):
+        """The documented scope, pinned: with tones the bound does not hold."""
+        result = disarm.transliterate("\u337f", errors="ignore", tones=True)
+        assert result == "zhu sh\u00ec hu\u00ec sh\u00e8"
+        assert len(result.encode("utf-8")) == 18 > self._bound("\u337f")
 
     def test_every_scalar_is_within_the_bound(self):
         over = [
             f"U+{cp:04X}"
             for cp in range(0x80, 0x110000)
             if not 0xD800 <= cp <= 0xDFFF
-            and len(disarm.transliterate(chr(cp), errors="ignore")) > self._bound(chr(cp))
+            and len(disarm.transliterate(chr(cp), errors="ignore").encode("utf-8"))
+            > self._bound(chr(cp))
         ]
         assert over == []
 
@@ -218,7 +234,7 @@ class TestI7OutputLengthBound:
     def test_hypothesis_output_bound(self, text):
         result = disarm.transliterate(text, errors="ignore")
         bound = self._bound(text)
-        assert len(result) <= bound, (
+        assert len(result.encode("utf-8")) <= bound, (
             f"Output length {len(result)} exceeds bound {bound} "
             f"for input of {len(text)} chars / {len(text.encode('utf-8'))} bytes"
         )

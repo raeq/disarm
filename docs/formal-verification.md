@@ -143,14 +143,21 @@ the whole input, so the argument survives every context rule the engine has. It 
 modelled and checked in `formal/lean/Transliterate` (`translit_I2`), with each kind
 of piece discharged against the code.
 
-**Scope.** I1–I3 are stated for `tones=False` and no runtime registrations, and hold
-for every `lang`, scheme and `context` setting within that. Outside it:
+**Scope.** I1–I3 and I7 are stated for `tones=False` and no runtime registrations, and
+hold for every `lang`, scheme and `context` setting within that. I7 counts the output in
+UTF-8 bytes, which inside the scope is the character count, since the output is ASCII.
+Outside it:
 
 - `tones=True` emits pinyin with diacritics by design (`北` → `běi`), so it is outside
-  I2, and outside I3 too, since a second pass strips the tone.
+  I2, and outside I3 too, since a second pass strips the tone. It is outside I7 as well:
+  a toned vowel is two bytes, so U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`, 18 bytes
+  for 3 against a bound of 16 (found by the #1040 fuzz run). I7 bounds the ASCII
+  normalizer, whose worst case the per-code-point exhaustion measures; the toned table is
+  a display form, and bounding it would take either a looser constant for every mode or
+  shorter toned output, which is the feature. So I7 is scoped, not fixed.
 - Values given to `register_lang` and `register_replacements` are the caller's and
-  are not checked: a non-ASCII value breaks I2 and I3, and `register_replacements`
-  also breaks I1, because it runs before the ASCII fast path.
+  are not checked: a non-ASCII value breaks I2 and I3, `register_replacements`
+  also breaks I1, because it runs before the ASCII fast path, and a long value breaks I7.
 - I3 is stated for `errors='ignore'`. Under `errors='preserve'` with `lang='auto'` it
   can fail, because a preserved character changes what the second pass detects.
 - `context=True` kept none of I1–I3 for text outside Arabic and Hebrew words until

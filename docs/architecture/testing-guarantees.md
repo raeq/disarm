@@ -96,7 +96,7 @@ Seven properties are stated as specifications, each with a documented verificati
 | I6 | No Input Size Cap | ∀s: f(s) accepts s whatever its length | Boundary test: 12 MiB accepted (#80 removed the cap) |
 | I7 | Output Length Bounded | ∀s: \|f(s)\| ≤ \|s\|\_bytes × 5 + \|s\|\_chars | Exhaustive per code point (worst case U+337F, ratio 5) + Hypothesis 1,000 |
 
-I1–I3 are stated for `tones=False` and no runtime registrations; the scope and the argument behind I2 are in [Exhaustive Testing](../formal-verification.md#stated-invariants-i1i7-the-lossy-normalizer-specification). Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
+I1–I3 and I7 are stated for `tones=False` and no runtime registrations; the scope and the argument behind I2 are in [Exhaustive Testing](../formal-verification.md#stated-invariants-i1i7-the-lossy-normalizer-specification). Each invariant is a test class with a docstring stating the property. The verification method combines exhaustive enumeration (where the domain is bounded) with Hypothesis property-based testing (where it is not).
 
 See [formal-verification.md](../formal-verification.md) for the full specification document.
 
@@ -129,7 +129,7 @@ The exhaustive testing layers sit on top of a conventional test suite that is it
 | Python (pytest) | 2,268 | All public API functions |
 | Rust (#[test]) | 635 | Core algorithms, tables, edge cases |
 | Exhaustive domain (Rust) | 16 | Full BMP, Hangul, CJK, Indic |
-| Stated invariants (Python) | 12 | I1–I7 specifications |
+| Stated invariants (Python) | 16 | I1–I7 specifications |
 | Property-based (Hypothesis) | 500+ examples/property | Full Unicode input space |
 | Property-based (proptest) | Rust-side invariants | Normalization, roundtrips |
 | **Total** | **2,900+** | |
@@ -194,7 +194,7 @@ the full property once its finding is resolved:
 | `find_untranslatable` | "exactly the set `run` would replace/ignore/preserve" | `transliterate("\U0001f240")` is `[?]ben[?]` and `find_untranslatable` reports nothing: the NFKC brackets around the ideograph have no romanization. | Fixed: a character counts as recovered only when its whole NFKC form transliterates, so U+1F240 is reported, and `errors="strict"` raises on it. |
 | `sanitize_filename` | "The result is a fixed point" | With `preserve_extension=False`, `"a" + ".*" * 9` gives `a._`, which sanitizes to `a`. Each pass strips one trailing `._`, and the pass loop stops at eight (`MAX_PASSES`), which `src/filename.rs` admits can cost idempotence. | Fixed: a pass repeats its trailing-separator and dot strips until neither removes anything, so the input settles in one call, and a debug build asserts the pass bound is not reached. |
 | `slugify` with `allow_unicode` and `separator=""` | a valid slug is unchanged | `"\u1100 \u1161"` gives the two conjoining jamo, whose slug is U+AC00; `"\U00016d67,\U00016d67"` does the same with Kirat Rai. Joining the words puts two characters that compose side by side after composition has run. | Fixed: with an empty separator the joined slug is composed again, so the first call returns U+AC00. |
-| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 are scoped to `tones=False`; I7 is not. | Open |
+| `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 were scoped to `tones=False`; I7 was not. | Scoped: I7 is stated for `tones=False`, as I1-I3 are, and `docs/formal-verification.md` says why. It bounds the ASCII normalizer; toned pinyin is a display form whose vowels are two bytes. |
 | `catalog_key_with`, `search_key_with` | idempotent under every digit policy (the Presets model, #1024, #1029) | Found on 2026-09-24: `"\ufffd\ufffd\U00016d67\x16\U00016d67"` keys as the two Kirat Rai vowel signs, and the key of that is U+16D68. The control is stripped after the last step that composes. | Fixed: both builders end with an NFC pass, as `sort_key` and `ml_normalize` do. No fixture row moved; three were added. |
 | `slugify` with `allow_unicode` | none of the circled and squared Latin symbols in the slug (#1028) | Found on 2026-09-24: a slug kept U+24B6 under a separator of NULs, `/`, U+24B6 and `d`. The U+24B6 was the separator's, inserted as given between two words. | Not a library defect: the target checked the whole slug where the property is about the words. It now checks the words, and `SlugConfig::separator` says a separator is inserted as given. |
 

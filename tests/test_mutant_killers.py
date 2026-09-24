@@ -305,7 +305,7 @@ class TestPipelineStepTuples:
 
     @pytest.mark.parametrize("name", sorted(PRESET_STEP_FUNCTIONS))
     def test_preset_steps_exact(self, name: str):
-        """`PRESETS` against the step lists the presets run, read from `src/presets.rs`.
+        """`PRESETS` against the step lists the presets run, read from `src/presets/`.
 
         This used to compare `PRESETS` with a second hand-written copy of itself, so both
         drifted together: they missed `resolve_deletions`, `strip_invisibles` in the key

@@ -29,20 +29,29 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-PRESETS = ROOT / "src" / "presets.rs"
+PRESETS = ROOT / "src" / "presets"
 
 #: The function whose inlining the tree-shaking depends on.
 DISPATCH = "apply_into"
 
+#: A top-level `fn`, private or with a visibility qualifier (`pub(super) fn`).
+FN = r"^(?:pub(?:\([^)]*\))? )?fn "
+
 
 @pytest.fixture(scope="module")
 def source() -> str:
-    return PRESETS.read_text(encoding="utf-8")
+    # Every module of the presets except the two test modules, whose helpers would
+    # otherwise count as top-level functions.
+    return "".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(PRESETS.glob("*.rs"))
+        if path.name not in {"tests.rs", "presets_formal_findings.rs"}
+    )
 
 
 def _body_of(source: str, name: str) -> str:
     """The text of `fn name(...)`, brace-matched from its signature."""
-    match = re.search(rf"^fn {re.escape(name)}\(", source, re.M)
+    match = re.search(rf"{FN}{re.escape(name)}\(", source, re.M)
     assert match, f"{name} is gone from {PRESETS.name}; this gate needs rewriting"
     start = source.index("{", match.start())
     depth = 0
@@ -58,7 +67,7 @@ def _body_of(source: str, name: str) -> str:
 
 def test_the_dispatch_is_inline_always(source: str) -> None:
     """Without the attribute LLVM leaves an 18-arm match out of line, measured in #695."""
-    match = re.search(rf"^fn {DISPATCH}\(", source, re.M)
+    match = re.search(rf"{FN}{DISPATCH}\(", source, re.M)
     assert match
     preceding = source[: match.start()]
     assert "#[inline(always)]" in preceding[-400:], (
@@ -92,7 +101,7 @@ def test_only_the_fixed_point_combinator_walks_a_step_list(source: str) -> None:
     and it is reachable only from that arm — so a preset without `FixedPoint` never links
     it. A second walker, or a call from anywhere else, puts the whole match back in play.
     """
-    walkers = re.findall(r"^fn (\w+)\([^)]*steps: &\[Step\]", source, re.M | re.S)
+    walkers = re.findall(rf"{FN}(\w+)\([^)]*steps: &\[Step\]", source, re.M | re.S)
     assert walkers == ["apply_steps"], (
         f"step-list walkers changed: {walkers}. Each one instantiates the full dispatch "
         "with a runtime `Step`, which is what #695 removed."

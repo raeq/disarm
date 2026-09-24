@@ -219,7 +219,7 @@ def script_samples() -> dict[Script, str]:
 # The preset step lists, read from the Rust (Finding 5 of formal/lean/Presets)
 # ---------------------------------------------------------------------------
 
-#: Each preset in `PRESETS`, and the function in `src/presets.rs` that holds its list.
+#: Each preset in `PRESETS`, and the function in `src/presets/` that holds its list.
 PRESET_STEP_FUNCTIONS = {
     "canonicalize": "canonicalize_with",
     "canonicalize_strict": "canonicalize_strict_with",
@@ -255,7 +255,7 @@ def _strip_line_comments(src: str) -> str:
     """Drop `//` comments, leaving string and char literals intact.
 
     A `//` inside a literal (`"https://..."`) is text, not a comment. Raw strings are
-    not handled: `src/presets.rs` has none, and a test would fail loudly if one were
+    not handled: `src/presets/` has none, and a test would fail loudly if one were
     added to a step list.
     """
     out: list[str] = []
@@ -361,14 +361,20 @@ def _step_tuple(name: str, payload: str) -> tuple[str, str | None]:
 
 @functools.cache
 def rust_preset_steps() -> dict[str, list[tuple[str, str | None]]]:
-    """Every preset's step list, read from `src/presets.rs` and spelled as `PRESETS` spells it.
+    """Every preset's step list, read from `src/presets/` and spelled as `PRESETS` spells it.
 
     `PRESETS` is a mirror, and it drifted because the test that pinned it compared it with
     a second hand-written copy (Finding 5 of the Lean model in `formal/lean/Presets`). This
     reads the lists the presets actually run, so a step added in Rust fails the comparison
     until the mirror has it too. An unknown `Step` variant is an error rather than a skip.
     """
-    src = _strip_line_comments((ROOT / "src" / "presets.rs").read_text(encoding="utf-8"))
+    # The lists live in the text presets and the key builders, read here as one string.
+    src = _strip_line_comments(
+        "".join(
+            (ROOT / "src" / "presets" / name).read_text(encoding="utf-8")
+            for name in ("text.rs", "keys.rs")
+        )
+    )
     out: dict[str, list[tuple[str, str | None]]] = {}
     for preset, function in PRESET_STEP_FUNCTIONS.items():
         start = src.index(f"\npub(crate) fn {function}")

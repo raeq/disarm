@@ -2,7 +2,7 @@ r"""#698 — the four properties that make `strip_format` un-composable, as asse
 
 Prose in six binding doc comments claimed `strip_format` *removes* the private-use area
 and the presentation variation selectors and *leaves* TAB/LF alone. Every one of those is
-backwards. It was written from a summary rather than from `src/presets.rs`, it read
+backwards. It was written from a summary rather than from `src/presets/`, it read
 plausibly, and nothing checked it, because the claim had no executable referent anywhere
 in the suite — the docs asserted a behaviour and the tests asserted a different one.
 
@@ -68,7 +68,7 @@ def test_the_script_is_not_folded() -> None:
 
 
 def test_it_is_a_fixed_point() -> None:
-    """No NFC pass, so a decomposed base+mark stays decomposed (`src/presets.rs`)."""
+    """No NFC pass, so a decomposed base+mark stays decomposed (`src/presets/text.rs`)."""
     for text in (f"a{PUA}b❤{VS16}\tx", "é", "ар\u200dр"):
         once = disarm.strip_format(text)
         assert disarm.strip_format(once) == once, text

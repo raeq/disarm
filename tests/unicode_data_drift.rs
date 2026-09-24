@@ -6,7 +6,7 @@
 //!
 //! | dependency | declared | carries |
 //! |---|---|---|
-//! | `unicode-segmentation` | `"1"` | UAX #29 grapheme tables — `grapheme_len`, `terminal_width`, the boundaries `slugify` cuts on, the mark runs `is_zalgo` counts |
+//! | `unicode-segmentation` | `"1"` | UAX #29 grapheme tables — `grapheme_len`, `terminal_width`, the boundaries `slugify` cuts on |
 //! | `idna` | `"1"` | UTS #46 mapping and validation — every `xn--` label `is_suspicious_hostname` decodes |
 //!
 //! `idna` is the one that reaches a security verdict: `src/hostname.rs` runs every ACE

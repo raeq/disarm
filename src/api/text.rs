@@ -63,8 +63,9 @@ pub fn strip_zero_width_chars(text: &str) -> String {
 // ── Typographic punctuation (#703) ────────────────────────────────────────────
 
 /// Fold typographic punctuation to its ASCII spelling: the dash family and the minus
-/// sign to `-`, the curly and low-9 quotes and the primes to `'` / `"`, the ellipsis to
-/// `...`, and the non-standard spaces to a space (#703).
+/// sign to `-`, the curly, low-9 and reversed-9 quotes and the primes (`U+2032` to
+/// `U+2037`, a triple prime to `'''`) to `'` / `"`, the ellipsis to `...`, and every space
+/// separator (`Zs`) to a space (#703).
 ///
 /// Nothing else in disarm does this as a stated purpose. [`canonicalize`](crate::api::canonicalize) folds five
 /// dashes and skips `U+2014 EM DASH` and `U+2015 HORIZONTAL BAR`; [`transliterate`](crate::api::transliterate) folds
@@ -126,16 +127,32 @@ pub fn strip_pua(text: &str) -> String {
 
 // ── Zalgo (combining-mark abuse) ─────────────────────────────────────────────
 
-/// True if any base character carries more than `threshold` consecutive
-/// combining marks in NFD (zalgo-style abuse). A sane default is 3.
+/// True if any base character carries more than `threshold` marks of one canonical
+/// combining class in NFD (zalgo-style abuse). A sane default is 3.
+///
+/// The count is per class (#842), since zalgo is many marks at *one* position: a base may
+/// carry `threshold` marks of each class. It runs over everything up to the next non-mark.
+/// Class-0 marks, which a renderer positions rather than stacks, are not counted unless
+/// `threshold` is 0, and do not split the count of the marks around them. The first
+/// negation overlay (`U+0338`, `U+20D2`) on a symbol is not counted either, matching
+/// [`strip_zalgo`](crate::api::strip_zalgo) (#749), so that function's output is never
+/// zalgo at the same threshold.
+///
+/// ```
+/// use disarm::api::is_zalgo;
+/// assert!(!is_zalgo("a\u{0301}\u{0301}\u{0301}\u{0316}\u{0316}\u{0316}", 3)); // two positions
+/// assert!(is_zalgo("a\u{0301}\u{0301}\u{0301}\u{034F}\u{0301}\u{0301}\u{0301}", 3)); // one
+/// ```
 #[must_use]
 pub fn is_zalgo(text: &str, threshold: usize) -> bool {
     crate::zalgo::is_zalgo(text, threshold)
 }
 
-/// Cap combining marks at `max_marks` per base character (recomposed to NFC),
-/// stripping zalgo stacking while preserving legitimate diacritics. `max_marks`
-/// of 0 strips all combining marks.
+/// Cap the marks of each canonical combining class at `max_marks` per base character
+/// (recomposed to NFC), stripping zalgo stacking while preserving legitimate diacritics.
+/// Counted as [`is_zalgo`](crate::api::is_zalgo) counts: class-0 marks are kept, and the
+/// first negation overlay on a symbol is kept beyond the cap (#749). `max_marks` of 0
+/// strips every combining mark but that overlay.
 #[must_use]
 pub fn strip_zalgo(text: &str, max_marks: usize) -> String {
     crate::zalgo::strip_zalgo(text, max_marks)
@@ -172,17 +189,21 @@ pub fn fold_case(text: &str) -> Cow<'_, str> {
 /// A `true` answer is not a promise the value is unique; two distinct stable
 /// strings can still be equal after some *other* normalization step.
 ///
-/// **Two builds of the same disarm version can disagree here (#718).** The
-/// `to_lowercase` side is whatever UCD the compiling toolchain shipped, and the
-/// crate does not control it. That divergence is currently **latent rather than
-/// live**: the smallest toolchain this crate can be built on is 1.88 — the ICU4X
-/// crates `idna` pulls in set that floor, and `idna_adapter` uses edition 2024,
-/// which cargo below 1.85 cannot parse at all — and every rustc from 1.88 carries
-/// Unicode 16 or newer. Measured over Garay (`U+10D50..=U+10D65`), the bicameral
-/// block added in Unicode 16 and the natural candidate for a split: 0 of 22 read
-/// unstable on 1.88, and `cargo +1.81`, `+1.85` and `+1.87` cannot build a
-/// consumer of this crate at all. The mechanism is real; no toolchain that can
-/// compile disarm currently exercises it.
+/// **Two builds of the same disarm version can disagree here (#718), and today they
+/// do.** The `to_lowercase` side is whatever UCD the compiling toolchain shipped
+/// (`char::UNICODE_VERSION`), which the crate does not control, while the fold table
+/// is pinned at Unicode 16.0. A toolchain on a *newer* Unicode than the table
+/// lowercases letters the table does not fold. On a Unicode 17 toolchain the 28 cased
+/// letters Unicode 17 added — `U+A7CE`, `U+A7D2`, `U+A7D4` and `U+16EA0..=U+16EB8` —
+/// read `false`; a rustc 1.88 build, on Unicode 16, knows none of them and reads
+/// `true` (C2 in `formal/lean/Text`).
+///
+/// An *older* toolchain than the table is not reachable. The smallest this crate can
+/// be built on is 1.88 — the ICU4X crates `idna` pulls in set that floor, and
+/// `idna_adapter` uses edition 2024, which cargo below 1.85 cannot parse at all — and
+/// every rustc from 1.88 carries Unicode 16 or newer. Measured over Garay
+/// (`U+10D50..=U+10D65`), the bicameral block added in Unicode 16: 0 of 22 read
+/// unstable on 1.88.
 ///
 /// ```
 /// use disarm::api;

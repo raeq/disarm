@@ -173,7 +173,9 @@ class Text:
 
         Covers Latin, Greek, Cyrillic, Armenian, Georgian, Cherokee,
         Adlam, Deseret, Osage, Warang Citi, fullwidth Latin, and all
-        ligature expansions.  Equivalent to ``str.casefold()``.
+        ligature expansions.  Equivalent to ``str.casefold()`` on a Python whose
+        ``unicodedata`` is Unicode 16.0; the table is disarm's, not the host's (see
+        `disarm.fold_case`).
         """
         return Text(self._t().fold_case(self._value))
 
@@ -383,8 +385,10 @@ class Text:
         return self._t().is_ascii(self._value)
 
     def is_case_fold_stable(self) -> bool:
-        """True if full case folding and ``str.lower()`` agree, so the value is a
-        stable identity key. ``False`` means another string folds to the same
+        """True if full case folding and a simple lowercase agree, so the value is a
+        stable identity key. Both are compiled into disarm rather than taken from the
+        host, so this is not always ``fold_case(t) == t.lower()`` (see
+        `disarm.is_case_fold_stable`). ``False`` means another string folds to the same
         thing (``groß.txt`` / ``gross.txt``) — a fact, not an accusation."""
         return self._t().is_case_fold_stable(self._value)
 

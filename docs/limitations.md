@@ -241,8 +241,8 @@ Normalization depends on the version of the `unicode-normalization` Rust crate c
 
 ### `strip_zalgo`'s cap is a bound on real orthography, not only on abuse
 
-`strip_zalgo` keeps at most three combining marks per base character, and `is_zalgo`
-flags a base carrying more than three. Those two figures are equal on purpose (#788):
+`strip_zalgo` keeps at most three combining marks of one combining class on a base
+character, and `is_zalgo` flags a base carrying more than three. Those two figures are equal on purpose (#788):
 before they were 2 and 3, so the library removed a mark from text it had just declined to
 call suspicious.
 
@@ -262,6 +262,10 @@ distinction is what makes it usable across scripts:
 - A mark with combining class 0 is *positioned* by the renderer rather than stacked —
   Burmese vowel signs and medials, Indic matras, Thai vowels. It never counts.
 - Zalgo is many marks at one position, which means many marks of one non-zero class.
+- The count runs from one base to the next non-mark. A class-0 mark does not reset it:
+  canonical ordering sorts marks by class only between starters, and a class-0 mark is a
+  starter, so resetting there let `a` + three acutes + `U+034F` + three acutes, or any
+  number of such runs, through as ordinary (Z1 in `formal/lean/Text`).
 
 Counting every mark on a base instead flagged 142 ordinary Burmese place names in disarm's
 own test corpus and deleted a tone mark from each: `မြို့` is one syllable carrying a base,
@@ -315,23 +319,30 @@ Measured over the 405 assigned Default_Ignorable code points: `fold_case(normali
 form="NFKC"))` removes **none of them**. 403 pass through byte-identical, and the two
 Hangul fillers map to another Default_Ignorable code point rather than to nothing.
 
-**Use `canonicalize` if what you want is the identifier operation.** It removes **387** of
+**Use `canonicalize` if what you want is the identifier operation.** It removes **399** of
 the 405 — its invisible-strip is what stands in for the missing third step — and it also
 applies the confusable fold, which `toNFKC_Casefold` does not.
 
-The 18 it keeps are **not** the variation selectors: `COMPARISON_STRIP` removes every one
+The 6 it keeps are **not** the variation selectors: `COMPARISON_STRIP` removes every one
 of those, including the presentation selectors, which is the whole point of a comparison
 policy. They are:
 
 | | |
 |---|---|
 | `U+17B4`–`U+17B5` | Khmer inherent vowels |
-| `U+180B`–`U+180F` | Mongolian free variation selectors |
-| `U+1BCA0`–`U+1BCA3` | Duployan shorthand format controls |
-| `U+1D173`–`U+1D17A` | musical beam, tie, slur and phrase controls |
+| `U+180B`–`U+180D`, `U+180F` | Mongolian free variation selectors |
 
-Each is a formatting control belonging to a specific script or notation, where removing it
-would damage ordinary text in that script rather than close a smuggling channel.
+(`U+180E`, between them, is the Mongolian vowel separator, which the zero-width strip
+removes. The Duployan and musical format controls, `U+1BCA0`–`U+1BCA3` and
+`U+1D173`–`U+1D17A`, were on this list until #813 added them to that strip.)
+
+Each is a formatting control belonging to a specific script, where removing it would
+damage ordinary text in that script rather than close a smuggling channel. All six are
+combining marks of class 0 and render as nothing, which made them the invisible way to
+split a zalgo stack: `a` + three acutes + `U+180B` + three acutes counted as two runs of
+three, and `canonicalize` kept all six acutes. The count no longer resets at a class-0
+mark (Z1 in `formal/lean/Text`), so `canonicalize` keeps the separator and one acute, as it
+does for `a` + six acutes.
 
 This is a gap in the *primitives*, not in the presets. It matters when a caller is
 building their own pipeline from the parts and reasoning from the UTS #39 definition: the
@@ -918,7 +929,7 @@ terminal_width("") + 1 + terminal_width("🏻")  # 3 — but the joined string m
 
 Both measurements are individually grapheme-cluster-accurate; the discrepancy is a property of grapheme segmentation, not a width error. The library deliberately does **not** "fix" this by mis-measuring the lone modifier — that would make the width of `🏻` wrong in isolation.
 
-The honest precondition for additivity is that the separator genuinely splits the text into independent clusters, i.e. segmentation is itself additive: `grapheme_len(a + " " + b) == grapheme_len(a) + 1 + grapheme_len(b)`. In practice, ensure `b` does not begin with a combining/extending scalar (or normalize/prepend a base character) before relying on additive width arithmetic. The left operand `a` is unaffected: the separator always starts a fresh cluster regardless of what `a` ends with. (See issue #279.)
+The honest precondition for additivity is that the separator genuinely splits the text into independent clusters, i.e. segmentation is itself additive: `grapheme_len(a + " " + b) == grapheme_len(a) + 1 + grapheme_len(b)`. In practice, ensure `b` does not begin with a combining/extending scalar (or normalize/prepend a base character) before relying on additive width arithmetic. The left operand `a` is unaffected unless it ends with a `Grapheme_Cluster_Break=Prepend` character, such as `U+0600 ARABIC NUMBER SIGN`: UAX #29 attaches a `Prepend` to whatever follows it, the separator included, so `grapheme_len("\u0600" + " ok")` is 3, not 4. For the thirteen zero-width `Prepend` characters (the Arabic, Syriac and Kaithi number signs) the width still adds up, because the cluster they open measures the character they attach to. For the fourteen that take a cell of their own (`U+0D4E MALAYALAM LETTER DOT REPH`, the Soyombo cluster-initial letters, ...) it does not: the separator's column is absorbed into their cluster. (See issue #279, and W1 in `formal/lean/Text`.)
 
 ## Filename Sanitization
 

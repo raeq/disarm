@@ -18,8 +18,8 @@
 //!   compose-after-lowercase), numeric entities included.
 //! - **Idempotence** without stopwords or truncation, on both paths. Not in general:
 //!   truncation can cut a word down to a stopword, as python-slugify's does, and the
-//!   Sanitizers model records that as intended. Not with an empty separator under
-//!   `allow_unicode` either, which does not hold (see the check).
+//!   Sanitizers model records that as intended. With an empty separator under
+//!   `allow_unicode` too, where the words are composed again after they are joined.
 //!
 //! The shape checks and idempotence assume a separator of ASCII punctuation. A separator
 //! is the caller's string, and one made of combining marks joins the word before it on
@@ -163,14 +163,9 @@ fuzz_target!(|data: &[u8]| {
         }
     }
 
-    // Idempotence without stopwords or truncation. Weakened: not with an empty separator
-    // under `allow_unicode`, where joining two words can put two characters that compose
-    // side by side after the composing step has run. `"\u{1100} \u{1161}"` gives the two
-    // conjoining jamo, and slugifying that gives U+AC00; Kirat Rai U+16D67 does the same
-    // (found by this target).
-    let joins_compose = o.allow_unicode && sep.is_empty();
+    // Idempotence without stopwords or truncation.
     let spells_entity = !o.no_entities && sep.contains('&');
-    if stopwords.is_empty() && max_length == 0 && plain_sep && !spells_entity && !joins_compose {
+    if stopwords.is_empty() && max_length == 0 && plain_sep && !spells_entity {
         assert_eq!(
             slugify(&out, &config),
             out,

@@ -104,3 +104,20 @@ def test_a_run_of_empty_extensions_is_a_fixed_point(
 
 def test_nine_empty_extensions() -> None:
     assert sanitize_filename("a" + ".*" * 9, preserve_extension=False) == "a"
+
+
+# -- 5. slugify: allow_unicode with an empty separator composes across words ----------
+
+
+@pytest.mark.parametrize(
+    ("text", "slug"),
+    [
+        ("\u1100 \u1161", "\uac00"),
+        ("\U00016d67,\U00016d67", "\U00016d68"),
+        ("\U00016d63!\U00016d67", "\U00016d69"),
+    ],
+)
+def test_an_empty_separator_slug_is_its_own_slug(text: str, slug: str) -> None:
+    once = slugify(text, allow_unicode=True, separator="")
+    assert once == slug
+    assert slugify(once, allow_unicode=True, separator="") == once

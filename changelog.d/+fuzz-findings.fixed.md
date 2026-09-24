@@ -39,3 +39,10 @@
   sanitizes to `a`. A pass now repeats its strips until none removes anything, so that
   input gives `a` in one call, and a debug build asserts that the pass bound is never
   reached. Names a single round already settled are unchanged.
+- **An `allow_unicode` slug with an empty separator is its own slug (fuzz finding 5 of
+  #1040).** Joining the words with nothing can put two characters that compose side by
+  side after the composing step has run: `slugify("\u1100 \u1161", allow_unicode=True,
+  separator="")` returned the two conjoining jamo, which render as `\uac00` and which a
+  second call composed to it, and Kirat Rai U+16D67 did the same with itself. The joined
+  slug is now composed again, so the first call returns `\uac00`. A separator keeps the
+  words apart, as before.

@@ -829,6 +829,19 @@ pub(crate) fn slugify_impl_with_stopset(
         slug.truncate(slug.len() - separator.len());
     }
 
+    // Step 6b: with no separator, compose again (#1040). Step 4b composed each word, but
+    // joining the words with nothing can put two characters that compose side by side:
+    // `"\u{1100} \u{1161}"` gave the two conjoining jamo, which render as U+AC00 and which
+    // the next call composed to it, and Kirat Rai U+16D67 does the same with itself. A
+    // mark never starts a word (the loop above drops one), so only these starters that
+    // compose with the starter before them are affected; composing here gives the slug
+    // that already reads as one, and a second call has nothing left to compose.
+    if config.allow_unicode && separator.is_empty() {
+        if let Cow::Owned(composed) = crate::compose::compose_str(&slug) {
+            slug = composed;
+        }
+    }
+
     // Step 7: Remove stopwords
     // Note: if *all* words match the stopword list the result will be an empty
     // string.  This is intentional — callers that need a non-empty fallback

@@ -234,3 +234,39 @@ fn a_run_of_empty_extensions_settles_in_one_call() {
         }
     }
 }
+
+// -- 5. slugify: `allow_unicode` with an empty separator composes across words ------
+//
+// Joining the words with nothing can put two characters that compose side by side after
+// the composing step has run: `"\u{1100} \u{1161}"` gave the two conjoining jamo, whose
+// slug is U+AC00, and Kirat Rai U+16D67 does the same with itself.
+
+#[test]
+fn an_empty_separator_slug_is_its_own_slug() {
+    let config = SlugConfig::new()
+        .with_allow_unicode(true)
+        .with_separator("");
+    assert_eq!(slugify("\u{1100} \u{1161}", &config), "\u{AC00}");
+    assert_eq!(slugify("\u{16D67},\u{16D67}", &config), "\u{16D68}");
+    assert_eq!(slugify("\u{16D63}!\u{16D67}", &config), "\u{16D69}");
+    for s in [
+        "\u{1100} \u{1161}",
+        "\u{1100}\u{1161} \u{11A8} x",
+        "\u{16D67},\u{16D67},\u{16D67}",
+        "a \u{301}b",
+        "\u{915} \u{94D}\u{937}",
+        "e! \u{302}\u{301}",
+    ] {
+        for lowercase in [true, false] {
+            let config = SlugConfig::new()
+                .with_allow_unicode(true)
+                .with_separator("")
+                .with_lowercase(lowercase);
+            let once = slugify(s, &config);
+            assert_eq!(slugify(&once, &config), once, "{s:?}");
+        }
+    }
+    // A separator keeps the words apart, as it always did.
+    let dashed = SlugConfig::new().with_allow_unicode(true);
+    assert_eq!(slugify("\u{1100} \u{1161}", &dashed), "\u{1100}-\u{1161}");
+}

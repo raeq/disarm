@@ -200,6 +200,14 @@ U+0308 does.
 assert slugify("T\u0308", allow_unicode=True) == "\u1e97"
 ```
 
+With `separator=""` the words are joined with nothing, and the joined slug is composed
+again, so two characters that compose across the join come out as the one they render
+as, and slugifying the slug returns it unchanged:
+
+```python
+assert slugify("\u1100 \u1161", allow_unicode=True, separator="") == "\uac00"
+```
+
 ### lang
 
 Language profile for transliteration:

@@ -34,6 +34,7 @@ on:
       - "pyproject.toml"
       - "Cargo.toml"
       - "build.rs"
+      - "codegen/**"
       - "MANIFEST.in"
       - "src/tables/data/**"
       - "python/disarm/**"

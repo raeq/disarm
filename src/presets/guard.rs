@@ -20,7 +20,7 @@ pub(super) struct Actionable {
     pub(super) confusables: bool, // Confusables rewrites table sources (ASCII and non-ASCII)
     // ── non-ASCII code-point classes ──
     pub(super) nfkc: bool, // Nfkc/Nfc/NfcIfNonAscii change NFKC-unstable chars (round-trips
-    //                 // decomposables like Hangul/dakuten-kana/precomposed accents)
+    // decomposables like Hangul/dakuten-kana/precomposed accents)
     pub(super) marks: bool, // Nfkc/Nfc/Zalgo/StripAccents touch standalone combining marks
     pub(super) strip_accents: bool, // StripAccents removes the mark from precomposed accented letters
     pub(super) zalgo_cap: Option<usize>, // Zalgo(cap): a char whose NFD has > cap marks is re-capped

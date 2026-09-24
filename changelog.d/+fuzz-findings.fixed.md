@@ -46,3 +46,13 @@
   second call composed to it, and Kirat Rai U+16D67 did the same with itself. The joined
   slug is now composed again, so the first call returns `\uac00`. A separator keeps the
   words apart, as before.
+- **`search_key` and `catalog_key` are fixed points across a stripped control (fuzz
+  finding 7 of #1040).** Both strip controls after the last step that composes, so a
+  control between two characters that compose left them apart until the next call:
+  Kirat Rai U+16D67 + U+0016 + U+16D67 keyed as the two vowel signs, and the key of
+  that key was U+16D68. Kirat Rai composes with no mark involved and nothing romanizes
+  it, so neither the accent strip nor transliteration hid it, as they hide conjoining
+  jamo. Both builders now end with an NFC pass, as `sort_key` and `ml_normalize` already
+  did, under every digit policy. A key moves only where it was not a fixed point, and no
+  row of the key-stability fixture moved; `KEY_SCHEMA_VERSION` 10 is unreleased and
+  records it, and three rows for the class were added to the fixture.

@@ -13,10 +13,12 @@ import pytest
 
 from disarm import (
     DisarmError,
+    catalog_key,
     find_confusables,
     find_unmapped_confusables,
     find_untranslatable,
     sanitize_filename,
+    search_key,
     slugify,
     transliterate,
 )
@@ -131,3 +133,23 @@ def test_an_enclosed_latin_letter_in_the_slug_is_the_separators() -> None:
     assert slugify("admin x", allow_unicode=True, separator=circled_a) == "admin" + circled_a + "x"
     out = slugify(circled_a + "dmin " + circled_a, allow_unicode=True, separator="-")
     assert out == "dmin"
+
+
+# -- 7. The key builders end in NFC ------------------------------------------------------
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "\ufffd\ufffd\U00016d67\x16\U00016d67",
+        "\U00016d67\x00\U00016d67",
+        "\U00016d63\x01\U00016d67",
+    ],
+)
+def test_a_key_is_its_own_key_across_a_stripped_control(text: str, digit_policy: str) -> None:
+    for key in (catalog_key, search_key):
+        once = key(text, digit_policy=digit_policy)
+        assert key(once, digit_policy=digit_policy) == once
+        assert "\x00" not in once and "\x01" not in once
+    assert catalog_key("\U00016d67\x00\U00016d67") == "\U00016d68"

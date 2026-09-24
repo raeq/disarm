@@ -338,7 +338,7 @@ def catalog_key(
 
     Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi → strip
     invisibles → fold_case → (transliterate → confusables → strip_accents, to a fixed
-    point) → fold_case → strip_control → strip_zero_width → collapse_whitespace
+    point) → fold_case → strip_control → strip_zero_width → collapse_whitespace → NFC
 
     Produces a canonical deduplication key for bibliographic titles.
 
@@ -482,7 +482,7 @@ def search_key(
 
     Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip_bidi → strip
     invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control →
-    strip_zero_width → collapse_whitespace
+    strip_zero_width → collapse_whitespace → NFC
 
     Produces a case-insensitive, accent-insensitive, script-insensitive
     lookup key.  Like `catalog_key` but without confusable
@@ -1211,6 +1211,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
+        # Terminal NFC (#1040): a control between two characters that compose (Kirat
+        # Rai) was stripped after the last step that composes.
+        ("normalize", "NFC"),
     ],
     "strip_format": [
         ("strip_bidi", None),
@@ -1236,6 +1239,8 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("strip_control", None),
         ("strip_zero_width", None),
         ("collapse_whitespace", None),
+        # Terminal NFC (#1040), as `catalog_key`.
+        ("normalize", "NFC"),
     ],
     "sort_key": [
         ("resolve_deletions", None),

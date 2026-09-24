@@ -1420,7 +1420,7 @@ const fn without_fold_case(steps: &[Step; 11]) -> [Step; 10] {
 ///
 /// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi → strip
 /// invisibles → fold_case → fixed point(transliterate → confusables → strip_accents) →
-/// fold_case → strip_control → strip_zero_width → collapse_whitespace
+/// fold_case → strip_control → strip_zero_width → collapse_whitespace → NFC
 ///
 /// Transliteration runs before confusable normalization so that non-Latin
 /// scripts receive correct phonetic romanization (e.g. Cyrillic г→g, not
@@ -1516,6 +1516,14 @@ pub(crate) fn catalog_key_with<'a>(
             Step::StripControl,
             Step::StripZeroWidth,
             Step::CollapseWs,
+            // 8. Terminal NFC, as `sort_key` (#416) and `ml_normalize` have (#1040). The
+            //    strips above run after the last step that composes, so a control between
+            //    two characters that compose left them apart until the next call. Kirat
+            //    Rai U+16D67 U+0016 U+16D67 keyed as the two vowel signs, and the key of
+            //    that was U+16D68: the pair composes with no mark involved, and nothing
+            //    romanizes Kirat Rai, so neither the accent strip nor transliteration hid
+            //    it, as they hide conjoining jamo.
+            Step::NfcIfNonAscii,
         ]
     }
     crate::transliterate::validate_lang(lang)?;
@@ -1537,7 +1545,7 @@ pub(crate) fn catalog_key_with<'a>(
 ///
 /// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip_bidi → strip
 /// invisibles → fold_case → transliterate → strip_accents → fold_case → strip_control →
-/// strip_zero_width → collapse_whitespace
+/// strip_zero_width → collapse_whitespace → NFC
 ///
 /// Produces a case-insensitive, accent-insensitive, script-insensitive lookup
 /// key.  Like `catalog_key` but without confusable normalization — lighter and
@@ -1615,6 +1623,8 @@ pub(crate) fn search_key_with<'a>(
             Step::StripControl,
             Step::StripZeroWidth,
             Step::CollapseWs,
+            // 8. Terminal NFC, for the reason `catalog_key` gives (#1040).
+            Step::NfcIfNonAscii,
         ]
     }
     crate::transliterate::validate_lang(lang)?;

@@ -93,7 +93,7 @@ pub fn ml_normalize<'a>(
 
 /// Library catalog deduplication key: resolve deletions → NFKC → strip bidi → strip
 /// invisibles → case fold → (transliterate → confusables → strip accents, to a fixed
-/// point) → case fold → strip control → strip zero-width → collapse whitespace.
+/// point) → case fold → strip control → strip zero-width → collapse whitespace → NFC.
 ///
 /// `strict_iso9` selects the ISO 9:1995 Cyrillic scheme. Fails
 /// ([`ErrorKind::InvalidArgument`](crate::ErrorKind::InvalidArgument)) on an unknown `lang`.

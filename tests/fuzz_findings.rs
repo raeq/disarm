@@ -7,8 +7,9 @@
 //! `docs/architecture/testing-guarantees.md` under *Fuzzing* for the list.
 
 use disarm::api::{
-    find_confusables, find_unmapped_confusables, normalize_confusables, sanitize_filename, slugify,
-    NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript, Transliterate,
+    catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables,
+    normalize_confusables, sanitize_filename, search_key, search_key_with, slugify, sort_key_with,
+    DigitPolicy, NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript, Transliterate,
 };
 
 fn nfc(s: &str) -> String {
@@ -297,4 +298,64 @@ fn an_enclosed_latin_letter_in_the_slug_is_the_separators() {
         assert!(!word.contains('\u{24B6}'), "{word:?} in {out:?}");
     }
     assert_eq!(out, format!("dmin{sep}x{sep}y"));
+}
+
+// -- 7. The key builders end in NFC ------------------------------------------------
+//
+// `catalog_key` and `search_key` strip controls after the last step that composes, so a
+// control between two characters that compose left them apart until the next call:
+// Kirat Rai U+16D67 U+0016 U+16D67 keyed as the two vowel signs, and the key of that is
+// U+16D68. The fuzz crash was `U+FFFD U+FFFD U+16D67 U+0016 U+16D67` with no options,
+// so under the default policy; every policy failed the same way.
+
+#[test]
+fn a_key_is_its_own_key_across_a_stripped_control() {
+    type Key = fn(&str, DigitPolicy) -> String;
+    let keys: [(&str, Key); 4] = [
+        ("catalog_key", |s, p| {
+            catalog_key_with(s, None, false, p).unwrap().into_owned()
+        }),
+        ("catalog_key strict_iso9", |s, p| {
+            catalog_key_with(s, None, true, p).unwrap().into_owned()
+        }),
+        ("search_key", |s, p| {
+            search_key_with(s, None, p).unwrap().into_owned()
+        }),
+        ("sort_key", |s, p| {
+            sort_key_with(s, None, p).unwrap().into_owned()
+        }),
+    ];
+    let crash = "\u{FFFD}\u{FFFD}\u{16D67}\u{16}\u{16D67}";
+    for (name, key) in keys {
+        for policy in [
+            DigitPolicy::Numeric,
+            DigitPolicy::Tr39,
+            DigitPolicy::Preserve,
+        ] {
+            for s in [
+                crash,
+                "\u{16D67}\0\u{16D67}",
+                "\u{16D63}\u{1}\u{16D67}",
+                "\u{16D69}\u{7F}\u{16D67}",
+                "x\u{16D67}\u{200B}\u{16D67}y",
+            ] {
+                let once = key(s, policy);
+                assert_eq!(key(&once, policy), once, "{name} ({policy}) on {s:?}");
+            }
+            assert_eq!(
+                key(crash, policy),
+                "\u{FFFD}\u{FFFD}\u{16D68}",
+                "{name} ({policy})"
+            );
+        }
+    }
+    // The public defaults are the `Numeric` builders, byte for byte.
+    assert_eq!(
+        catalog_key("\u{16D63}\u{1}\u{16D67}", None, false).unwrap(),
+        "\u{16D69}"
+    );
+    assert_eq!(
+        search_key("\u{16D67}\0\u{16D67}", None).unwrap(),
+        "\u{16D68}"
+    );
 }

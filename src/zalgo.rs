@@ -148,44 +148,29 @@ impl MarkTally {
     }
 }
 
-/// Call `visit(base, run)` for each maximal run of characters that are not
-/// [plain](crate::normalize::is_nfd_plain), where `base` is the plain character before the
-/// run (`None` at the start of the text), until `visit` returns `true`. Returns whether it
-/// did.
-///
-/// The per-base walks below only ever need these runs. A plain character is its own NFD
-/// and a starter NFD never reorders across, so the NFD of the text is the NFD of the pieces
-/// between them; and it is not a mark, so it ends the base before it and leaves
-/// [`MarkTally`] and [`RepeatTracker`] in the state a fresh one has after reading it. So a
-/// walk that feeds `base` and then the NFD of `run` to a fresh tracker sees exactly what
-/// the same tracker sees at that point of the NFD of the whole text, and the text between
-/// runs, nearly all of it in ordinary text, is never decomposed. ASCII is plain and is
-/// never decoded.
+/// Call `visit(base, run)` for each [mark run](crate::normalize::mark_runs) of `text`
+/// until it returns `true`; returns whether it did. Feeding `base` and then the NFD of
+/// `run` to a fresh [`MarkTally`] or [`RepeatTracker`] reaches the states the walk over
+/// the whole text's NFD reaches there.
 fn any_mark_run(text: &str, mut visit: impl FnMut(Option<char>, &str) -> bool) -> bool {
-    let bytes = text.as_bytes();
-    let mut base = None; // the plain character before `i`, when the byte before it ends one
-    let mut run = None; // start of the run being read
-    let mut i = 0;
-    while i < bytes.len() {
-        let (c, len) = if bytes[i] < 0x80 {
-            (char::from(bytes[i]), 1)
-        } else {
-            let c = text[i..].chars().next().expect("`i` is a char boundary");
-            (c, c.len_utf8())
-        };
-        if len == 1 || crate::normalize::is_nfd_plain(c) {
-            if let Some(start) = run.take() {
-                if visit(base, &text[start..i]) {
-                    return true;
-                }
-            }
-            base = Some(c);
-        } else if run.is_none() {
-            run = Some(i);
-        }
-        i += len;
+    crate::normalize::mark_runs(text).any(|run| visit(run.base, &text[run.start..run.end]))
+}
+
+/// `text` with the NFD of each mark run replaced by `rewrite(base, nfd_of_run, out)`'s
+/// output: the whole text's NFD, rewritten run by run, without decomposing the rest.
+fn rewrite_mark_runs(
+    text: &str,
+    mut rewrite: impl FnMut(Option<char>, &str, &mut String),
+) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for run in crate::normalize::mark_runs(text) {
+        out.push_str(&text[copied..run.start]);
+        rewrite(run.base, &text[run.start..run.end], &mut out);
+        copied = run.end;
     }
-    run.is_some_and(|start| visit(base, &text[start..]))
+    out.push_str(&text[copied..]);
+    out
 }
 
 /// Streaming check: does any base carry **more than** `threshold` marks of one combining
@@ -288,10 +273,10 @@ pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) -> bool {
     if first_repeated_mark(text).is_none() {
         return false;
     }
-    out.clear();
-    let mut filtered = String::with_capacity(text.len());
-    let mut tracker = RepeatTracker::default();
-    filtered.extend(text.nfd().filter(|&ch| !tracker.repeats(ch)));
+    let filtered = rewrite_mark_runs(text, |_, run, kept| {
+        let mut tracker = RepeatTracker::default();
+        kept.extend(run.nfd().filter(|&ch| !tracker.repeats(ch)));
+    });
     crate::normalize::nfc_into(&filtered, out);
     true
 }
@@ -360,9 +345,13 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     // The same `MarkTally` as the predicate above, so the cap drops exactly the marks
     // the predicate counts as excess: `strip_zalgo` removes nothing from text `is_zalgo`
     // calls ordinary (#788), and its output is never zalgo at the same threshold (Z2).
-    let mut filtered = String::with_capacity(text.len());
-    let mut tally = MarkTally::new();
-    filtered.extend(text.nfd().filter(|&ch| tally.admit(ch, max_marks)));
+    let filtered = rewrite_mark_runs(text, |base, run, kept| {
+        let mut tally = MarkTally::new();
+        if let Some(b) = base {
+            tally.admit(b, max_marks);
+        }
+        kept.extend(run.nfd().filter(|&ch| tally.admit(ch, max_marks)));
+    });
 
     // Recompose to NFC for consistency with the rest of the library.
     crate::normalize::nfc_into(&filtered, out);
@@ -442,6 +431,40 @@ mod tests {
             text.nfd().find(|&ch| tracker.repeats(ch))
         }
 
+        fn whole_strip(text: &str, cap: usize) -> String {
+            if text.is_ascii() || !whole_exceeds(text, cap) {
+                return text.nfc().collect();
+            }
+            let mut tally = MarkTally::new();
+            let filtered: String = text.nfd().filter(|&ch| tally.admit(ch, cap)).collect();
+            filtered.nfc().collect()
+        }
+
+        fn whole_drop_repeats(text: &str) -> Option<String> {
+            whole_repeat(text)?;
+            let mut tracker = RepeatTracker::default();
+            let filtered: String = text.nfd().filter(|&ch| !tracker.repeats(ch)).collect();
+            Some(filtered.nfc().collect())
+        }
+
+        fn whole_strip_accents(text: &str) -> String {
+            let mut kept = String::new();
+            let (mut base, mut negation_kept) = (None, false);
+            for ch in text.nfd() {
+                if is_combining_mark(ch) {
+                    if !negation_kept && crate::transliterate::is_negation_of(ch, base) {
+                        negation_kept = true;
+                        kept.push(ch);
+                    }
+                } else {
+                    base = Some(ch);
+                    negation_kept = false;
+                    kept.push(ch);
+                }
+            }
+            kept.nfc().collect()
+        }
+
         fn check(text: &str) {
             for threshold in [0, 1, 2, 3] {
                 assert_eq!(
@@ -449,8 +472,25 @@ mod tests {
                     whole_exceeds(text, threshold),
                     "threshold {threshold} on {text:?}"
                 );
+                assert_eq!(
+                    strip_zalgo(text, threshold),
+                    whole_strip(text, threshold),
+                    "strip at {threshold} on {text:?}"
+                );
             }
             assert_eq!(first_repeated_mark(text), whole_repeat(text), "{text:?}");
+            let mut out = String::new();
+            let dropped = drop_repeated_marks_into(text, &mut out).then_some(out);
+            assert_eq!(dropped, whole_drop_repeats(text), "drop on {text:?}");
+            let accents = whole_strip_accents(text);
+            assert_eq!(
+                crate::transliterate::strip_accents(text),
+                accents,
+                "strip_accents on {text:?}"
+            );
+            // The borrowing form borrows only when nothing changes.
+            let cow = crate::transliterate::strip_accents_cow(text);
+            assert_eq!(cow, accents, "strip_accents_cow on {text:?}");
         }
 
         /// Every scalar that is not plain, or that decomposes, or is a mark.

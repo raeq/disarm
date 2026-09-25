@@ -1708,9 +1708,11 @@ pub(crate) fn strip_accents_cow(text: &str) -> std::borrow::Cow<'_, str> {
     use std::borrow::Cow;
     use unicode_normalization::{is_nfc_quick, IsNormalized, UnicodeNormalization};
     if text.is_ascii()
-        || (!text
-            .nfd()
-            .any(unicode_normalization::char::is_combining_mark)
+        || (!crate::normalize::mark_runs(text).any(|run| {
+            text[run.start..run.end]
+                .nfd()
+                .any(unicode_normalization::char::is_combining_mark)
+        })
             // Only the borrowing path pays for this scan; `Maybe` takes the owning
             // path, which is correct for every input.
             && is_nfc_quick(text.chars()) == IsNormalized::Yes)
@@ -1737,25 +1739,35 @@ pub fn strip_accents_into(text: &str, out: &mut String) {
     // the base it sits on (#749), which a stateless filter cannot see. A `String` rather
     // than a `Vec<char>`: the NFD walk of a long input is the hot path here, and four
     // bytes per scalar buys nothing that `str::nfc()` cannot read back.
+    //
+    // Only the mark runs are decomposed (`normalize::mark_runs`): the characters between
+    // them are their own NFD and carry no mark, and each run starts on the base before it
+    // with no overlay kept, which is where the walk over the whole NFD stood.
     let mut kept = String::with_capacity(text.len());
-    let mut base: Option<char> = None;
-    let mut negation_kept = false;
-    for ch in text.nfd() {
-        if unicode_normalization::char::is_combining_mark(ch) {
-            // Exactly one negation overlay per base, matching `strip_zalgo_into`. A
-            // relation carries a single stroke; a run of them is stacking, and this walk
-            // has no cap of its own to fall back on.
-            if !negation_kept && is_negation_of(ch, base) {
-                negation_kept = true;
+    let mut copied = 0;
+    for run in crate::normalize::mark_runs(text) {
+        kept.push_str(&text[copied..run.start]);
+        let mut base = run.base;
+        let mut negation_kept = false;
+        for ch in text[run.start..run.end].nfd() {
+            if unicode_normalization::char::is_combining_mark(ch) {
+                // Exactly one negation overlay per base, matching `strip_zalgo_into`. A
+                // relation carries a single stroke; a run of them is stacking, and this
+                // walk has no cap of its own to fall back on.
+                if !negation_kept && is_negation_of(ch, base) {
+                    negation_kept = true;
+                    kept.push(ch);
+                }
+            } else {
+                base = Some(ch);
+                negation_kept = false;
                 kept.push(ch);
             }
-        } else {
-            base = Some(ch);
-            negation_kept = false;
-            kept.push(ch);
         }
+        copied = run.end;
     }
-    out.extend(kept.nfc());
+    kept.push_str(&text[copied..]);
+    crate::normalize::nfc_into(&kept, out);
 }
 
 /// Reject a registration mutation once the tables have been sealed (#64), and

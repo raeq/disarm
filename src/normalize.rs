@@ -130,6 +130,35 @@ fn is_boundary_lookup(c: char, form: Form) -> bool {
     quick == IsNormalized::Yes
 }
 
+/// Whether `c` is its own NFD and not a combining mark: a character that ends the base
+/// before it, which NFD leaves in place and never reorders a mark across.
+///
+/// The mark walks in `crate::zalgo` step over these without decomposing anything, since
+/// the NFD of a text split before each of them is the NFD of the pieces.
+#[inline]
+pub(crate) fn is_nfd_plain(c: char) -> bool {
+    let cp = u32::from(c);
+    if cp > 0xFFFF {
+        return is_nfd_plain_lookup(c);
+    }
+    NFD_PLAIN[(cp >> 6) as usize] >> (cp & 63) & 1 == 1
+}
+
+fn is_nfd_plain_lookup(c: char) -> bool {
+    is_boundary_lookup(c, Form::Nfd) && !unicode_normalization::char::is_combining_mark(c)
+}
+
+/// NFC of `text` into `out` (cleared first): [`normalize_into`] for a caller that has no
+/// form string to validate.
+pub(crate) fn nfc_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+    } else {
+        normalize_segmented(text, Form::Nfc, out);
+    }
+}
+
 fn append_normalized(segment: &str, form: Form, out: &mut String) {
     match form {
         Form::Nfc => out.extend(segment.nfc()),
@@ -271,6 +300,18 @@ mod tests {
                     u32::from(c)
                 );
             }
+        }
+    }
+
+    #[test]
+    fn plain_bitmap_matches_the_lookup() {
+        for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                is_nfd_plain(c),
+                is_nfd_plain_lookup(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
         }
     }
 

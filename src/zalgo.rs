@@ -148,6 +148,46 @@ impl MarkTally {
     }
 }
 
+/// Call `visit(base, run)` for each maximal run of characters that are not
+/// [plain](crate::normalize::is_nfd_plain), where `base` is the plain character before the
+/// run (`None` at the start of the text), until `visit` returns `true`. Returns whether it
+/// did.
+///
+/// The per-base walks below only ever need these runs. A plain character is its own NFD
+/// and a starter NFD never reorders across, so the NFD of the text is the NFD of the pieces
+/// between them; and it is not a mark, so it ends the base before it and leaves
+/// [`MarkTally`] and [`RepeatTracker`] in the state a fresh one has after reading it. So a
+/// walk that feeds `base` and then the NFD of `run` to a fresh tracker sees exactly what
+/// the same tracker sees at that point of the NFD of the whole text, and the text between
+/// runs, nearly all of it in ordinary text, is never decomposed. ASCII is plain and is
+/// never decoded.
+fn any_mark_run(text: &str, mut visit: impl FnMut(Option<char>, &str) -> bool) -> bool {
+    let bytes = text.as_bytes();
+    let mut base = None; // the plain character before `i`, when the byte before it ends one
+    let mut run = None; // start of the run being read
+    let mut i = 0;
+    while i < bytes.len() {
+        let (c, len) = if bytes[i] < 0x80 {
+            (char::from(bytes[i]), 1)
+        } else {
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            (c, c.len_utf8())
+        };
+        if len == 1 || crate::normalize::is_nfd_plain(c) {
+            if let Some(start) = run.take() {
+                if visit(base, &text[start..i]) {
+                    return true;
+                }
+            }
+            base = Some(c);
+        } else if run.is_none() {
+            run = Some(i);
+        }
+        i += len;
+    }
+    run.is_some_and(|start| visit(base, &text[start..]))
+}
+
 /// Streaming check: does any base carry **more than** `threshold` marks of one combining
 /// class, counted in NFD up to the next non-mark? [`MarkTally`] says what counts.
 ///
@@ -155,8 +195,12 @@ impl MarkTally {
 /// at the front of a long benign tail settles in `O(burst)`, not `O(len)` — no
 /// full NFD walk once the verdict is decided (review H-P2/H-P3).
 fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
-    let mut tally = MarkTally::new();
-    text.nfd().any(|ch| !tally.admit(ch, threshold))
+    any_mark_run(text, |base, run| {
+        let mut tally = MarkTally::new();
+        base.into_iter()
+            .chain(run.nfd())
+            .any(|ch| !tally.admit(ch, threshold))
+    })
 }
 
 /// Detect whether text contains zalgo-style combining mark abuse.
@@ -248,7 +292,7 @@ pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) -> bool {
     let mut filtered = String::with_capacity(text.len());
     let mut tracker = RepeatTracker::default();
     filtered.extend(text.nfd().filter(|&ch| !tracker.repeats(ch)));
-    out.extend(filtered.nfc());
+    crate::normalize::nfc_into(&filtered, out);
     true
 }
 
@@ -259,8 +303,14 @@ pub(crate) fn drop_repeated_marks_into(text: &str, out: &mut String) -> bool {
 /// detector's `duplicate_mark` finding reads the same answer, so the finding and the
 /// key builders' repeat-dropper cannot disagree about what a repeat is.
 pub(crate) fn first_repeated_mark(text: &str) -> Option<char> {
-    let mut tracker = RepeatTracker::default();
-    text.nfd().find(|&ch| tracker.repeats(ch))
+    let mut found = None;
+    any_mark_run(text, |_, run| {
+        // A fresh tracker is the state after a plain base: `previous` is `None`.
+        let mut tracker = RepeatTracker::default();
+        found = run.nfd().find(|&ch| tracker.repeats(ch));
+        found.is_some()
+    });
+    found
 }
 
 /// Strip excessive combining marks, keeping at most `max_marks` of each combining class
@@ -295,7 +345,7 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     // to NFC (`NFC(NFD(x)) == NFC(x)`), preserving the documented NFC output
     // contract without the per-char copy. Most non-ASCII text has no zalgo.
     if !exceeds_combining_run(text, max_marks) {
-        out.extend(text.nfc());
+        crate::normalize::nfc_into(text, out);
         return;
     }
 
@@ -315,7 +365,7 @@ pub(crate) fn strip_zalgo_into(text: &str, max_marks: usize, out: &mut String) {
     filtered.extend(text.nfd().filter(|&ch| tally.admit(ch, max_marks)));
 
     // Recompose to NFC for consistency with the rest of the library.
-    out.extend(filtered.nfc());
+    crate::normalize::nfc_into(&filtered, out);
 }
 
 /// Remove a combining mark whose own script is a *specific* script differing from the
@@ -377,6 +427,104 @@ pub(crate) fn strip_cross_script_marks_into(text: &str, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
+    /// The run walks see what the whole-text NFD walks they replaced saw.
+    mod run_walk {
+        use super::super::*;
+        use unicode_normalization::char::canonical_combining_class;
+
+        fn whole_exceeds(text: &str, threshold: usize) -> bool {
+            let mut tally = MarkTally::new();
+            text.nfd().any(|ch| !tally.admit(ch, threshold))
+        }
+
+        fn whole_repeat(text: &str) -> Option<char> {
+            let mut tracker = RepeatTracker::default();
+            text.nfd().find(|&ch| tracker.repeats(ch))
+        }
+
+        fn check(text: &str) {
+            for threshold in [0, 1, 2, 3] {
+                assert_eq!(
+                    exceeds_combining_run(text, threshold),
+                    whole_exceeds(text, threshold),
+                    "threshold {threshold} on {text:?}"
+                );
+            }
+            assert_eq!(first_repeated_mark(text), whole_repeat(text), "{text:?}");
+        }
+
+        /// Every scalar that is not plain, or that decomposes, or is a mark.
+        fn interesting() -> Vec<char> {
+            (0x80u32..0x11_0000)
+                .filter_map(char::from_u32)
+                .filter(|&c| {
+                    !crate::normalize::is_nfd_plain(c)
+                        || is_combining_mark(c)
+                        || canonical_combining_class(c) != 0
+                        || c.to_string().nfd().ne(std::iter::once(c))
+                })
+                .collect()
+        }
+
+        /// Plain bases of every kind the walks treat differently (a letter, a symbol a
+        /// negation overlay keeps, an astral letter), the overlays, stacking marks of two
+        /// classes, class-0 marks, and characters whose NFD carries a mark.
+        const CONTEXTS: [&str; 16] = [
+            "a",
+            "=",
+            "<",
+            "\u{10400}",
+            "\u{0338}",
+            "\u{20D2}",
+            "\u{0301}",
+            "\u{0301}\u{0301}",
+            "\u{0316}",
+            "\u{034F}",
+            "\u{180B}",
+            "\u{102D}",
+            "\u{00E9}",
+            "\u{2260}",
+            "\u{1E09}",
+            "\u{AC00}",
+        ];
+
+        #[test]
+        fn every_interesting_scalar_in_every_context() {
+            let set = interesting();
+            assert!(set.len() > 3_000, "only {} interesting scalars", set.len());
+            for &c in &set {
+                for x in CONTEXTS {
+                    check(&format!("{x}{c}{c}"));
+                    check(&format!("{c}{x}{x}"));
+                    check(&format!("{x}{c}{x}{c}{c}"));
+                }
+            }
+        }
+
+        #[test]
+        fn random_strings() {
+            let set = interesting();
+            let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+            let mut next = move || {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state
+            };
+            for _ in 0..50_000 {
+                let len = (next() % 16) as usize;
+                let text: String = (0..len)
+                    .map(|_| match next() % 4 {
+                        0 => CONTEXTS[(next() % CONTEXTS.len() as u64) as usize].to_owned(),
+                        1 => char::from(b' ' + (next() % 95) as u8).to_string(),
+                        _ => set[(next() % set.len() as u64) as usize].to_string(),
+                    })
+                    .collect();
+                check(&text);
+            }
+        }
+    }
+
     /// #846 review: the class-0 exemption must not reach `max_marks == 0`.
     ///
     /// Three doc comments promise that 0 strips **all** combining marks and is equivalent

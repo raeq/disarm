@@ -1,21 +1,27 @@
 # Architecture: Performance
 
-The optimization strategies that make disarm 10–53× faster than pure-Python alternatives.
+The optimization strategies behind disarm's speed against pure-Python alternatives: 24–116×
+Unidecode on Latin-script text, ~13× on Cyrillic, Greek, Arabic, Persian and Hebrew, and ~2.4–4.8× on
+the Indic and Southeast Asian scripts, whose romanization does work Unidecode does not
+([Performance](../performance.md) has the figures and the machine they were recorded on).
 
 ## The PyO3 boundary problem
 
-Every call from Python into Rust crosses the PyO3 boundary: argument conversion, GIL management, result conversion back to a Python object. This costs ~300–500 ns per call. For a function like `transliterate()` that processes a short string in ~60 ns of actual Rust work, the boundary overhead is the dominant cost. Every optimization strategy below either reduces the time spent in the boundary or reduces the number of crossings.
+Every call from Python into Rust crosses the PyO3 boundary: argument conversion, the call itself, and result conversion back to a Python object. A native call on a short string costs a few tens of nanoseconds (`transliterate("hello")` is ~41 ns in total), so on short input the boundary, not the transliteration, is most of the cost, and anything layered on top of it shows. A Python wrapper function around the native call costs more than the call: the #469 surrogate guard, while it was one, added 70–84 ns to every call, and it is now native (#1067). Every optimization strategy below either reduces the time spent in the boundary or reduces the number of crossings.
 
-## Optimization 1: Python-side ASCII fast-path
+## Optimization 1: One crossing, and the original object back
 
-The most effective optimization is never crossing the boundary at all. `transliterate()`, `strip_accents()`, and `normalize()` check `text.isascii()` on the Python side before calling into Rust. This is a ~30–50 ns CPython C call that scans the string's internal buffer. Pure-ASCII strings (the common case in English workloads) return immediately:
+`transliterate()` is bound directly to its native entry point (#277): a call on a `str`
+crosses into Rust once, with no Python function in between, and keyword defaults cost
+nothing. When the engine leaves the text unchanged (pure ASCII, the common case in
+English workloads) it returns the caller's own `str` object rather than a copy, so a
+no-op allocates nothing. The check lives in the core, not in Python, so `lang` is still
+validated on ASCII input (#197).
 
-| Function | With fast-path | Without |
-|---|---|---|
-| `transliterate("hello")` | 62 ns | 407 ns |
-| `strip_accents("hello")` | 36 ns | 805 ns |
-
-This turns the common case from a ~400 ns function call into a ~60 ns no-op.
+| Call (fresh `str` each time) | Cost |
+|---|---|
+| `transliterate("hello")` | ~41 ns |
+| `strip_accents("hello")` | ~54 ns |
 
 ## Optimization 2: Flat BMP array
 
@@ -49,21 +55,21 @@ This heuristic eliminates reallocations for the two most common workload shapes.
 
 ## Optimization 6: List input (batch processing)
 
-`transliterate()`, `slugify()`, `normalize()`, and `strip_accents()` accept a `list[str]` and process all strings in a single PyO3 boundary crossing. For 100 strings, this saves ~24 µs of boundary overhead (240 ns × 100). The saving scales linearly with list size.
+`transliterate()`, `slugify()`, `normalize()`, and `strip_accents()` accept a `list[str]` and process all strings in a single PyO3 boundary crossing, with the GIL released for the compute loop. `transliterate` borrows each item's UTF-8 and hands an unchanged item back as the original object (#1069). Because a single call is already one cheap crossing, the list form saves the per-call overhead, not the work:
 
-| Operation (100 strings) | List | Loop | Speedup |
+| `transliterate`, 100 fresh strings | List | Loop | Speedup |
 |---|---|---|---|
-| transliterate | 28.3 µs | 82.9 µs | 2.9× |
+| ASCII | 9.1 µs | 12.5 µs | 1.4× |
+| Mixed scripts | 43.4 µs | 50.0 µs | 1.15× |
 
 ## Optimization 7: Consistent Rust-native normalization
 
 `normalize()` uses the Rust `unicode-normalization` crate (Unicode 16.0) for
-all non-ASCII inputs — non-ASCII single strings, all list inputs, and
-pipelines. Pure-ASCII single strings take the Python-side `isascii()` fast-path
-from Optimization 1 and never enter Rust (ASCII is invariant under all four
-normalization forms). For everything else this ensures consistent results
-across code paths and eliminates Unicode version mismatches between CPython's
-`unicodedata` (Unicode 15.1) and the Rust crate's tables.
+every input — single strings, list inputs and pipelines. The core returns ASCII
+unchanged without running the normalizer (ASCII is invariant under all four forms),
+and since #1064 it runs the normalizer only over the segments that can change. This
+ensures consistent results across code paths and eliminates Unicode version
+mismatches between CPython's `unicodedata` and the Rust crate's tables.
 
 While CPython's `unicodedata.normalize()` is faster for single-string calls
 (it operates directly on PEP 393 compact strings with zero-copy semantics),
@@ -80,6 +86,6 @@ All secondary lookup tables (Hanzi pinyin, confusables, case folding, emoji) use
 Two operations are inherently slower than their CPython C-builtin counterparts:
 
 - **Normalization**: `unicodedata.normalize()` operates on CPython's internal string buffer without copying. disarm uses Rust for all normalization (consistency over speed — see Optimization 7).
-- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. disarm's PHF-based `fold_case()` is within ~4× at the Python level, with the gap dominated by PyO3 boundary-crossing cost rather than algorithmic differences.
+- **Case folding**: `str.casefold()` is a CPython C builtin with zero allocation overhead. On a short string `fold_case()` is ~1.7× slower, the gap being the boundary crossing; on a paragraph it is ~1.9× faster, since #1066 answers an already-folded character from a bitmap instead of a table probe.
 
-These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and disarm is 7–38× faster for those.
+These gaps are acceptable because normalization and case folding are rarely the bottleneck in real workloads — transliteration and slugification dominate processing time, and disarm is ~6–11× faster than python-slugify and 2.4–116× faster than Unidecode, by script, for those.

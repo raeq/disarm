@@ -64,7 +64,7 @@ _EMPTY_KEY_CENSUS = {
     "catalog_key": (139_867, 2_399),
     "sort_key": (138_404, 936),
     "skeleton_key": (137_955, 487),
-    "slugify": (243_401, 105_933),
+    "slugify": (243_370, 105_902),
     "sanitize_filename": (0, 0),
 }
 

@@ -224,7 +224,7 @@
 
 # === Latin Extended-B (U+0180–U+024F) ===
 # Source: NFKD decomposition where available; phonetic approximation for
-# stroked/hooked/African letters (Ŋ→N, Ə→A, Ʃ→Sh)
+# stroked/hooked/African letters (Ŋ→N, Ɛ→E, Ʃ→Sh)
 
 0180	b
 0181	B
@@ -240,8 +240,8 @@
 018B	D
 018C	d
 018D	d
-018E	D
-018F	A
+018E	E
+018F	E
 0190	E
 0191	F
 0192	f
@@ -6034,6 +6034,19 @@
 1CAE	Kh
 1CAF	J
 1CB0	H
+1CB1	He
+1CB2	Hi
+1CB3	W
+1CB4	Har
+1CB5	Ho
+1CB6	F
+1CB7	Yn
+1CB8	El
+1CB9	G
+1CBA	'
+1CBD	Ae
+1CBE	
+1CBF	W
 
 # === Latin Extended Additional (U+1E00–U+1EFF) ===
 # Source: Unicode NFKD decomposition (99.6% match)
@@ -6921,6 +6934,20 @@
 24FD	9
 24FE	10
 24FF	0
+
+# === Latin Extended-C (U+2C60–U+2C7F) ===
+# Source: the other form of each case pair, re-cased (#1052). A capital here maps as
+# its IPA Extensions lowercase does, and U+2C65/U+2C66 as their Latin Extended-B capitals.
+2C62	L
+2C64	R
+2C65	a
+2C66	t
+2C6D	A
+2C6E	M
+2C6F	A
+2C70	A
+2C7E	S
+2C7F	Z
 
 # === Coptic (U+2C80–U+2CFF) ===
 # Source: Coptic scholarly convention
@@ -8076,6 +8103,22 @@ A6F4	:
 A6F5	,
 A6F6	;
 A6F7	?
+
+# === Latin Extended-D (U+A720–U+A7FF) ===
+# Source: the lowercase of each case pair, re-cased (#1052). Every capital here has an
+# IPA Extensions or Latin Extended-B lowercase the table already maps.
+A78D	H
+A7AA	H
+A7AB	E
+A7AC	G
+A7AD	L
+A7AE	I
+A7B0	K
+A7B1	T
+A7B2	J
+A7C5	S
+A7CB	O
+A7DC	L
 
 # === Javanese (U+A980–U+A9DF) ===
 # Source: Phonetic values following Indic abugida pattern

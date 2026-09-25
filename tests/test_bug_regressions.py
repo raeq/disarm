@@ -237,6 +237,39 @@ class TestTransliterationTableQuality:
             assert result != char, f"U+{cp:04X} ({char}) has no mapping"
 
 
+class TestCasePairTransliteration:
+    """Both forms of a case pair transliterate alike, and search_key stays ASCII (#1052).
+
+    search_key folds case before it transliterates, so a lowercase form with no mapping
+    leaked into the key even when its capital had one. The full sweep over the core's
+    case-folding table is `tests/case_pair_transliteration.rs`; these are the issue's rows.
+    """
+
+    @pytest.mark.parametrize(
+        ("upper", "lower", "want_upper", "want_lower", "want_key"),
+        [
+            ("Ⱥ", "ⱥ", "A", "a", "a"),
+            ("Ⱦ", "ⱦ", "T", "t", "t"),
+            ("Ɫ", "ɫ", "L", "l", "l"),
+            ("Ɑ", "ɑ", "A", "a", "a"),
+            ("Ჱ", "ჱ", "He", "he", "he"),
+        ],
+    )
+    def test_issue_rows(self, upper, lower, want_upper, want_lower, want_key) -> None:
+        assert transliterate(upper) == want_upper
+        assert transliterate(lower) == want_lower
+        assert search_key(upper) == want_key
+        assert search_key(lower) == want_key
+
+    def test_search_key_meets_the_accented_capital(self) -> None:
+        assert search_key("ȺBC") == search_key("ÀBC") == "abc"
+
+    def test_reversed_e_and_schwa_agree_with_their_lowercase(self) -> None:
+        # U+018E had copied the row above it (ƍ -> d).
+        assert transliterate("Ǝ") == transliterate("ǝ").upper() == "E"
+        assert transliterate("Ə") == transliterate("ə").upper() == "E"
+
+
 # ---------------------------------------------------------------------------
 # Pipeline integration edge cases
 # ---------------------------------------------------------------------------

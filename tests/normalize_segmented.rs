@@ -77,10 +77,14 @@ fn interesting() -> Vec<char> {
                     || s.nfd().ne(s.chars())
                     || s.nfkd().ne(s.chars())
                     || s.nfc().ne(s.chars())
-                    || unicode_normalization::is_nfc_quick(s.chars())
-                        != unicode_normalization::IsNormalized::Yes
-                    || unicode_normalization::is_nfkc_quick(s.chars())
-                        != unicode_normalization::IsNormalized::Yes
+                    || [
+                        unicode_normalization::is_nfc_quick(s.chars()),
+                        unicode_normalization::is_nfd_quick(s.chars()),
+                        unicode_normalization::is_nfkc_quick(s.chars()),
+                        unicode_normalization::is_nfkd_quick(s.chars()),
+                    ]
+                    .into_iter()
+                    .any(|quick| quick != unicode_normalization::IsNormalized::Yes)
                     || matches!(u32::from(c), 0x1100..=0x11FF | 0xAC00..=0xD7A3))
         })
         .collect()

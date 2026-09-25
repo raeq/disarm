@@ -259,6 +259,7 @@ class TestCasePairTransliteration:
         assert transliterate(upper) == want_upper
         assert transliterate(lower) == want_lower
         assert search_key(upper) == want_key
+        assert search_key(lower) == want_key
 
     def test_search_key_meets_the_accented_capital(self) -> None:
         assert search_key("ȺBC") == search_key("ÀBC") == "abc"

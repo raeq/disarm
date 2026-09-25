@@ -148,6 +148,12 @@ lto = true
 codegen-units = 1
 strip = true
 
+# Benchmarks inherit release, but keep their symbols: iai-callgrind counts only inside the
+# benchmark function, which Callgrind finds by name, so a stripped binary measures 0 and the
+# iai gate passed everything from #893 on. scripts/check_iai_nonzero.py now fails on a 0.
+[profile.bench]
+strip = false
+
 [[bench]]
 name = "bench_personas"
 path = "benchmarks/bench_personas.rs"

@@ -194,6 +194,7 @@ mod py;
 #[pymodule]
 #[pyo3(name = "_core")]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<py::boundary::SurrogateSafe>()?;
     // Core transforms
     m.add_function(wrap_pyfunction!(py::transliterate::_transliterate, m)?)?;
     m.add_function(wrap_pyfunction!(

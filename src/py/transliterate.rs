@@ -4,13 +4,14 @@
 //! infallible pure-transform wrappers; the registration set, the Python
 //! fallback-callback machinery, and the batch/context entry points land here too.
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyUnicodeEncodeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 
+use crate::py::boundary::{scrub_wtf8, Utf8Arg};
 use crate::ErrorMode;
 
 /// `strip_accents(text) -> str`
@@ -136,38 +137,45 @@ pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
 /// signature source of truth.
 #[pyfunction]
 #[pyo3(
-    signature = (text, *, lang=None, target=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false, context=false),
+    signature = (text, *, lang=None, target=None, errors=Utf8Arg::literal("replace"), replace_with=Utf8Arg::literal("[?]"), strict_iso9=false, gost7034=false, tones=false, context=false),
     text_signature = "(text, *, lang=None, target=None, errors='replace', replace_with='[?]', strict_iso9=False, gost7034=False, tones=False, context=False)"
 )]
 #[allow(clippy::too_many_arguments)]
 pub fn _transliterate_entry<'py>(
     text: &Bound<'py, PyAny>,
-    lang: Option<&str>,
-    target: Option<&str>,
-    errors: &str,
-    replace_with: &str,
+    lang: Option<Utf8Arg<'_>>,
+    target: Option<Utf8Arg<'_>>,
+    errors: Utf8Arg<'_>,
+    replace_with: Utf8Arg<'_>,
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
     context: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let (lang, target) = (lang.as_deref(), target.as_deref());
+    let (errors, replace_with) = (&*errors, &*replace_with);
     // Fast path: exact `str` (subclasses keep their legacy general-path
     // handling), forward direction, no context engine. The conflict-matrix
     // validation is a provable no-op without `target`/`context` (#231); all
     // remaining validation (lang, errors, strict_iso9 × gost7034) runs inside
     // `_transliterate` itself (#130).
+    //
+    // This entry point is the one `_boundary.py` does not wrap in `SurrogateSafe`: the
+    // extra call layer cost as much as the call. It keeps the #469 contract itself: the
+    // string arguments are `Utf8Arg`s, and text holding surrogates is scrubbed and run
+    // again, exactly as the guard would.
     if target.is_none() && !context {
         if let Ok(s) = text.cast_exact::<PyString>() {
-            return Ok(_transliterate(
-                s,
-                lang,
-                errors,
-                replace_with,
-                strict_iso9,
-                gost7034,
-                tones,
-            )?
-            .into_any());
+            let run = |s: &Bound<'py, PyString>| {
+                _transliterate(s, lang, errors, replace_with, strict_iso9, gost7034, tones)
+            };
+            return match run(s) {
+                Err(err) if err.is_instance_of::<PyUnicodeEncodeError>(text.py()) => {
+                    run(&PyString::new(text.py(), &scrub_wtf8(s)?))
+                }
+                result => result,
+            }
+            .map(Bound::into_any);
         }
     }
     // Everything else: delegate to the Python dispatcher.

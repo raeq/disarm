@@ -88,8 +88,8 @@ Kyiv (the default mapping would not), and German ü → ue:
     ```rust
     use disarm::api::Transliterate;
 
-    assert_eq!(Transliterate::new().lang("uk").run("Київ"), "Kyiv");
-    assert_eq!(Transliterate::new().lang("de").run("Ärger"), "Aerger");
+    assert_eq!(Transliterate::new().lang("uk").try_run("Київ").unwrap(), "Kyiv");
+    assert_eq!(Transliterate::new().lang("de").try_run("Ärger").unwrap(), "Aerger");
     ```
 
 === "Ruby"

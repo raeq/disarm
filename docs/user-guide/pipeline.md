@@ -32,7 +32,7 @@ Wrap a string in `Text`, chain methods, extract with `.value` or `str()`. Each m
     use disarm::DisarmStr;
 
     let normalized = "  Héllo   Straße  ".normalize(NormalizationForm::Nfc);
-    let romanized = Transliterate::new().lang("de").run(&normalized);
+    let romanized = Transliterate::new().lang("de").try_run(&normalized).unwrap();
     let folded = romanized.fold_case();
     let result = api::collapse_whitespace(&folded);
     assert_eq!(result, "hello strasse"); // => "hello strasse"
@@ -96,7 +96,7 @@ Because each step returns a new `Text`, you can branch from a common base:
     assert_eq!(ascii_version, "Hello World"); // => "Hello World"
     let lowered = base.fold_case();
     assert_eq!(lowered, "héllo wörld"); // => "héllo wörld"
-    let slug = api::slugify(&base.transliterate(), &SlugConfig::new());
+    let slug = api::try_slugify(&base.transliterate(), &SlugConfig::new()).unwrap();
     assert_eq!(slug, "hello-world"); // => "hello-world"
     ```
 

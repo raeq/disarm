@@ -500,17 +500,24 @@ pub use crate::slugify::SlugConfig;
 /// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
-/// unknown language code falls back to the default transliterator. Prefer
-/// [`try_slugify`], which rejects it the way Python's `slugify` and every other
-/// binding do.
+/// unknown language code falls back to the default transliterator. Deprecated since
+/// 0.17 for that reason: use [`try_slugify`], which rejects it the way Python's
+/// `slugify` and every other binding do; removed in 1.0.
+#[deprecated(
+    since = "0.17.0",
+    note = "use `try_slugify`, which rejects an unknown `config.lang`; removed in 1.0"
+)]
 #[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
 }
 
-/// [`slugify`], rejecting a `config.lang` that [`validate_lang`](crate::api::validate_lang)
-/// does not accept instead of falling back to the default tables. What every binding's
-/// `slugify` calls (`formal/bindings`, B2).
+/// Generate a URL-safe slug from `text` according to `config`, rejecting a
+/// `config.lang` that [`validate_lang`](crate::api::validate_lang) does not accept
+/// instead of falling back to the default tables. What every binding's `slugify` calls
+/// (`formal/bindings`, B2), and what replaces the deprecated [`slugify`].
+///
+/// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// # Errors
 ///

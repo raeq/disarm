@@ -168,8 +168,8 @@ impl Transliterate {
     ///
     /// The code is checked when the builder runs, not here: [`try_run`](Self::try_run)
     /// and [`try_find_untranslatable`](Self::try_find_untranslatable) reject a code
-    /// [`validate_lang`] does not accept, and the infallible [`run`](Self::run) falls
-    /// back to the default tables.
+    /// [`validate_lang`] does not accept; the deprecated infallible [`run`](Self::run)
+    /// falls back to the default tables instead.
     #[must_use]
     pub fn lang(mut self, lang: impl Into<String>) -> Self {
         self.lang = Some(lang.into());
@@ -202,9 +202,24 @@ impl Transliterate {
     /// **lenient** in two ways [`try_run`](Self::try_run) is not: an unknown
     /// [`lang`](Self::lang) falls back to the default tables instead of being rejected,
     /// and the replacements registered with [`register_replacements`] are not applied.
-    /// Prefer `try_run`; it is what every binding's `transliterate` calls.
+    ///
+    /// Deprecated since 0.17: a typo in `lang` (`"UK"` for `"uk"`) gave quietly wrong
+    /// output here, and every binding already calls `try_run` (`formal/bindings`, B2).
+    /// Use [`try_run`](Self::try_run); removed in 1.0.
+    #[deprecated(
+        since = "0.17.0",
+        note = "use `try_run`, which rejects an unknown `lang` and applies the registered \
+                replacements; removed in 1.0"
+    )]
     #[must_use]
     pub fn run<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        self.run_tables(text)
+    }
+
+    /// The tables alone, with the configured `lang` taken as given: the body of the
+    /// deprecated [`run`](Self::run) and of [`transliterate`], which has no `lang` to get
+    /// wrong.
+    fn run_tables<'a>(&self, text: &'a str) -> Cow<'a, str> {
         // `None` = the default `Replace("[?]")`, supplied as a borrowed `'static`
         // literal so the default path never allocates the sentinel.
         let (error_mode, replacement) = match &self.on_unknown {
@@ -271,8 +286,14 @@ impl Transliterate {
     /// Every character in `text` that has no romanization, in order of
     /// appearance — exactly the set [`run`](Self::run) would
     /// replace/ignore/preserve. (Independent of [`on_unknown`](Self::on_unknown),
-    /// which only decides what to *do* with them.) Lenient as `run` is: see
-    /// [`try_find_untranslatable`](Self::try_find_untranslatable).
+    /// which only decides what to *do* with them.) Lenient as `run` is, and deprecated
+    /// with it since 0.17: use
+    /// [`try_find_untranslatable`](Self::try_find_untranslatable); removed in 1.0.
+    #[deprecated(
+        since = "0.17.0",
+        note = "use `try_find_untranslatable`, which rejects an unknown `lang` and sees \
+                the text `try_run` sees; removed in 1.0"
+    )]
     #[must_use]
     pub fn find_untranslatable(&self, text: &str) -> Vec<Untranslatable> {
         let (strict_iso9, gost7034) = self.scheme.flags();
@@ -358,13 +379,14 @@ pub struct Untranslatable {
 }
 
 /// Transliterate `text` to ASCII with every default (default tables,
-/// `Replace("[?]")`, no tones). Shorthand for `Transliterate::new().run(text)`, and
-/// like it does not apply the replacements registered with [`register_replacements`];
-/// `Transliterate::new().try_run(text)` does. Use the [`Transliterate`] builder to
-/// choose a [`Scheme`] or [`OnUnknown`].
+/// `Replace("[?]")`, no tones): the tables alone. It takes no `lang`, so the typo the
+/// deprecated [`Transliterate::run`] let through cannot happen here, and it stays
+/// infallible. It does not apply the replacements registered with
+/// [`register_replacements`]; `Transliterate::new().try_run(text)` does. Use the
+/// [`Transliterate`] builder to choose a language, [`Scheme`] or [`OnUnknown`].
 #[must_use]
 pub fn transliterate(text: &str) -> Cow<'_, str> {
-    Transliterate::new().run(text)
+    Transliterate::new().run_tables(text)
 }
 
 // ── Registration of process-global tables ────────────────────────────────────
@@ -389,8 +411,8 @@ pub fn register_lang(code: &str, mappings: HashMap<String, String>) -> Result<()
 
 /// Register global pre-transliteration replacements, applied before the tables by
 /// [`Transliterate::try_run`] and [`Transliterate::try_find_untranslatable`] (and by
-/// Python's `transliterate`, which shares that code). The infallible
-/// [`transliterate`] and [`Transliterate::run`] run the tables alone.
+/// Python's `transliterate`, which shares that code). The infallible [`transliterate`]
+/// and the deprecated [`Transliterate::run`] run the tables alone.
 ///
 /// Fails ([`ErrorKind::ResourceLimit`](crate::ErrorKind::ResourceLimit)) past the replacement cap
 /// or ([`ErrorKind::Unsupported`](crate::ErrorKind::Unsupported)) once sealed.

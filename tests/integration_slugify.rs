@@ -1,6 +1,12 @@
 //! Integration tests for slugification.
 
-use disarm::api::{slugify, SlugConfig};
+use disarm::api::{try_slugify, SlugConfig};
+
+/// `try_slugify` for the configs these tests build, every one with a valid `lang` (or
+/// none): the slug it returns is the one the deprecated infallible `slugify` returned.
+fn slugify(text: &str, config: &SlugConfig) -> String {
+    try_slugify(text, config).expect("a valid lang")
+}
 
 #[test]
 fn basic_slugify() {

@@ -27,6 +27,30 @@ endgroup() {
     if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi
 }
 
+# One annotation per failed target, carrying what a reader needs to reproduce it: the
+# kind of finding (the artifact's prefix: crash, timeout, oom, leak), what the target
+# asserted, and the input itself in Base64. The job log runs to 50,000 lines and the
+# uploaded artifact is behind a download, while an annotation is one API call away.
+# `%`, CR and LF are escaped as workflow commands require. Every command in it is
+# guarded, because it runs under `set -e` and a failure here would stop the other targets.
+report() {
+    local t="$1" log="$2" artifact why input
+    artifact="$(ls -t "fuzz/artifacts/$t"/* 2>/dev/null | head -n 1 || true)"
+    why="$(grep -m 1 -A 4 -E "panicked at|ERROR: (libFuzzer|AddressSanitizer|LeakSanitizer)" "$log" \
+        | cut -c 1-400 | tr '\n' ' ' || true)"
+    input=""
+    # Portable (GNU and BSD `base64` both read stdin and wrap differently, so drop the
+    # newlines), and never fatal: reporting a finding must not end the run.
+    if [ -n "$artifact" ]; then
+        input="$(base64 <"$artifact" 2>/dev/null | tr -d '\n' || true)"
+    fi
+    local msg="$t failed: ${why:-see the job log}; artifact ${artifact:-none}; input (base64) ${input:-none}"
+    msg="${msg//%/%25}"
+    msg="${msg//$'\r'/%0D}"
+    msg="${msg//$'\n'/%0A}"
+    echo "::error title=fuzz $t::$msg"
+}
+
 status=0
 for t in "${targets[@]}"; do
     seeds=fuzz/seeds/unicode
@@ -34,11 +58,14 @@ for t in "${targets[@]}"; do
     mkdir -p "fuzz/corpus/$t"
     group "$t (${secs}s)"
     # -timeout: an input that takes 30 s is a finding (a quadratic path), not noise.
+    log="$(mktemp)"
     if ! cargo fuzz run "$t" "fuzz/corpus/$t" "$seeds" -- \
-        -max_total_time="$secs" -timeout=30 -rss_limit_mb=4096 -print_final_stats=1; then
-        echo "::error title=fuzz $t::$t failed; the input is under fuzz/artifacts/$t/"
+        -max_total_time="$secs" -timeout=30 -rss_limit_mb=4096 -print_final_stats=1 \
+        2>&1 | tee "$log"; then
+        report "$t" "$log"
         status=1
     fi
+    rm -f "$log"
     endgroup
 done
 exit "$status"

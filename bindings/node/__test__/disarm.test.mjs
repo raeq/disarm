@@ -489,6 +489,9 @@ describe('metadata introspection (#404)', () => {
     // One emoji, however many code points it is written with.
     expect(disarm.replaceEmoji('x👨‍👩‍👧y')).toBe('xy')
     expect(disarm.replaceEmoji('x1️⃣y')).toBe('xy')
+    // U+FE0F makes an Emoji=Yes base an emoji, not an Extended_Pictographic one (#992).
+    expect(disarm.replaceEmoji('x\u00A9\uFE0Fy')).toBe('xy')
+    expect(disarm.replaceEmoji('x\u2605\uFE0Fy')).toBe('x\u2605\uFE0Fy')
   })
   test('scriptInfo returns static facts about a script', () => {
     expect(disarm.scriptInfo('Coptic').defaultLang).toBe('cop')

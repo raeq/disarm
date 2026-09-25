@@ -587,8 +587,9 @@ pub fn demojize_with(text: &str, strip_modifiers: bool, on_unknown: &OnUnknown) 
 /// `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
 /// which is wider than the emoji: `demojize("x™y")` is `"x trade mark y"`. This asks
 /// *is this an emoji by the UCD's properties?*, so its domain is the emoji-presentation
-/// set — `Emoji_Presentation=Yes`, an `Emoji` or `Extended_Pictographic` base carrying
-/// `U+FE0F`, and the ZWJ, modifier, keycap and flag sequences built on those. Nothing else moves.
+/// set — `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying `U+FE0F` (#992: not an
+/// `Extended_Pictographic` one, so `★` + `U+FE0F` stays), and the ZWJ, modifier, keycap and
+/// flag sequences built on those. Nothing else moves.
 ///
 /// `replacement` is inserted exactly as given, with no padding and no whitespace
 /// collapse, because the two useful values want opposite things and neither can be a

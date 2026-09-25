@@ -521,8 +521,8 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
 // `\u{00A9}` from ordinary prose, which is not what a caller removing emoji asked for.
 //
 // So replacement asks "is this an emoji by the UCD's own properties?" and its domain is
-// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji` or
-// `Extended_Pictographic` base carrying `U+FE0F`, and the sequences built on those. That question needs two range tables and
+// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying
+// `U+FE0F` (#992), and the sequences built on those. That question needs two range tables and
 // no names, which is the second reason the paths are separate: a build that only
 // replaces links neither the CLDR name trie nor the 182 KB behind it (#695).
 
@@ -608,7 +608,7 @@ fn head_len_at(window: &[char]) -> Option<usize> {
     // Two ways to open: the code point renders as emoji on its own, or it *can* and the
     // next code point says to.
     let vs16_next = window.get(1) == Some(&VS16);
-    let opens = opens_emoji_presentation(first) || (vs16_next && tables::is_emoji_property(first));
+    let opens = opens_emoji_presentation(first) || (vs16_next && tables::is_emoji_yes(first));
     if !opens {
         return None;
     }
@@ -678,15 +678,15 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
 /// `ml_normalize` the real step is a change with a `KEY_SCHEMA_VERSION` cost of its own.
 ///
 /// Only a sequence whose head renders as emoji **without being asked** counts. A
-/// text-default base that `U+FE0F` opens — `\u{00A9}`, `\u{00AE}`, `\u{2605}` — is
-/// an emoji presentation sequence to [`presentation_len_at`], and `replace_emoji` is
-/// right to replace it. Here it is not an emoji *with no name*: it is a symbol with no
-/// name that was asked to render as emoji, and dropping it deletes an assigned character
-/// on the strength of a selector. Excluded, the scanners keep the base and drop the
+/// text-default `Emoji=Yes` base that `U+FE0F` opens — `\u{00A9}`, `\u{00AE}` — is an
+/// emoji presentation sequence to [`presentation_len_at`], and `replace_emoji` is right
+/// to replace it. Here it is not an emoji *with no name*: it is a symbol with no name
+/// that was asked to render as emoji, and dropping it deletes an assigned character on
+/// the strength of a selector. Excluded, the scanners keep the base and drop the
 /// selector, as they did before #990. Without this the branch took 2,141 such symbols —
-/// `emoji_property.tsv` is `Emoji` OR `Extended_Pictographic`, which reaches unassigned
-/// code points too — and a ZWJ chain opened by one, `\u{00A9}\u{FE0F}\u{200D}🔥`,
-/// took the named `🔥` down with it. The keycap bases open no sequence without a keycap
+/// the VS16 arm then read `Emoji` OR `Extended_Pictographic`, which reaches `\u{2605}`
+/// and unassigned code points too, until #992 narrowed it to `Emoji=Yes` — and a ZWJ
+/// chain opened by one, `\u{00A9}\u{FE0F}\u{200D}🔥`, took the named `🔥` down with it. The keycap bases open no sequence without a keycap
 /// after them, and every keycap has a CLDR name, so they need no exception.
 ///
 /// Both scanners call this, so the two cannot drift apart on what they rewrite.

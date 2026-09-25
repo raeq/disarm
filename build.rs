@@ -710,6 +710,14 @@ fn main() {
         &out_dir.join("emoji_property_ranges.rs"),
         "EMOJI_PROPERTY_RANGES",
     );
+    // #992: `Emoji=Yes` alone, the base UTS #51 defines an emoji presentation sequence
+    // for. The table above adds `Extended_Pictographic`, which reserves whole blocks, so
+    // a selector after U+2605 BLACK STAR or an unassigned U+1FC00 opened a sequence there.
+    generate_range_set(
+        &data_dir.join("emoji_yes.tsv"),
+        &out_dir.join("emoji_yes_ranges.rs"),
+        "EMOJI_YES_RANGES",
+    );
     // #774: the assigned-ness gate in front of the block-range script table.
     generate_range_set(
         &data_dir.join("assigned_ranges.tsv"),

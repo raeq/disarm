@@ -158,9 +158,9 @@ public final class Disarm {
      * <p>The counterpart to {@link #demojize(String)}, and a different question of a
      * different table. {@code demojize} asks what CLDR calls a character, so its domain
      * is the name table, which is wider than the emoji. This asks whether the UCD calls
-     * it an emoji — {@code Emoji_Presentation=Yes}, an {@code Emoji} or
-     * {@code Extended_Pictographic} base carrying {@code U+FE0F}, and the ZWJ, modifier,
-     * keycap and flag sequences on those. Nothing else moves.
+     * it an emoji — {@code Emoji_Presentation=Yes}, an {@code Emoji=Yes} base carrying
+     * {@code U+FE0F} (not an {@code Extended_Pictographic} one, so a black star with a
+     * selector stays), and the ZWJ, modifier, keycap and flag sequences on those. Nothing else moves.
      *
      * <p>{@code replacement} is inserted exactly as given, with no padding: {@code ""}
      * closes an intra-word split and {@code " "} keeps two words apart, and no rule

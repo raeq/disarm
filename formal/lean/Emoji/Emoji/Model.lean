@@ -58,7 +58,7 @@ def headLen : List Char → Option Nat
       if rest[after]? == some KEYCAP then some (2 + after) else none -- :582-586
     else
       let vs16Next := rest.head? == some VS16                        -- :591
-      let opens := opensEmojiPresentation first || (vs16Next && isEmojiProperty first) -- :592
+      let opens := opensEmojiPresentation first || (vs16Next && isEmojiYes first) -- :592
       if !opens then none                                            -- :593
       else some (1 + (rest.takeWhile isHeadMod).length)              -- :597-605
 

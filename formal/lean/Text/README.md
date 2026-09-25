@@ -444,9 +444,10 @@ python3 -c 'import disarm; print(disarm.grapheme_width("a\ufe0f"), disarm.graphe
 # 2 1 6
 ```
 
-Expected `1 1 3`. **Fix:** honour VS16 only on a base with the `Emoji` property (the
-`emoji_property.tsv` that build.rs already reads), symmetric with VS15. Kernel: `w2`. No key
-moves.
+Expected `1 1 3`. **Fix:** honour VS16 only on a base with the `Emoji` property, symmetric
+with VS15. Kernel: `w2`. No key moves. As first landed the fix read `emoji_property.tsv`,
+which is `Emoji` OR `Extended_Pictographic`, so `★` + `U+FE0F` still measured 2; #992 moved
+it to `emoji_yes.tsv`, `Emoji` alone.
 
 ### C1: `is_case_fold_stable` and `fold_case` against the host's `str` (doc overclaim, low)
 

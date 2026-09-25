@@ -65,6 +65,11 @@ def isEmojiProperty (c : Char) : Bool :=
   let n := c.toNat
   n == 0x23 || n == 0x2A || n == 0x30 || n == 0x31 || n == 0x32 || n == 0x33 || n == 0x34 || n == 0x35 || n == 0x36 || n == 0x37 || n == 0x38 || n == 0x39 || n == 0xA9 || n == 0x2122 || n == 0x2764 || n == 0x1F1E6 || n == 0x1F1E7 || n == 0x1F3FB || n == 0x1F468 || n == 0x1F525 || n == 0x1F600
 
+/-- UCD Emoji=Yes alone, the base U+FE0F opens (tables::is_emoji_yes, #992) -/
+def isEmojiYes (c : Char) : Bool :=
+  let n := c.toNat
+  n == 0x23 || n == 0x2A || n == 0x30 || n == 0x31 || n == 0x32 || n == 0x33 || n == 0x34 || n == 0x35 || n == 0x36 || n == 0x37 || n == 0x38 || n == 0x39 || n == 0xA9 || n == 0x2122 || n == 0x2764 || n == 0x1F1E6 || n == 0x1F1E7 || n == 0x1F3FB || n == 0x1F468 || n == 0x1F525 || n == 0x1F600
+
 /-- emoji_starters.tsv (tables::is_emoji_multi_starter) -/
 def isStarter (c : Char) : Bool :=
   let n := c.toNat

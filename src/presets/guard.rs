@@ -263,7 +263,7 @@ pub(super) fn is_demojizable(ch: char) -> bool {
 pub(super) fn acts_on_nonascii(
     ch: char,
     m: Actionable,
-    conf_map: Option<&'static phf::Map<char, &'static str>>,
+    conf_map: Option<crate::tables::ConfusableMap>,
 ) -> bool {
     // Transliterate can map *any* non-ASCII code point (the table covers Latin-1
     // symbols like `×`→`x` too, not just non-Latin scripts), so for a transliterating
@@ -368,7 +368,7 @@ pub(super) enum Guard {
 pub(super) fn classify(
     text: &str,
     mask: Actionable,
-    conf_map: Option<&'static phf::Map<char, &'static str>>,
+    conf_map: Option<crate::tables::ConfusableMap>,
 ) -> Guard {
     // Byte loop, not `char_indices`: the ASCII path (the deployment norm) stays a
     // tight per-byte scan with no UTF-8 decode; a multi-byte lead byte (≥ 0xC0) is

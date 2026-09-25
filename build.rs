@@ -10,7 +10,7 @@
 //!   - char sets:      `HEXCODEPOINT`
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -60,6 +60,18 @@ const CONFUSABLE_TABLES: [(&str, &str, &str); 4] = [
     ("arabic", "confusables_to_arabic.tsv", "TO_ARABIC"),
     ("hebrew", "confusables_to_hebrew.tsv", "TO_HEBREW"),
 ];
+
+/// Append `{ident}_BMP`, the BMP keys of the confusable map `ident`, so a lookup can
+/// answer a miss with one bit instead of a hash probe. Built from the same `entries`
+/// the map is, after every injected row.
+fn emit_key_bitmap(code: &mut String, ident: &str, entries: &BTreeMap<u32, String>) {
+    bitmap::emit_bmp_bitmap(
+        code,
+        &format!("{ident}_BMP"),
+        &format!("U+{{cp}} is a key of `{ident}`"),
+        |c| entries.contains_key(&u32::from(c)),
+    );
+}
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -178,7 +190,8 @@ fn main() {
             }
         }
 
-        let code = build_char_str_map(&entries, "TO_LATIN", "");
+        let mut code = build_char_str_map(&entries, "TO_LATIN", "");
+        emit_key_bitmap(&mut code, "TO_LATIN", &entries);
         fs::write(out_dir.join("confusables_phf.rs"), code).unwrap();
 
         // ASCII confusable sources for the preset fast-path guard (#458). The
@@ -217,7 +230,8 @@ fn main() {
             !entries.is_empty(),
             "confusables_to_cyrillic.tsv: expected ≥1 entries, got 0",
         );
-        let code = build_char_str_map(&entries, "TO_CYRILLIC", "");
+        let mut code = build_char_str_map(&entries, "TO_CYRILLIC", "");
+        emit_key_bitmap(&mut code, "TO_CYRILLIC", &entries);
         fs::write(out_dir.join("confusables_to_cyrillic_phf.rs"), code).unwrap();
     }
 
@@ -231,7 +245,8 @@ fn main() {
     for &(script, table, ident) in &CONFUSABLE_TABLES[2..] {
         let entries = read_char_str_tsv(&data_dir.join(table));
         assert!(!entries.is_empty(), "{table}: expected ≥1 entries, got 0");
-        let code = build_char_str_map(&entries, ident, "");
+        let mut code = build_char_str_map(&entries, ident, "");
+        emit_key_bitmap(&mut code, ident, &entries);
         fs::write(
             out_dir.join(format!("confusables_to_{script}_phf.rs")),
             code,

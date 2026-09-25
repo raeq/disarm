@@ -74,9 +74,9 @@ assert slugify("Héllo Wörld") == "hello-world"
 [the evidence](https://docs.disarm.dev/security/adversarial-defense.html#evidence) ·
 [what it misses](https://docs.disarm.dev/security/adversarial-defense.html#coverage-and-limits)
 
-**What does it cost?** ~450M chars/sec on Latin (~38× Unidecode), ~106M on Cyrillic, ~712K
-slugs/sec (~10–24× python-slugify), ~65 ns for an already-ASCII call. Hardware-dependent and
-directional, not guarantees. →
+**What does it cost?** 24–116× Unidecode on Latin-script text, ~13× on Cyrillic, Greek,
+Arabic and Hebrew, ~6–11× python-slugify, ~57 ns for an already-ASCII call. Hardware-dependent
+and directional, not guarantees. →
 [full results](https://docs.disarm.dev/performance.html#results) ·
 [how to read them](https://docs.disarm.dev/performance.html#how-to-read-these-numbers) ·
 [where disarm is slower](https://docs.disarm.dev/performance.html#where-disarm-is-slower)

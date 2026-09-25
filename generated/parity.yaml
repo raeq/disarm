@@ -485,8 +485,8 @@ operations:
       python: list_langs
       ruby: null
       node: null
-      java: null
-      kotlin: null
+      java: listLangs
+      kotlin: listLangs
       cabi: null
   - id: list_profiles
     names:
@@ -494,8 +494,8 @@ operations:
       python: list_profiles
       ruby: null
       node: null
-      java: null
-      kotlin: null
+      java: listProfiles
+      kotlin: listProfiles
       cabi: null
   - id: list_scripts
     names:
@@ -629,8 +629,8 @@ operations:
       python: reverse_langs
       ruby: null
       node: null
-      java: null
-      kotlin: null
+      java: reverseLangs
+      kotlin: reverseLangs
       cabi: null
   - id: reverse_transliterate
     names:

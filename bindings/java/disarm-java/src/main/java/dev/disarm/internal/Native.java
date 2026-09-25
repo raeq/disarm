@@ -175,6 +175,12 @@ public final class Native {
 
     public static native String[] listContextLangs();
 
+    public static native String[] listLangs();
+
+    public static native String[] listProfiles();
+
+    public static native String[] reverseLangs();
+
     // ── Reusable handles (opaque jlong pointers) ───────────────────────────────
     public static native long pipelineNew(String profile);
 

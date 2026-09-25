@@ -77,6 +77,17 @@ class Lexicon:
     def __init__(self, words: Iterable[str]) -> None: ...
     def __len__(self) -> int: ...
 
+class SurrogateSafe:
+    """A ``_core`` function guarded by the #469 scrub-and-retry (``_boundary.py``)."""
+
+    def __init__(
+        self,
+        inner: Callable[..., Any],
+        retry: Callable[[Callable[..., Any], tuple[Any, ...], dict[str, Any] | None], Any],
+    ) -> None: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+    def __get__(self, obj: object, owner: type | None = None) -> Any: ...
+
 class _Slugifier:
     separator: str
     lang: str | None

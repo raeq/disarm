@@ -308,3 +308,84 @@ def test_every_exported_class_is_surrogate_audited() -> None:
     )
     stale = accounted - exported
     assert not stale, f"covered/exempt names that are not exported classes: {stale}"
+
+
+def test_the_guard_never_enters_python_on_valid_input() -> None:
+    """The guard is native, so valid input costs no Python call frame.
+
+    It was a Python ``*args, **kwargs`` function, and a frame on every call cost 70-84
+    ns, two to four times the native cost of a short call: ``transliterate`` on ASCII
+    lost Unidecode's own ASCII benchmark cell 0.40x. Every ``_core`` function
+    ``_boundary`` re-exports is the native guard, and carries the wrapped function's
+    name and signature, except the entry points that keep the contract themselves.
+    """
+    from disarm import _boundary, _core
+
+    functions = [
+        name
+        for name in dir(_core)
+        if not name.startswith("__")
+        and callable(getattr(_core, name))
+        and not isinstance(getattr(_core, name), type)
+    ]
+    assert functions
+    for name in functions:
+        fn = getattr(_boundary, name)
+        if name in _boundary._SELF_GUARDED:
+            assert fn is getattr(_core, name), name
+            continue
+        assert isinstance(fn, _core.SurrogateSafe), name
+        assert fn.__name__ == getattr(_core, name).__name__, name
+        assert fn.__wrapped__ is getattr(_core, name), name
+    # The public `transliterate` is the native entry point itself: one crossing (#277).
+    assert disarm.transliterate is _core._transliterate_entry
+    assert "lang" in inspect.signature(disarm.transliterate).parameters
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"replace_with": "\ud800"},
+        {"replace_with": "<\ud83d\ude00>"},
+        {"lang": "r\udcffu"},
+        {"errors": "repl\ud800ace"},
+        {"lang": "ru", "replace_with": "\udfff"},
+    ],
+)
+@pytest.mark.parametrize("text", ["\u03a9\u2713 ok", "a\ud800b", "x\ud83d\ude00y"])
+def test_self_guarded_transliterate_scrubs_every_string_argument(
+    text: str, kwargs: dict[str, str]
+) -> None:
+    """``transliterate`` keeps the contract without the guard: every string argument,
+    not only the text, is taken WTF-8 -> UTF-8, and the result (or the error) is the
+    call on the scrubbed arguments."""
+    scrubbed = {k: _canonical(v) for k, v in kwargs.items()}
+    try:
+        expected: object = disarm.transliterate(_canonical(text), **scrubbed)
+    except (ValueError, TypeError) as exc:
+        with pytest.raises(type(exc)):
+            disarm.transliterate(text, **kwargs)
+        return
+    assert disarm.transliterate(text, **kwargs) == expected
+
+
+def test_self_guarded_transliterate_still_rejects_non_strings() -> None:
+    """``Utf8Arg`` fails on a non-``str`` exactly as ``&str`` did."""
+    for kwargs in ({"errors": None}, {"replace_with": None}, {"lang": 3}):
+        with pytest.raises(TypeError):
+            disarm.transliterate("x", **kwargs)  # type: ignore[call-overload]
+
+
+def test_the_guard_binds_as_a_method() -> None:
+    """``@_surrogate_safe`` guards the ``__call__`` of the stateful classes, so the
+    native guard must bind ``self`` the way a Python function does."""
+    from disarm._boundary import _surrogate_safe
+
+    class Echo:
+        @_surrogate_safe
+        def __call__(self, text: str) -> tuple[object, str]:
+            return self, disarm.transliterate(text)
+
+    echo = Echo()
+    assert echo("café") == (echo, "cafe")
+    assert Echo.__call__(echo, "x")[0] is echo

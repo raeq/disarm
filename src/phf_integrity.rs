@@ -33,55 +33,55 @@ pub(crate) enum Table {
     U32Set(&'static str, &'static phf::Set<u32>),
 }
 
-/// `(table, entry count, FNV-1a 64 of the sorted entries)`, pinned on phf 0.13.1.
+/// `(table, entry count, FNV-1a 64 of the sorted entries)`, pinned on phf 0.13.1, over code points (see [`cp`]).
 const GOLDEN: &[(&str, usize, u64)] = &[
-    ("CASE_FOLD", 1557, 0x1abd_fcdd_cfea_9256),
-    ("DEFAULT_SMP", 164, 0x37de_dd39_6d1a_3aa3),
-    ("DIGIT_TR39", 47, 0x3c54_9bca_25b2_1aa5),
-    ("EMOJI_MULTI", 2553, 0xa9bf_624a_4689_0fd3),
-    ("EMOJI_MULTI_STARTERS", 188, 0xe9f7_ddff_29fa_8bd6),
+    ("CASE_FOLD", 1557, 0x1d42_0719_be93_79f2),
+    ("DEFAULT_SMP", 164, 0x2fb9_9959_cbcb_1a80),
+    ("DIGIT_TR39", 47, 0x1999_32dd_ecce_86a3),
+    ("EMOJI_MULTI", 2553, 0xc441_cc94_b68c_63ca),
+    ("EMOJI_MULTI_STARTERS", 188, 0xac54_cc8f_ad4b_fd0b),
     ("EMOJI_ROWS_TR39_ALSO_CLAIMS", 54, 0x1412_ba05_9395_5824),
     (
         "EMOJI_ROWS_WITHOUT_EMOJI_PROPERTY",
         326,
         0x6a86_62a5_a76f_51bf,
     ),
-    ("EMOJI_SINGLE", 1727, 0x33d5_d127_4e51_ecb4),
-    ("EXCLUDED_COMPOSITIONS", 71, 0xcba2_eb9b_cc3d_37e8),
-    ("GOST7034", 12, 0x762e_da0d_e2c3_140e),
-    ("HANZI_PINYIN_TONED", 2099, 0x767d_4b9c_647d_d0ad),
-    ("ISO9", 26, 0x1fa5_790f_092e_1dac),
-    ("LANG_AM", 23, 0xee4f_db27_98ad_48e9),
-    ("LANG_BG", 4, 0xdc5b_9ae5_04e2_44c7),
-    ("LANG_CA", 1, 0xb4c4_6f6d_2bbb_8f91),
-    ("LANG_DE", 7, 0x4655_ffe9_70c1_e263),
-    ("LANG_EL", 6, 0x26a4_c3ba_2d74_5b4b),
-    ("LANG_ES", 2, 0x7f80_9903_fc4f_f40f),
-    ("LANG_ET", 6, 0xe982_dd17_7106_a021),
-    ("LANG_FA", 63, 0x5101_cf77_9719_a20f),
-    ("LANG_FR", 4, 0x6225_2248_9c13_8680),
-    ("LANG_IS", 2, 0x3bb8_ad0e_6a03_c785),
-    ("LANG_IT", 2, 0x3405_4270_3466_9d47),
-    ("LANG_JA", 1, 0xc57b_b9b6_1e27_9bd6),
-    ("LANG_JA_KUNREI", 16, 0xc090_cf1c_7054_5ecb),
-    ("LANG_NL", 2, 0x9f54_ceca_1998_2500),
-    ("LANG_NO", 6, 0xb837_9785_c921_2065),
-    ("LANG_PT", 2, 0x3405_4270_3466_9d47),
-    ("LANG_RU", 14, 0x3d28_68ec_72a3_a9bb),
-    ("LANG_SR", 14, 0x2ccc_e5b0_82ca_70b1),
-    ("LANG_SV", 4, 0xc884_db0c_0d68_81d5),
-    ("LANG_TR", 6, 0x684f_7b21_bd1e_f838),
-    ("LANG_UK", 14, 0x9ed6_d91e_5fb0_cb3a),
-    ("LANG_VI", 6, 0xbbfc_4af4_5dd3_9a54),
-    ("REVERSE_EL", 48, 0x6131_8ce4_86e2_accf),
-    ("REVERSE_RU", 62, 0xd6ce_aa23_7061_b9bb),
-    ("REVERSE_UK", 62, 0x28d7_a0cf_ba32_11b7),
-    ("TO_ARABIC", 373, 0x318c_e252_ec6b_71f4),
-    ("TO_CYRILLIC", 1354, 0x1daf_5775_52d0_3824),
-    ("TO_HEBREW", 261, 0x841f_24d0_5d1b_ab9f),
-    ("TO_LATIN", 2358, 0x4de3_5a6d_b179_98d2),
-    ("UPSTREAM_CONFUSABLE_SOURCES", 6565, 0xf4aa_9875_c35e_0987),
-    ("WORD_JOINERS", 38, 0xee47_29a9_5156_9174),
+    ("EMOJI_SINGLE", 1727, 0x25a3_5a30_0f81_a2de),
+    ("EXCLUDED_COMPOSITIONS", 71, 0xcc78_7481_ac55_481f),
+    ("GOST7034", 12, 0x6d35_8e67_c4cb_3c29),
+    ("HANZI_PINYIN_TONED", 2099, 0x68c6_868e_08a8_e36e),
+    ("ISO9", 26, 0xb535_52ce_713d_afa2),
+    ("LANG_AM", 23, 0x4183_1b15_5573_09c8),
+    ("LANG_BG", 4, 0xd01b_f70a_5914_62f1),
+    ("LANG_CA", 1, 0xf2b4_6049_ef18_ce6d),
+    ("LANG_DE", 7, 0xa8a3_f71e_b8a7_3da4),
+    ("LANG_EL", 6, 0xe0f4_e420_7472_3be2),
+    ("LANG_ES", 2, 0x9c8f_1a42_19c8_281f),
+    ("LANG_ET", 6, 0x8612_b725_3f02_e8db),
+    ("LANG_FA", 63, 0x80a7_67dd_498c_2690),
+    ("LANG_FR", 4, 0xfa9c_b229_6399_73fe),
+    ("LANG_IS", 2, 0x1261_00b9_15b3_5b61),
+    ("LANG_IT", 2, 0x90ca_a57e_b0ba_7591),
+    ("LANG_JA", 1, 0xa5d8_8610_1968_595e),
+    ("LANG_JA_KUNREI", 16, 0xadc1_3837_04f4_0f13),
+    ("LANG_NL", 2, 0x7f5b_9725_3528_4446),
+    ("LANG_NO", 6, 0x25aa_f3fd_3c9d_a363),
+    ("LANG_PT", 2, 0x90ca_a57e_b0ba_7591),
+    ("LANG_RU", 14, 0x43f0_8ca6_cc1e_4cd8),
+    ("LANG_SR", 14, 0xa50e_4952_5c62_2419),
+    ("LANG_SV", 4, 0x522d_fe04_2930_b63d),
+    ("LANG_TR", 6, 0xd6fa_26f5_f9e9_5dec),
+    ("LANG_UK", 14, 0x0d1c_f474_aa88_db85),
+    ("LANG_VI", 6, 0x47b8_b6da_2f4e_ef66),
+    ("REVERSE_EL", 48, 0xa1ed_11d7_4462_ebef),
+    ("REVERSE_RU", 62, 0x99e4_c65a_10bb_ac0c),
+    ("REVERSE_UK", 62, 0x19de_f3cc_52a8_1481),
+    ("TO_ARABIC", 373, 0xcdeb_2dde_f222_023a),
+    ("TO_CYRILLIC", 1354, 0xf9db_5917_32b8_4e5e),
+    ("TO_HEBREW", 261, 0xc456_938e_2b7e_21e4),
+    ("TO_LATIN", 2358, 0x81f2_0691_aa62_a97d),
+    ("UPSTREAM_CONFUSABLE_SOURCES", 6565, 0x1b36_25d7_817a_8906),
+    ("WORD_JOINERS", 38, 0xfacb_8b87_168b_b8ed),
 ];
 
 fn fnv1a(lines: &[String]) -> u64 {
@@ -95,6 +95,19 @@ fn fnv1a(lines: &[String]) -> u64 {
     h
 }
 
+/// A character as its code point. Not `{c:?}`: `Debug` escapes a character by the
+/// standard library's own Unicode tables, which change between Rust releases, so a
+/// digest over it would differ across toolchains (stable 1.94 and CI's newer compilers
+/// disagreed on `UPSTREAM_CONFUSABLE_SOURCES`).
+fn cp(c: char) -> String {
+    format!("{:04X}", u32::from(c))
+}
+
+/// A string as its code points, space-separated.
+fn cps(s: &str) -> String {
+    s.chars().map(cp).collect::<Vec<_>>().join(" ")
+}
+
 /// Check that every entry looks itself up, and return `(name, count, digest)`.
 fn measure(table: &Table) -> (&'static str, usize, u64) {
     let (name, mut lines) = match *table {
@@ -105,7 +118,7 @@ fn measure(table: &Table) -> (&'static str, usize, u64) {
             (
                 name,
                 map.entries()
-                    .map(|(k, v)| format!("{k:?}\t{v:?}"))
+                    .map(|(k, v)| format!("{}\t{}", cp(*k), cps(v)))
                     .collect::<Vec<_>>(),
             )
         }
@@ -120,7 +133,7 @@ fn measure(table: &Table) -> (&'static str, usize, u64) {
             (
                 name,
                 map.entries()
-                    .map(|(k, v)| format!("{k:?}\t{v:?}"))
+                    .map(|(k, v)| format!("{}\t{}", cps(k), cps(v)))
                     .collect(),
             )
         }
@@ -135,7 +148,7 @@ fn measure(table: &Table) -> (&'static str, usize, u64) {
             (
                 name,
                 map.entries()
-                    .map(|(k, v)| format!("{k:?}\t{v:?}"))
+                    .map(|(k, v)| format!("{}\t{}", cps(k), cp(*v)))
                     .collect(),
             )
         }
@@ -143,7 +156,7 @@ fn measure(table: &Table) -> (&'static str, usize, u64) {
             for k in set {
                 assert!(set.contains(k), "{name}: {k:?} does not look itself up");
             }
-            (name, set.iter().map(|k| format!("{k:?}")).collect())
+            (name, set.iter().map(|k| cp(*k)).collect())
         }
         Table::U32Set(name, set) => {
             for k in set {

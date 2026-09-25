@@ -997,11 +997,8 @@ fn tokenize_ascii(
             slug.push(out as u8);
             prev_was_sep = false;
         } else if !prev_was_sep && !separator.is_empty() {
-            if let [single] = separator {
-                slug.push(*single);
-            } else {
-                slug.extend_from_slice(separator);
-            }
+            // Several bytes: the one-byte case returned above.
+            slug.extend_from_slice(separator);
             prev_was_sep = true;
         }
     }

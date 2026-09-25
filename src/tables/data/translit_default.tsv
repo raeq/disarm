@@ -224,7 +224,7 @@
 
 # === Latin Extended-B (U+0180–U+024F) ===
 # Source: NFKD decomposition where available; phonetic approximation for
-# stroked/hooked/African letters (Ŋ→N, Ɛ→E, Ʃ→Sh)
+# stroked/hooked/African letters (Ŋ→N, Ə→A, Ʃ→Sh)
 
 0180	b
 0181	B
@@ -241,7 +241,7 @@
 018C	d
 018D	d
 018E	E
-018F	E
+018F	A
 0190	E
 0191	F
 0192	f
@@ -448,7 +448,7 @@
 0256	d
 0257	d
 0258	e
-0259	e
+0259	a
 025A	e
 025B	e
 025C	e

@@ -264,10 +264,16 @@ class TestCasePairTransliteration:
     def test_search_key_meets_the_accented_capital(self) -> None:
         assert search_key("ȺBC") == search_key("ÀBC") == "abc"
 
-    def test_reversed_e_and_schwa_agree_with_their_lowercase(self) -> None:
+    def test_reversed_e_agrees_with_its_lowercase(self) -> None:
         # U+018E had copied the row above it (ƍ -> d).
-        assert transliterate("Ǝ") == transliterate("ǝ").upper() == "E"
-        assert transliterate("Ə") == transliterate("ə").upper() == "E"
+        assert transliterate("\u018e") == transliterate("\u01dd").upper() == "E"
+
+    def test_schwa_gives_a_in_both_forms(self) -> None:
+        """The Azerbaijani convention in English: Əliyev is Aliyev, Heydər is Heydar."""
+        assert transliterate("\u018f") == "A"
+        assert transliterate("\u0259") == "a"
+        assert transliterate("\u018fliyev") == "Aliyev"
+        assert search_key("Heyd\u0259r \u018fliyev") == "heydar aliyev"
 
 
 # ---------------------------------------------------------------------------

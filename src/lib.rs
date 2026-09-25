@@ -146,6 +146,9 @@ pub(crate) mod whitespace;
 pub(crate) mod width;
 pub(crate) mod zalgo;
 
+#[cfg(test)]
+mod phf_integrity;
+
 // `#[doc(hidden)] pub` rather than `pub(crate)`: these three carry deep
 // implementation entrypoints that the in-repo Criterion/iai benchmarks (separate
 // crates, so they can only see `pub` items) measure directly. `#[doc(hidden)]`

@@ -111,6 +111,17 @@ pub(crate) fn reverse_transliterate_impl(text: &str, lang: &str) -> String {
     result
 }
 
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(crate) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![
+        T::StrStr("REVERSE_EL", &REVERSE_EL),
+        T::StrStr("REVERSE_RU", &REVERSE_RU),
+        T::StrStr("REVERSE_UK", &REVERSE_UK),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

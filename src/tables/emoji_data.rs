@@ -27,3 +27,19 @@ include!(concat!(env!("OUT_DIR"), "/emoji_starters_phf.rs"));
 
 /// Maximum length of any multi-codepoint emoji sequence.
 pub const MAX_EMOJI_SEQ_LEN: usize = 9;
+
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![
+        T::CharStr("EMOJI_SINGLE", &EMOJI_SINGLE),
+        T::StrStr("EMOJI_MULTI", &EMOJI_MULTI),
+        T::CharSet("EMOJI_MULTI_STARTERS", &EMOJI_MULTI_STARTERS),
+        T::U32Set("EMOJI_ROWS_TR39_ALSO_CLAIMS", &EMOJI_ROWS_TR39_ALSO_CLAIMS),
+        T::U32Set(
+            "EMOJI_ROWS_WITHOUT_EMOJI_PROPERTY",
+            &EMOJI_ROWS_WITHOUT_EMOJI_PROPERTY,
+        ),
+    ]
+}

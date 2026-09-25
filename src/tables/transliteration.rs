@@ -120,3 +120,36 @@ pub fn resolve_lang_map(lang: &str) -> Option<&'static phf::Map<char, &'static s
 pub fn lookup_lang(lang: &str, ch: char) -> Option<&'static str> {
     resolve_lang_map(lang).and_then(|t| t.get(&ch).copied())
 }
+
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![
+        T::CharStr("DEFAULT_SMP", &DEFAULT_SMP),
+        T::CharStr("GOST7034", &GOST7034),
+        T::CharStr("ISO9", &ISO9),
+        T::CharStr("LANG_AM", &LANG_AM),
+        T::CharStr("LANG_BG", &LANG_BG),
+        T::CharStr("LANG_CA", &LANG_CA),
+        T::CharStr("LANG_DE", &LANG_DE),
+        T::CharStr("LANG_EL", &LANG_EL),
+        T::CharStr("LANG_ES", &LANG_ES),
+        T::CharStr("LANG_ET", &LANG_ET),
+        T::CharStr("LANG_FA", &LANG_FA),
+        T::CharStr("LANG_FR", &LANG_FR),
+        T::CharStr("LANG_IS", &LANG_IS),
+        T::CharStr("LANG_IT", &LANG_IT),
+        T::CharStr("LANG_JA", &LANG_JA),
+        T::CharStr("LANG_JA_KUNREI", &LANG_JA_KUNREI),
+        T::CharStr("LANG_NL", &LANG_NL),
+        T::CharStr("LANG_NO", &LANG_NO),
+        T::CharStr("LANG_PT", &LANG_PT),
+        T::CharStr("LANG_RU", &LANG_RU),
+        T::CharStr("LANG_SR", &LANG_SR),
+        T::CharStr("LANG_SV", &LANG_SV),
+        T::CharStr("LANG_TR", &LANG_TR),
+        T::CharStr("LANG_UK", &LANG_UK),
+        T::CharStr("LANG_VI", &LANG_VI),
+    ]
+}

@@ -657,11 +657,33 @@ public final class Disarm {
         return List.of(Native.listContextLangs());
     }
 
+    /** Every language code {@code transliterate} accepts as {@code lang}, sorted (#981). */
+    public static List<String> listLangs() {
+        return List.of(Native.listLangs());
+    }
+
+    /**
+     * Every policy profile name {@link #getPipeline(String)} accepts, sorted (#981). Each
+     * one's {@link Pipeline#purpose()} says what it is for.
+     */
+    public static List<String> listProfiles() {
+        return List.of(Native.listProfiles());
+    }
+
+    /**
+     * Every language code with a reverse table, from Latin back to the native script
+     * (#981).
+     */
+    public static List<String> reverseLangs() {
+        return List.of(Native.reverseLangs());
+    }
+
     // ── Reusable handles & anomalies ────────────────────────────────────────────
 
     /**
-     * Build a reusable {@link Pipeline} for a named policy profile. Throws
-     * {@link DisarmInvalidArgumentException} on an unknown profile. The returned
+     * Build a reusable {@link Pipeline} for a named policy profile, one of
+     * {@link #listProfiles()}. Throws {@link DisarmInvalidArgumentException} on an unknown
+     * profile. The returned
      * pipeline holds a native resource — close it (try-with-resources).
      */
     public static Pipeline getPipeline(String profile) {

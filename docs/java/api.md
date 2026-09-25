@@ -31,34 +31,32 @@ import dev.disarm.kotlin.*              // functions
 
 ## What the JVM surface does not have
 
-Measured against the 86 canonical operations in `generated/parity.yaml`, the JVM
-covers 50. Some of the remainder are deprecated aliases or Python-only
+Measured against the 112 canonical operations in `generated/parity.yaml`, the JVM
+covers 65. Some of the remainder are deprecated aliases or Python-only
 conveniences and are not gaps at all. These are the ones that are:
 
 | absent | what it is | reach it with |
 |---|---|---|
-| `canonicalizeStrict` | the stricter comparison preset | `canonicalize`, then screen separately |
-| `stripFormat` | strip bidi and invisibles, keep the script | `canonicalize` (also folds confusables) |
 | `escapeHtml`, `percentEncode` | output encoders | your framework's encoder, which you should prefer anyway |
 | `stripLogInjection` | neutralize a log line | `canonicalize` plus your own newline handling |
 | `decodeToUtf8`, `detectEncoding` | encoding recovery | — |
-| `listLangs`, `listProfiles`, `reverseLangs` | introspection | — |
 | `registerLang`, `registerReplacements` | runtime registration | — |
 | `setEmojiProvider` | custom emoji naming | — |
 | `isAscii` | a predicate | `text.chars().allMatch(c -> c < 128)` |
 
-`canonicalizeStrict` is the one to know about.
-[CVE Validation](../security/cve-validation.md) measures that
-`canonicalize_strict` and `strip_obfuscation` are the two presets that clear every
-row of the matrix, and recommends them on that basis. On the JVM only
-`stripObfuscation` exists, so the two-call advice cannot be followed as written.
-`stripObfuscation` alone clears the matrix; `canonicalize` misses the eclipsing
-mark in CVE-2017-7833.
+[CVE Validation](../security/cve-validation.md) measures that `canonicalize_strict`
+and `strip_obfuscation` are the two presets that clear every row of the matrix, and
+recommends them on that basis. Both are on the JVM, as `canonicalizeStrict` and
+`stripObfuscation`; `canonicalize` misses the eclipsing mark in CVE-2017-7833.
 
-The JVM is also absent from the parity matrix itself, which tracks rust, python,
-ruby and node. The coverage figure above was measured for this page rather than
-read off a gate, so treat it as accurate on the day it was written rather than
-maintained. Both halves are tracked in [#677](https://github.com/raeq/disarm/issues/677).
+The introspection lists are here too: `listLangs`, `listProfiles` and `reverseLangs`
+return what every other binding returns (#981), and each profile's
+`Pipeline.purpose()` says what it is for.
+
+The figures and the table are gated. `tests/test_jvm_api_page.py` reads the coverage
+figure off the parity matrix, which has carried `java` and `kotlin` columns since
+#677, and fails if the table names a method that `Disarm.java` or the Kotlin
+functions declare.
 
 ## Options builders
 

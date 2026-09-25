@@ -604,6 +604,14 @@ fn main() {
         "CASE_FOLD",
         "pub",
     );
+    // Its BMP keys, so a fold answers the common miss (an already-folded character)
+    // with one bit rather than a hash probe.
+    {
+        let entries = read_char_str_tsv(&data_dir.join("case_folding.tsv"));
+        let mut code = String::new();
+        emit_key_bitmap(&mut code, "CASE_FOLD", &entries);
+        fs::write(out_dir.join("case_folding_bmp.rs"), code).unwrap();
+    }
 
     // --- Transliteration: default table (flat BMP array) ---
     {

@@ -140,6 +140,12 @@ pub(crate) const fn composes_with_preceding_starter(c: char) -> bool {
 /// starter that composes backwards ([`composes_with_preceding_starter`]).
 #[inline]
 fn is_cluster_follower(c: char) -> bool {
+    // Below U+0590 a mark is in one of two sub-blocks and nothing composes backwards
+    // (see `could_compose`), so the common letters skip the property lookup.
+    let u = c as u32;
+    if u < 0x0590 {
+        return (0x0300..=0x036F).contains(&u) || (0x0483..=0x0489).contains(&u);
+    }
     is_combining_mark(c) || composes_with_preceding_starter(c)
 }
 
@@ -416,6 +422,18 @@ pub(crate) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_follower_range_is_the_follower_rule() {
+        for c in (0u32..0x11_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                is_cluster_follower(c),
+                is_combining_mark(c) || composes_with_preceding_starter(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
+        }
+    }
 
     fn chars(text: &str) -> Vec<char> {
         composed(text).map(|(c, _)| c).collect()

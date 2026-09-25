@@ -124,10 +124,22 @@ pub trait DisarmStr: AsRef<str> {
     fn grapheme_len(&self) -> usize {
         grapheme_len(self.as_ref())
     }
-    /// See [`slugify`].
+    /// See [`slugify`]; deprecated with it since 0.17, use
+    /// [`DisarmStr::try_slugify`]; removed in 1.0.
+    #[deprecated(
+        since = "0.17.0",
+        note = "use `try_slugify`, which rejects an unknown `config.lang`; removed in 1.0"
+    )]
     #[must_use]
     fn slugify(&self, config: &SlugConfig) -> String {
-        slugify(self.as_ref(), config)
+        crate::slugify::slugify_impl(self.as_ref(), config)
+    }
+    /// See [`try_slugify`].
+    ///
+    /// # Errors
+    /// Propagates [`try_slugify`]'s error.
+    fn try_slugify(&self, config: &SlugConfig) -> Result<String, Error> {
+        try_slugify(self.as_ref(), config)
     }
     /// See [`strip_format`].
     #[must_use]
@@ -307,7 +319,7 @@ mod tests {
     #[test]
     fn slugify_with_config() {
         assert_eq!(
-            slugify("Héllo Wörld", &SlugConfig::default()),
+            try_slugify("Héllo Wörld", &SlugConfig::default()).unwrap(),
             "hello-world"
         );
         let bounded = SlugConfig {
@@ -315,7 +327,7 @@ mod tests {
             word_boundary: true,
             ..SlugConfig::default()
         };
-        assert_eq!(slugify("hello world", &bounded), "hello");
+        assert_eq!(try_slugify("hello world", &bounded).unwrap(), "hello");
     }
 
     #[test]
@@ -325,14 +337,18 @@ mod tests {
         // Cyrillic auto-transliterates to ASCII via the builder.
         let out = Transliterate::new()
             .on_unknown(OnUnknown::Replace("?".into()))
-            .run("Москва");
+            .try_run("Москва")
+            .unwrap();
         assert!(out.is_ascii() && !out.is_empty(), "got {out:?}");
         // strip_accents / is_ascii / list_langs.
         assert_eq!(strip_accents("café"), "cafe");
         assert!(is_ascii("hi") && !is_ascii("café"));
         assert!(list_langs().iter().any(|l| l == "ru"));
         // ASCII has nothing untranslatable.
-        assert!(Transliterate::new().find_untranslatable("hello").is_empty());
+        assert!(Transliterate::new()
+            .try_find_untranslatable("hello")
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

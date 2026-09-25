@@ -8,9 +8,16 @@
 
 use disarm::api::{
     catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables,
-    normalize_confusables, sanitize_filename, search_key, search_key_with, slugify, sort_key_with,
-    DigitPolicy, NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript, Transliterate,
+    normalize_confusables, sanitize_filename, search_key, search_key_with, sort_key_with,
+    try_slugify, DigitPolicy, NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript,
+    Transliterate,
 };
+
+/// `try_slugify` for the configs these tests build, every one with a valid `lang` (or
+/// none): the slug it returns is the one the deprecated infallible `slugify` returned.
+fn slugify(text: &str, config: &SlugConfig) -> String {
+    try_slugify(text, config).expect("a valid lang")
+}
 
 fn nfc(s: &str) -> String {
     disarm::api::normalize(s, NormalizationForm::Nfc)
@@ -94,7 +101,7 @@ fn assert_located(text: &str) {
         }
     }
     for t in [Transliterate::new(), Transliterate::new().lang("ru")] {
-        for u in t.find_untranslatable(text) {
+        for u in t.try_find_untranslatable(text).unwrap() {
             let rest = &text[u.offset..];
             assert!(rest.starts_with(u.ch), "{u:?} in {text:?}");
         }
@@ -110,7 +117,9 @@ fn a_mark_that_composes_with_nothing_is_at_its_own_offset() {
         "{found:?}"
     );
     // A variation selector is at its own offset, not its base's.
-    let found = Transliterate::new().find_untranslatable("x\u{FE0F}");
+    let found = Transliterate::new()
+        .try_find_untranslatable("x\u{FE0F}")
+        .unwrap();
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!((found[0].ch, found[0].offset), ('\u{FE0F}', 1));
 }
@@ -164,17 +173,26 @@ fn every_report_points_at_its_character() {
 #[test]
 fn a_partial_compatibility_recovery_is_reported() {
     let t = Transliterate::new();
-    assert_eq!(t.run("\u{1F240}"), "[?]ben[?]");
-    let found = t.find_untranslatable("x\u{1F240}y");
+    assert_eq!(t.try_run("\u{1F240}").unwrap(), "[?]ben[?]");
+    let found = t.try_find_untranslatable("x\u{1F240}y").unwrap();
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!((found[0].ch, found[0].offset), ('\u{1F240}', 1));
     // Reported exactly when the policies disagree on it.
-    let ignore = t.clone().on_unknown(OnUnknown::Ignore).run("\u{1F240}");
-    let preserve = t.clone().on_unknown(OnUnknown::Preserve).run("\u{1F240}");
+    let ignore = t
+        .clone()
+        .on_unknown(OnUnknown::Ignore)
+        .try_run("\u{1F240}")
+        .unwrap();
+    let preserve = t
+        .clone()
+        .on_unknown(OnUnknown::Preserve)
+        .try_run("\u{1F240}")
+        .unwrap();
     assert_ne!(ignore, preserve);
     // A compatibility character recovered whole is still not reported.
     assert!(t
-        .find_untranslatable("\u{FB01}\u{1D400}\u{337F}")
+        .try_find_untranslatable("\u{FB01}\u{1D400}\u{337F}")
+        .unwrap()
         .is_empty());
 }
 
@@ -191,15 +209,20 @@ fn nothing_reported_means_the_policies_agree() {
             continue;
         };
         let s = c.to_string();
-        if !t.find_untranslatable(&s).is_empty() {
+        if !t.try_find_untranslatable(&s).unwrap().is_empty() {
             continue;
         }
-        let ignore = t.clone().on_unknown(OnUnknown::Ignore).run(&s);
-        let preserve = t.clone().on_unknown(OnUnknown::Preserve).run(&s);
+        let ignore = t.clone().on_unknown(OnUnknown::Ignore).try_run(&s).unwrap();
+        let preserve = t
+            .clone()
+            .on_unknown(OnUnknown::Preserve)
+            .try_run(&s)
+            .unwrap();
         let replace = t
             .clone()
             .on_unknown(OnUnknown::Replace("\u{1}".into()))
-            .run(&s);
+            .try_run(&s)
+            .unwrap();
         assert_eq!(ignore, preserve, "U+{cp:04X}");
         assert_eq!(ignore, replace, "U+{cp:04X}");
     }

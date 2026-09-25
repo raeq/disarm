@@ -4,7 +4,13 @@
 //! Each test names its finding. Finding 9 (`UniqueSlugifier`) is a binding-layer type; its
 //! candidate builder is in the core and is tested beside it in `src/slugify.rs`.
 
-use disarm::api::{slugify, SlugConfig};
+use disarm::api::{try_slugify, SlugConfig};
+
+/// `try_slugify` for the configs these tests build, every one with a valid `lang` (or
+/// none): the slug it returns is the one the deprecated infallible `slugify` returned.
+fn slugify(text: &str, config: &SlugConfig) -> String {
+    try_slugify(text, config).expect("a valid lang")
+}
 
 fn unicode() -> SlugConfig {
     SlugConfig::new().with_allow_unicode(true)

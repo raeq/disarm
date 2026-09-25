@@ -358,10 +358,10 @@ pub struct SlugConfig {
     ///   Devanagari conjunct — so dropping them changes the word. Never emitted at the
     ///   start or end of a token, where they would be invisible padding.
     pub allow_unicode: bool,
-    /// Transliteration language hint; `None` uses the default tables. The infallible
-    /// [`api::slugify`](crate::api::slugify) does not validate it (best-effort);
+    /// Transliteration language hint; `None` uses the default tables.
     /// [`api::try_slugify`](crate::api::try_slugify), which every binding calls, rejects
-    /// an unknown code.
+    /// an unknown code; the deprecated infallible [`api::slugify`](crate::api::slugify)
+    /// does not validate it (best-effort).
     pub lang: Option<String>,
     /// Decode HTML named entities (e.g. `&amp;`) before slugifying.
     pub entities: bool,

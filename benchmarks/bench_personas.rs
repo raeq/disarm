@@ -17,7 +17,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Through
 use disarm::api::fold_case;
 use disarm::api::strip_accents;
 use disarm::api::{canonicalize, search_key};
-use disarm::api::{slugify, OnUnknown, SlugConfig, Transliterate};
+use disarm::api::{try_slugify, OnUnknown, SlugConfig, Transliterate};
 
 #[path = "persona_corpus.rs"]
 mod persona_corpus;
@@ -37,7 +37,7 @@ fn engine(text: &str, lang: Option<&str>) -> usize {
     if let Some(l) = lang {
         b = b.lang(l);
     }
-    b.run(text).len()
+    b.try_run(text).unwrap().len()
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +107,11 @@ fn bench_strict_scan(c: &mut Criterion) {
             BenchmarkId::new("find_untranslatable", name),
             &doc,
             |b, text| {
-                b.iter(|| Transliterate::new().find_untranslatable(black_box(text)));
+                b.iter(|| {
+                    Transliterate::new()
+                        .try_find_untranslatable(black_box(text))
+                        .unwrap()
+                });
             },
         );
     }
@@ -126,7 +130,7 @@ fn bench_slugify_doc(c: &mut Criterion) {
         let doc = persona_corpus::doc(name).expect("persona exists");
         group.throughput(text_throughput(&doc));
         group.bench_with_input(BenchmarkId::new("default", name), &doc, |b, text| {
-            b.iter(|| slugify(black_box(text), &config));
+            b.iter(|| try_slugify(black_box(text), &config).unwrap());
         });
     }
     group.finish();
@@ -195,7 +199,7 @@ fn bench_short_per_call(c: &mut Criterion) {
         b.iter(|| engine(black_box(SHORT_UNICODE), None));
     });
     group.bench_function("slugify_short_ascii", |b| {
-        b.iter(|| slugify(black_box("Hello World This Is A Title"), &config));
+        b.iter(|| try_slugify(black_box("Hello World This Is A Title"), &config).unwrap());
     });
     group.finish();
 }

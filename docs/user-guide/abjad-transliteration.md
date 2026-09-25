@@ -36,8 +36,8 @@ Standard character-by-character transliteration — the approach used by Unideco
     use disarm::api::{self, Transliterate};
 
     assert_eq!(api::transliterate("كتب العربية"), "ktb al'rbyh");
-    assert_eq!(Transliterate::new().lang("he").run("שלום"), "shlvm");
-    assert_eq!(Transliterate::new().lang("fa").run("کتاب فارسی"), "ktab farsy");
+    assert_eq!(Transliterate::new().lang("he").try_run("שלום").unwrap(), "shlvm");
+    assert_eq!(Transliterate::new().lang("fa").try_run("کتاب فارسی").unwrap(), "ktab farsy");
     ```
 
 === "Ruby"
@@ -231,7 +231,7 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
     use disarm::api::Transliterate;
 
     // Without context
-    assert_eq!(Transliterate::new().lang("fa").run("کتاب فارسی"), "ktab farsy");
+    assert_eq!(Transliterate::new().lang("fa").try_run("کتاب فارسی").unwrap(), "ktab farsy");
     ```
 
 === "Ruby"
@@ -290,7 +290,7 @@ The Hebrew dictionary is built from [Project Ben Yehuda](https://github.com/proj
     use disarm::api::Transliterate;
 
     // Without context
-    assert_eq!(Transliterate::new().lang("he").run("שלום"), "shlvm");
+    assert_eq!(Transliterate::new().lang("he").try_run("שלום").unwrap(), "shlvm");
     ```
 
 === "Ruby"

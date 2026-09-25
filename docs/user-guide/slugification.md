@@ -20,9 +20,9 @@ disarm generates URL-safe slugs from Unicode text. The `slugify` operation is pa
     use disarm::api::{self, SlugConfig};
 
     let cfg = SlugConfig::default();
-    assert_eq!(api::slugify("Hello, World!", &cfg), "hello-world");
-    assert_eq!(api::slugify("My Blog Post — Draft #3", &cfg), "my-blog-post-draft-3");
-    assert_eq!(api::slugify("Ünïcödé Téxt", &cfg), "unicode-text");
+    assert_eq!(api::try_slugify("Hello, World!", &cfg).unwrap(), "hello-world");
+    assert_eq!(api::try_slugify("My Blog Post — Draft #3", &cfg).unwrap(), "my-blog-post-draft-3");
+    assert_eq!(api::try_slugify("Ünïcödé Téxt", &cfg).unwrap(), "unicode-text");
     ```
 
 === "Ruby"
@@ -223,7 +223,7 @@ Language profile for transliteration:
     ```rust
     use disarm::api::{self, SlugConfig};
 
-    assert_eq!(api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")), "aerger-im-buero");
+    assert_eq!(api::try_slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")).unwrap(), "aerger-im-buero");
     ```
 
 === "Ruby"

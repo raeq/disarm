@@ -206,15 +206,15 @@ All 10 Brahmic scripts use virama/mātrā-aware transliteration: consonants carr
 
     // Chinese
     assert_eq!(api::transliterate("北京市"), "bei jing shi");
-    assert_eq!(api::slugify("北京烤鸭", &SlugConfig::new()), "bei-jing-kao-ya");
+    assert_eq!(api::try_slugify("北京烤鸭", &SlugConfig::new()).unwrap(), "bei-jing-kao-ya");
 
     // Korean
     assert_eq!(api::transliterate("서울"), "seo ul");
-    assert_eq!(api::slugify("대한민국", &SlugConfig::new()), "dae-han-min-gug");
+    assert_eq!(api::try_slugify("대한민국", &SlugConfig::new()).unwrap(), "dae-han-min-gug");
 
     // Japanese (hiragana/katakana use Hepburn; kanji use Chinese pinyin)
     assert_eq!(api::transliterate("ひらがな"), "hiragana");
-    assert_eq!(Transliterate::new().lang("ja").run("東京タワー"), "dong jing tawa");
+    assert_eq!(Transliterate::new().lang("ja").try_run("東京タワー").unwrap(), "dong jing tawa");
     ```
 
 === "Ruby"
@@ -401,8 +401,8 @@ For scripts that remain ambiguous after discrimination (Devanagari, Han), pass a
     ```rust
     use disarm::api::{self, SlugConfig, Transliterate};
 
-    assert_eq!(Transliterate::new().lang("de").run("Ürümqi"), "Ueruemqi");
-    assert_eq!(api::slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")), "aerger-im-buero");
+    assert_eq!(Transliterate::new().lang("de").try_run("Ürümqi").unwrap(), "Ueruemqi");
+    assert_eq!(api::try_slugify("Ärger im Büro", &SlugConfig::new().with_lang("de")).unwrap(), "aerger-im-buero");
     // sanitize_filename also accepts a lang profile.
     ```
 

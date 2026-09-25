@@ -83,7 +83,13 @@ fn registration_is_atomic_with_its_cap_and_with_the_seal() {
     let read_back = |codes: &[String]| -> Vec<String> {
         codes
             .iter()
-            .map(|c| Transliterate::new().lang(c).run("\u{4E00}").into_owned())
+            .map(|c| {
+                Transliterate::new()
+                    .lang(c)
+                    .try_run("\u{4E00}")
+                    .unwrap()
+                    .into_owned()
+            })
             .collect()
     };
     let barrier = Arc::new(Barrier::new(writers + 1));

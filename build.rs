@@ -20,6 +20,8 @@ use std::path::{Path, PathBuf};
 mod arrays;
 #[path = "codegen/confusables.rs"]
 mod confusables;
+#[path = "codegen/norm_boundary.rs"]
+mod norm_boundary;
 #[path = "codegen/phf_tables.rs"]
 mod phf_tables;
 #[path = "codegen/ranges.rs"]
@@ -295,6 +297,11 @@ fn main() {
         )
         .unwrap();
     }
+
+    // --- Normalization-boundary bitmaps ---
+    // Which BMP characters the normalizer can skip, per form, from the same crate that
+    // normalizes (see codegen/norm_boundary.rs and src/normalize.rs).
+    norm_boundary::generate(&out_dir);
 
     // --- Digit-policy overrides (#561) ---
     // The rows where disarm folds a non-Latin digit to the ASCII DIGIT and TR39 folds it

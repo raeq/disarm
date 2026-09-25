@@ -6,7 +6,8 @@ conversion raises ``UnicodeEncodeError`` before any disarm logic runs. Rust can
 never receive this input, so the contract is enforced here, one level above the
 extension: every ``_core`` callable is re-exported wrapped so that, on the boundary
 failure, the offending string arguments are converted **WTF-8 -> UTF-8** and the
-call retried.
+call retried. The exceptions are the entry points in ``_SELF_GUARDED``, which convert
+their own string arguments natively and are re-exported unwrapped.
 
 The conversion (``str.encode('utf-16-le', 'surrogatepass').decode(..., 'replace')``)
 recombines a well-formed high+low pair into its astral scalar — matching a
@@ -17,10 +18,11 @@ the original bytes.
 
 The wrap is lazy: valid input (the overwhelming common case) takes the success path,
 which never leaves native code (``_core.SurrogateSafe``); only a call that actually
-fails at the boundary is scrubbed and retried, in Python. Wrapping every ``_core`` callable here — rather
-than at each call site — keeps the contract uniform across all entrypoints (and the
-``Text`` builder, which delegates to the public functions), so a new entrypoint is
-covered for free.
+fails at the boundary is scrubbed and retried, in Python. Wrapping by default here,
+rather than at each call site, keeps the contract uniform across all entrypoints (and
+the ``Text`` builder, which delegates to the public functions), so a new entrypoint
+is covered for free; an entry point opts out only by guarding itself, and
+``test_the_guard_never_enters_python_on_valid_input`` holds the list.
 """
 
 from __future__ import annotations

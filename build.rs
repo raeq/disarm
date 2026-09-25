@@ -18,8 +18,12 @@ use std::path::{Path, PathBuf};
 
 #[path = "codegen/arrays.rs"]
 mod arrays;
+#[path = "codegen/bitmap.rs"]
+mod bitmap;
 #[path = "codegen/confusables.rs"]
 mod confusables;
+#[path = "codegen/emoji_candidate.rs"]
+mod emoji_candidate;
 #[path = "codegen/norm_boundary.rs"]
 mod norm_boundary;
 #[path = "codegen/phf_tables.rs"]
@@ -542,6 +546,10 @@ fn main() {
         code.push_str(";\n");
         fs::write(out_dir.join("emoji_non_emoji_phf.rs"), code).unwrap();
     }
+
+    // The BMP characters a demojize scanner may act on; everything else is copied
+    // without a table probe.
+    emoji_candidate::generate(data_dir, &out_dir);
 
     // Production matcher (#242 item 4): compact code-point trie.
     generate_emoji_trie(

@@ -224,10 +224,12 @@ overridden by a language-specific table or the ISO 9 / GOST table.
 |-------|-------|--------|-------|
 | Latin-1 Supplement | U+0080–U+00FF | NFKD decomposition + convention | ~69% match Unicode NFKD; remainder uses conventional ASCII (AE, Th, ss, GBP, JPY) |
 | Latin Extended-A | U+0100–U+017F | NFKD decomposition + convention | ~62% NFKD; remainder follows Unidecode-like conventions for stroked/hooked letters |
-| Latin Extended-B | U+0180–U+024F | NFKD + Unidecode-like fallback | Letters without NFKD decomposition use phonetic approximation (Ŋ→N, Ə→A, Ʃ→Sh) |
+| Latin Extended-B | U+0180–U+024F | NFKD + Unidecode-like fallback | Letters without NFKD decomposition use phonetic approximation (Ŋ→N, Ɛ→E, Ʃ→Sh) |
 | IPA Extensions | U+0250–U+02AF | Phonetic approximation | 0% NFKD match; maps each IPA symbol to its nearest readable ASCII. Digraphs preferred over Unidecode's uppercase convention (ʃ→sh not S, ʒ→zh not Z) |
 | Latin Extended Additional | U+1E00–U+1EFF | NFKD decomposition | 99.6% NFKD match. Single exception: U+1E9E LATIN CAPITAL LETTER SHARP S → SS (no NFKD decomposition exists) |
 | Spacing Modifier Letters | U+02B0–U+02FF | Phonetic approximation | Modifier letters mapped to their base letter equivalents |
+| Latin Extended-C | U+2C60–U+2C7F | Other form of the case pair | Only the ten case-pair letters: each maps as its other form does, re-cased (Ɑ→A as ɑ→a, ⱥ→a as Ⱥ→A). No other letter in the block has a row (#1052) |
+| Latin Extended-D | U+A720–U+A7FF | Lowercase of the case pair | Only the twelve capitals whose lowercase the table maps (Ɦ→H as ɦ→h, Ʞ→K as ʞ→k). No other letter in the block has a row (#1052) |
 
 ### Cyrillic
 
@@ -290,6 +292,7 @@ for palatal stops (Hunterian) rather than "ca"/"cha" (IAST).
 | Block | Range | Source | Notes |
 |-------|-------|--------|-------|
 | Georgian | U+10A0–U+10FF | **BGN/PCGN Georgian (2009)** | Confirmed by base consonant choices (gh, zh, kh, dz). **Deviation:** Ejective apostrophes stripped — t'/k'/p'/ts'/ch' all lose the apostrophe, causing ejective/non-ejective pairs to merge. Expected for ASCII |
+| Georgian Extended | U+1C90–U+1CBF | Mkhedruli rows, re-cased | Mtavruli capitals map as their Mkhedruli lowercase does, title-cased (Ჟ→Zh as ჟ→zh). The archaic letters U+1CB1–U+1CBF joined in #1052 |
 | Armenian | U+0530–U+058F | **BGN/PCGN Armenian (1981)** | Confirmed by digraphs (Zh, Kh, Gh, Sh, Ch, Ts) and "yev" for ew ligature (U+0587). **Deviation:** Aspirate apostrophes stripped — Ch'/Ts'/P'/K' lose apostrophes |
 
 ### Semitic

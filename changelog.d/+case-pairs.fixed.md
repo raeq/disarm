@@ -1,0 +1,12 @@
+- **One form of 37 case pairs had no transliteration, and `search_key` leaked it (#PR).**
+  `search_key` folds case before it transliterates, so a lowercase letter with no table
+  row reached the key even when its capital had one: `search_key("ȺBC")` gave `ⱥbc` and
+  never met `search_key("ÀBC")`. The other way round, `transliterate` gave `[?]` for
+  capitals whose lowercase maps, among them the Georgian Mtavruli letters U+1CB1 to
+  U+1CBF and the Latin Extended-C and -D capitals of IPA letters (`Ɫ`, `Ɑ`, `Ɦ`, `Ʞ`).
+  Each missing form now maps as its partner does, re-cased, and
+  `tests/case_pair_transliteration.rs` checks every uppercase row of the case-folding
+  table. Two existing capitals changed to agree with their lowercase:
+  `Ǝ` gave `D` (a copy of the row above it) and `Ə` gave `A`; both now give `E`, as
+  `ǝ` and `ə` give `e`. `slugify` reduces 31 fewer single characters to `""`, and the
+  census in `docs/limitations.md` moves to 243,370.

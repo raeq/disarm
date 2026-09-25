@@ -6,7 +6,8 @@ names *starting with* `LATIN `, `MODIFIER LETTER ` or `TURNED `, or containing
 it entirely; and it counted combining marks and TAG characters, which are handled by
 `strip_accents` and by stripping respectively.
 
-The corrected census is 299 across 8 blocks, published as `latin_shape_exposure.tsv`. It
+The corrected census was 299 across 8 blocks, published as `latin_shape_exposure.tsv`
+(296 since #1052 mapped the other half of three case pairs). It
 is an exposure set rather than a bug list — Latin Extended-D's medievalist letters have no
 sensible ASCII fold — so what matters is that the list is reviewed and that it cannot grow
 without someone noticing.
@@ -99,9 +100,9 @@ def test_each_block_holds_its_count(
 
 
 def test_the_total_is_what_the_issue_records() -> None:
-    """299 as generated. A host with an older UCD sees fewer, which is not a regression."""
-    assert len(_fixture_rows()) == 299
-    assert len(_nameable(_fixture_rows())) <= 299
+    """296 as generated. A host with an older UCD sees fewer, which is not a regression."""
+    assert len(_fixture_rows()) == 296
+    assert len(_nameable(_fixture_rows())) <= 296
 
 
 def test_the_selector_excludes_combining_marks() -> None:
@@ -138,6 +139,8 @@ def test_what_915_and_920_fixed_is_absent() -> None:
         assert cp not in exposed, f"U+{cp:04X} folds since #915 and should not be listed"
     for cp in (0x1F150, 0x1F170, 0x1F17F):  # negative enclosed
         assert cp not in exposed, f"U+{cp:04X} folds since #920 and should not be listed"
+    for cp in (0x023A, 0x2C65, 0x2C66):  # the unmapped half of a case pair
+        assert cp not in exposed, f"U+{cp:04X} folds since #1052 and should not be listed"
 
 
 def test_the_census_is_pointed_at_something() -> None:

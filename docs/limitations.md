@@ -679,7 +679,7 @@ stripped is then indistinguishable from a value that was never there.
 
 | surface | single characters → `""` | excluding PUA |
 |---|---|---|
-| `slugify` | 243,401 | 105,933 |
+| `slugify` | 243,370 | 105,902 |
 | `strip_obfuscation` | 140,200 | 2,732 |
 | `search_key` | 139,870 | 2,402 |
 | `catalog_key` | 139,867 | 2,399 |

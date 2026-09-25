@@ -127,7 +127,7 @@ impl DigitPolicy {
 /// other), so a separate file would have had to be per-target as well.
 #[inline]
 fn lookup_with_policy(
-    map: Option<&'static phf::Map<char, &'static str>>,
+    map: Option<tables::ConfusableMap>,
     ch: char,
     tr39_digits: bool,
     preserve_digits: bool,

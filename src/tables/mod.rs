@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 
 use crate::unicode_ranges as ur;
 
+pub use confusables_data::ConfusableMap;
 /// The upstream `confusables.txt` release both confusable tables were folded from
 /// (#560). Re-exported publicly as [`crate::api::CONFUSABLES_VERSION`].
 pub(crate) use confusables_data::CONFUSABLES_VERSION;
@@ -490,9 +491,7 @@ pub fn lookup_confusable(ch: char, target_script: &str) -> Option<&'static str> 
 /// loop can probe the map directly instead of re-dispatching `target_script`
 /// every character (#236 / #233 review item).
 #[inline]
-pub fn resolve_confusable_map(
-    target_script: &str,
-) -> Option<&'static phf::Map<char, &'static str>> {
+pub fn resolve_confusable_map(target_script: &str) -> Option<confusables_data::ConfusableMap> {
     confusables_data::resolve_map(target_script)
 }
 

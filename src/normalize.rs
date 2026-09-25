@@ -130,6 +130,116 @@ fn is_boundary_lookup(c: char, form: Form) -> bool {
     quick == IsNormalized::Yes
 }
 
+/// Whether `c` is its own NFD and not a combining mark: a character that ends the base
+/// before it, which NFD leaves in place and never reorders a mark across.
+///
+/// The mark walks in `crate::zalgo` step over these without decomposing anything, since
+/// the NFD of a text split before each of them is the NFD of the pieces.
+#[inline]
+pub(crate) fn is_nfd_plain(c: char) -> bool {
+    let cp = u32::from(c);
+    if cp > 0xFFFF {
+        return is_nfd_plain_lookup(c);
+    }
+    NFD_PLAIN[(cp >> 6) as usize] >> (cp & 63) & 1 == 1
+}
+
+fn is_nfd_plain_lookup(c: char) -> bool {
+    is_boundary_lookup(c, Form::Nfd) && !unicode_normalization::char::is_combining_mark(c)
+}
+
+/// A maximal run of characters that are not [plain](is_nfd_plain): `start..end` in the
+/// text, and `base`, the plain character just before it (`None` at the start of the text).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MarkRun {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) base: Option<char>,
+}
+
+/// The [`MarkRun`]s of `text`, in order.
+///
+/// What the per-base NFD walks (`crate::zalgo`, `strip_accents`) have to look at. A plain
+/// character is its own NFD and NFD never reorders across it, so the NFD of the text is
+/// the plain characters as they are with the NFD of each run between them; and it is not a
+/// mark, so it ends the base before it: a walk entering a run holds exactly the state a
+/// fresh one has after reading `base`. So a walk over the runs alone, each started from
+/// `base`, sees at every run what the walk over the whole text's NFD saw there, and the
+/// text between runs, nearly all of ordinary text, is never decomposed. ASCII is plain
+/// and is never decoded.
+pub(crate) fn mark_runs(text: &str) -> MarkRuns<'_> {
+    MarkRuns {
+        text,
+        i: 0,
+        base: None,
+    }
+}
+
+pub(crate) struct MarkRuns<'a> {
+    text: &'a str,
+    i: usize,
+    base: Option<char>,
+}
+
+impl Iterator for MarkRuns<'_> {
+    type Item = MarkRun;
+
+    fn next(&mut self) -> Option<MarkRun> {
+        let text = self.text;
+        let bytes = text.as_bytes();
+        // Locals rather than fields in the loops, written back once per run.
+        let (mut i, mut base) = (self.i, self.base);
+        // Skip plain characters, remembering the last as the base.
+        let start = loop {
+            let Some(&b) = bytes.get(i) else {
+                self.i = i;
+                self.base = base;
+                return None;
+            };
+            if b < 0x80 {
+                base = Some(char::from(b));
+                i += 1;
+                continue;
+            }
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            if !is_nfd_plain(c) {
+                break i;
+            }
+            base = Some(c);
+            i += c.len_utf8();
+        };
+        // Extend the run to the next plain character.
+        while let Some(&b) = bytes.get(i) {
+            if b < 0x80 {
+                break;
+            }
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            if is_nfd_plain(c) {
+                break;
+            }
+            i += c.len_utf8();
+        }
+        self.i = i;
+        self.base = base;
+        Some(MarkRun {
+            start,
+            end: i,
+            base,
+        })
+    }
+}
+
+/// NFC of `text` into `out` (cleared first): [`normalize_into`] for a caller that has no
+/// form string to validate.
+pub(crate) fn nfc_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+    } else {
+        normalize_segmented(text, Form::Nfc, out);
+    }
+}
+
 fn append_normalized(segment: &str, form: Form, out: &mut String) {
     match form {
         Form::Nfc => out.extend(segment.nfc()),
@@ -271,6 +381,18 @@ mod tests {
                     u32::from(c)
                 );
             }
+        }
+    }
+
+    #[test]
+    fn plain_bitmap_matches_the_lookup() {
+        for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                is_nfd_plain(c),
+                is_nfd_plain_lookup(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
         }
     }
 

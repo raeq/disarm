@@ -687,8 +687,13 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
+    // Step 6 reads an ASCII value a byte at a time and lowercases as it goes
+    // (`tokenize_ascii`), so step 4 is folded into it — unless the step-5 regex has to
+    // see the lowercased value first.
+    let ascii_pass = config.regex_pattern.is_none() && value.is_ascii();
+
     // Step 4: Lowercase
-    if config.lowercase {
+    if config.lowercase && !ascii_pass {
         // #236 item 4: ASCII-lowercase in place (skipping the allocation when
         // already lowercase) only when the value is wholly ASCII. Built-in
         // transliteration tables emit ASCII (build.rs enforces it), but
@@ -741,19 +746,96 @@ pub(crate) fn slugify_impl_with_stopset(
 
     // Step 6: Replace non-alphanumeric with separator
     let separator = &config.separator;
-    let mut slug = String::with_capacity(value.len());
-    let mut prev_was_sep = true; // avoid leading separator
 
     // Precompute safe_chars membership once: `String::contains(char)` is an O(k)
     // substring scan, so the per-char check was O(n·k) for any non-empty
-    // safe_chars (#252 O5.1). Empty safe_chars (the default) → skip the set build
-    // and the per-char hash probe entirely (O3). `HashSet::new()` does not allocate.
-    let has_safe_chars = !config.safe_chars.is_empty();
-    let safe_set: HashSet<char> = if has_safe_chars {
-        config.safe_chars.chars().collect()
+    // safe_chars (#252 O5.1). Collecting an empty safe_chars (the default) does not
+    // allocate, and both passes skip the per-char probe when the set is empty (O3).
+    let safe_set: HashSet<char> = config.safe_chars.chars().collect();
+    let mut slug = if ascii_pass {
+        tokenize_ascii(&value, config, &safe_set, config.lowercase)
+    } else if value.is_ascii() {
+        // Already lowercased by step 4 if that was asked for.
+        tokenize_ascii(&value, config, &safe_set, false)
     } else {
-        HashSet::new()
+        tokenize_chars(&value, config, &safe_set)
     };
+
+    // Strip trailing separator
+    if slug.ends_with(separator) && !separator.is_empty() {
+        slug.truncate(slug.len() - separator.len());
+    }
+
+    // Step 6b: with no separator, compose again (#1040). Step 4b composed each word, but
+    // joining the words with nothing can put two characters that compose side by side:
+    // `"\u{1100} \u{1161}"` gave the two conjoining jamo, which render as U+AC00 and which
+    // the next call composed to it, and Kirat Rai U+16D67 does the same with itself. A
+    // mark never starts a word (the loop above drops one), so only these starters that
+    // compose with the starter before them are affected; composing here gives the slug
+    // that already reads as one, and a second call has nothing left to compose.
+    if config.allow_unicode && separator.is_empty() {
+        if let Cow::Owned(composed) = crate::compose::compose_str(&slug) {
+            slug = composed;
+        }
+    }
+
+    // Step 7: Remove stopwords
+    // Note: if *all* words match the stopword list the result will be an empty
+    // string.  This is intentional — callers that need a non-empty fallback
+    // should check `slug.is_empty()` and supply one (e.g. a hash of the input).
+    //
+    // With an empty separator there are no words: the tokens were joined with nothing
+    // between them, and `split("")` yields single characters, so `stopwords=["b"]` turned
+    // `abc` into `ac` (Finding 8 of `formal/lean/Sanitizers`). The filter is skipped.
+    if !config.stopwords.is_empty() && !separator.is_empty() {
+        // Use the caller-supplied set when available (e.g. _Slugifier caches it
+        // at construction), otherwise build a temporary set from config. Either way
+        // it is built by `build_stopset`, which lowercases.
+        let tmp_stopset;
+        let stopset: &HashSet<String> = if let Some(s) = prebuilt_stopset {
+            s
+        } else {
+            tmp_stopset = build_stopset(&config.stopwords);
+            &tmp_stopset
+        };
+        slug = filter_stopwords(
+            &slug,
+            separator,
+            stopset,
+            config.save_order,
+            !config.lowercase,
+        );
+    }
+
+    // Step 8: Truncate to max_length (byte-length, cluster-boundary safe for
+    // allow_unicode — #711). The ASCII path keeps the cheap code-point route, where the
+    // two boundaries coincide anyway.
+    if config.max_length > 0 && slug.len() > config.max_length {
+        if config.word_boundary {
+            // Truncate at word boundary
+            slug = truncate_at_boundary(&slug, config.max_length, separator, config.allow_unicode);
+        } else {
+            let boundary = floor_slug_boundary(&slug, config.max_length, config.allow_unicode);
+            slug.truncate(boundary);
+            // Strip what the cut left at the end: a joiner the cluster kept (Finding 13),
+            // then a partial separator as well as a whole one (Finding 5), as
+            // `truncate_at_boundary` does.
+            let end = trim_cut_tail(&slug, separator, config.allow_unicode).len();
+            slug.truncate(end);
+        }
+    }
+
+    slug
+}
+
+/// Step 6 of [`slugify_impl_with_stopset`]: keep word characters, and put one separator
+/// where each run of anything else was. Leading separators are never written; a trailing
+/// one is, and the caller strips it.
+fn tokenize_chars(value: &str, config: &SlugConfig, safe_set: &HashSet<char>) -> String {
+    let separator = &config.separator;
+    let has_safe_chars = !safe_set.is_empty();
+    let mut slug = String::with_capacity(value.len());
+    let mut prev_was_sep = true; // avoid leading separator
 
     // #712: a joiner is held back until another kept character arrives, and marks are
     // capped per base. Both are `allow_unicode`-only state; the ASCII path below stays
@@ -828,71 +910,131 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
-    // Strip trailing separator
-    if slug.ends_with(separator) && !separator.is_empty() {
-        slug.truncate(slug.len() - separator.len());
-    }
-
-    // Step 6b: with no separator, compose again (#1040). Step 4b composed each word, but
-    // joining the words with nothing can put two characters that compose side by side:
-    // `"\u{1100} \u{1161}"` gave the two conjoining jamo, which render as U+AC00 and which
-    // the next call composed to it, and Kirat Rai U+16D67 does the same with itself. A
-    // mark never starts a word (the loop above drops one), so only these starters that
-    // compose with the starter before them are affected; composing here gives the slug
-    // that already reads as one, and a second call has nothing left to compose.
-    if config.allow_unicode && separator.is_empty() {
-        if let Cow::Owned(composed) = crate::compose::compose_str(&slug) {
-            slug = composed;
-        }
-    }
-
-    // Step 7: Remove stopwords
-    // Note: if *all* words match the stopword list the result will be an empty
-    // string.  This is intentional — callers that need a non-empty fallback
-    // should check `slug.is_empty()` and supply one (e.g. a hash of the input).
-    //
-    // With an empty separator there are no words: the tokens were joined with nothing
-    // between them, and `split("")` yields single characters, so `stopwords=["b"]` turned
-    // `abc` into `ac` (Finding 8 of `formal/lean/Sanitizers`). The filter is skipped.
-    if !config.stopwords.is_empty() && !separator.is_empty() {
-        // Use the caller-supplied set when available (e.g. _Slugifier caches it
-        // at construction), otherwise build a temporary set from config. Either way
-        // it is built by `build_stopset`, which lowercases.
-        let tmp_stopset;
-        let stopset: &HashSet<String> = if let Some(s) = prebuilt_stopset {
-            s
-        } else {
-            tmp_stopset = build_stopset(&config.stopwords);
-            &tmp_stopset
-        };
-        slug = filter_stopwords(
-            &slug,
-            separator,
-            stopset,
-            config.save_order,
-            !config.lowercase,
-        );
-    }
-
-    // Step 8: Truncate to max_length (byte-length, cluster-boundary safe for
-    // allow_unicode — #711). The ASCII path keeps the cheap code-point route, where the
-    // two boundaries coincide anyway.
-    if config.max_length > 0 && slug.len() > config.max_length {
-        if config.word_boundary {
-            // Truncate at word boundary
-            slug = truncate_at_boundary(&slug, config.max_length, separator, config.allow_unicode);
-        } else {
-            let boundary = floor_slug_boundary(&slug, config.max_length, config.allow_unicode);
-            slug.truncate(boundary);
-            // Strip what the cut left at the end: a joiner the cluster kept (Finding 13),
-            // then a partial separator as well as a whole one (Finding 5), as
-            // `truncate_at_boundary` does.
-            let end = trim_cut_tail(&slug, separator, config.allow_unicode).len();
-            slug.truncate(end);
-        }
-    }
-
     slug
+}
+
+/// A byte that is not part of a word in [`tokenize_ascii`]'s tables: outside `u8`, so no
+/// output byte can collide with it (a safe character may be NUL).
+const NOT_WORD: u16 = 0x100;
+
+/// For each ASCII byte, what [`tokenize_ascii`] writes for it: the byte, lowercased when
+/// `lowercase` is set, when it is alphanumeric or `safe`; [`NOT_WORD`] otherwise.
+const fn ascii_word_table_const(lowercase: bool) -> [u16; 128] {
+    let mut table = [NOT_WORD; 128];
+    let mut b = 0u8;
+    while b < 128 {
+        if b.is_ascii_alphanumeric() {
+            table[b as usize] = (if lowercase { b.to_ascii_lowercase() } else { b }) as u16;
+        }
+        b += 1;
+    }
+    table
+}
+
+/// [`ascii_word_table_const`] with safe characters, built per call when there are any.
+fn ascii_word_table(lowercase: bool, safe: impl Fn(u8) -> bool) -> [u16; 128] {
+    let mut table = ascii_word_table_const(lowercase);
+    for (b, slot) in (0u8..128).zip(table.iter_mut()) {
+        if *slot == NOT_WORD && safe(b) {
+            // Kept verbatim: a safe character that is not alphanumeric has no case.
+            *slot = u16::from(b);
+        }
+    }
+    table
+}
+
+const ASCII_WORD: [u16; 128] = ascii_word_table_const(false);
+const ASCII_WORD_LOWER: [u16; 128] = ascii_word_table_const(true);
+
+/// Step 6 over a value that is wholly ASCII, a byte at a time, lowercasing on the way
+/// when `lowercase` is set.
+///
+/// Writes exactly what step 4 and [`tokenize_chars`] write between them for such a value
+/// (`ascii_token_pass_matches_the_char_pass`). Every ASCII character is one byte,
+/// `char::is_alphanumeric` is `is_ascii_alphanumeric` on it, and the `allow_unicode`
+/// rules act only on joiners and combining marks, none of which is ASCII. Case does not
+/// change which bytes are word bytes, so lowercasing only the bytes that are kept is the
+/// same as lowercasing the value first; the separator is written as given.
+///
+/// The char pass decoded, classified and re-encoded every character through
+/// `String::push`, after step 4 had copied and lowercased the whole value: about 52
+/// instructions a byte on the iai `slugify_doc ascii` document.
+fn tokenize_ascii(
+    value: &str,
+    config: &SlugConfig,
+    safe_set: &HashSet<char>,
+    lowercase: bool,
+) -> String {
+    debug_assert!(value.is_ascii());
+    // What each ASCII byte becomes: its output byte, or NOT_WORD. The two tables the
+    // default configuration needs are built at compile time, so a short slug pays nothing
+    // to set up; only a configuration with safe characters builds its own.
+    let built;
+    let table: &[u16; 128] = if safe_set.is_empty() {
+        if lowercase {
+            &ASCII_WORD_LOWER
+        } else {
+            &ASCII_WORD
+        }
+    } else {
+        built = ascii_word_table(lowercase, |b| safe_set.contains(&char::from(b)));
+        &built
+    };
+    let separator = config.separator.as_bytes();
+
+    if let [sep] = *separator {
+        return tokenize_ascii_one_byte_separator(value.as_bytes(), table, sep);
+    }
+
+    let mut slug: Vec<u8> = Vec::with_capacity(value.len());
+    let mut prev_was_sep = true; // avoid leading separator
+    for &b in value.as_bytes() {
+        // `& 0x7F` is a no-op on ASCII and lets the compiler drop the bounds check.
+        let out = table[usize::from(b & 0x7F)];
+        if out != NOT_WORD {
+            // Truncation is the intent: every entry but NOT_WORD is an ASCII byte.
+            #[allow(clippy::cast_possible_truncation)]
+            slug.push(out as u8);
+            prev_was_sep = false;
+        } else if !prev_was_sep && !separator.is_empty() {
+            if let [single] = separator {
+                slug.push(*single);
+            } else {
+                slug.extend_from_slice(separator);
+            }
+            prev_was_sep = true;
+        }
+    }
+    // ASCII bytes and whole copies of a `&str` separator: always UTF-8.
+    String::from_utf8(slug).expect("ASCII bytes and whole separators are UTF-8")
+}
+
+/// [`tokenize_ascii`] for the default shape, a one-byte separator, without a branch on
+/// the byte.
+///
+/// Every input byte writes one byte (its table entry, or the separator) and the write
+/// position moves past it when it should stay: always for a word byte, and for a non-word
+/// byte only straight after a word, which is where a separator belongs. So a separator
+/// can never make the slug longer than the value, the buffer is sized once, and the loop
+/// has no data-dependent branch for the predictor to miss at every word boundary.
+fn tokenize_ascii_one_byte_separator(bytes: &[u8], table: &[u16; 128], sep: u8) -> String {
+    let mut out = vec![0u8; bytes.len()];
+    let mut len = 0;
+    let mut after_word = false;
+    for (&b, _) in bytes.iter().zip(0..out.len()) {
+        let entry = table[usize::from(b & 0x7F)];
+        let word = entry != NOT_WORD;
+        // Truncation is the intent: every entry but NOT_WORD is an ASCII byte.
+        #[allow(clippy::cast_possible_truncation)]
+        let byte = if word { entry as u8 } else { sep };
+        // `len` never passes the index of the byte being read, so this stays in bounds.
+        out[len] = byte;
+        len += usize::from(word | after_word);
+        after_word = word;
+    }
+    out.truncate(len);
+    // ASCII bytes and an ASCII separator.
+    String::from_utf8(out).expect("ASCII bytes and an ASCII separator are UTF-8")
 }
 
 /// Build the stopword set `slugify` compares against: every stopword lowercased.
@@ -1272,6 +1414,72 @@ fn decode_entities(text: &str, decimal: bool, hexadecimal: bool) -> Cow<'_, str>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The byte pass over an ASCII value writes exactly what step 4 (lowercase) and the
+    /// char pass write between them.
+    ///
+    /// Random strings over every ASCII byte, controls included, against every separator
+    /// shape the char pass treats differently (empty, one byte, several bytes, a
+    /// separator made of word characters, one with capitals that lowercasing must not
+    /// touch), with and without safe characters, lowercasing on and off, on both the ASCII
+    /// and the `allow_unicode` path.
+    #[test]
+    fn ascii_token_pass_matches_the_char_pass() {
+        let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let separators = ["-", "_", "", "--", "ab", " ", "AB"];
+        let safe_chars = ["", "._", "a-", "\x00"];
+        let mut compared = 0;
+        for &separator in &separators {
+            for &safe in &safe_chars {
+                for (allow_unicode, lowercase) in
+                    [(false, false), (false, true), (true, false), (true, true)]
+                {
+                    let config = SlugConfig {
+                        separator: separator.to_owned(),
+                        safe_chars: safe.to_owned(),
+                        allow_unicode,
+                        lowercase,
+                        ..SlugConfig::default()
+                    };
+                    let safe_set: HashSet<char> = config.safe_chars.chars().collect();
+                    for _ in 0..200 {
+                        let len = (next() % 40) as usize;
+                        // Biased toward the classes that matter: letters, digits, the
+                        // separator's own bytes, and runs of punctuation and spaces.
+                        let text: String = (0..len)
+                            .map(|_| match next() % 6 {
+                                0 => char::from(b'a' + (next() % 26) as u8),
+                                1 => char::from(b'A' + (next() % 26) as u8),
+                                2 => char::from(b'0' + (next() % 10) as u8),
+                                3 => ['-', '_', ' ', '.'][(next() % 4) as usize],
+                                _ => char::from((next() % 128) as u8),
+                            })
+                            .collect();
+                        // Step 4 as the char path runs it, then the char pass.
+                        let stepped = if lowercase {
+                            text.to_ascii_lowercase()
+                        } else {
+                            text.clone()
+                        };
+                        assert_eq!(
+                            tokenize_ascii(&text, &config, &safe_set, lowercase),
+                            tokenize_chars(&stepped, &config, &safe_set),
+                            "text={text:?} separator={separator:?} safe={safe:?} \
+                             allow_unicode={allow_unicode} lowercase={lowercase}"
+                        );
+                        compared += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(compared, 7 * 4 * 4 * 200);
+    }
 
     fn default_config() -> SlugConfig {
         SlugConfig {

@@ -11,7 +11,9 @@ MSRV is 1.88, so the hold's reason is gone, and an `ignore` left behind would hi
 later release too.
 
 The manifests are read with regular expressions rather than `tomllib`, which needs
-Python 3.11; the package still supports 3.10.
+Python 3.11; the package still supports 3.10. `Cargo.lock` is not committed (this is a
+library crate), so the requirement in `Cargo.toml` is what CI resolves from; the lockfile
+check runs wherever a build has produced one.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,7 +46,10 @@ def _declared(name: str) -> str:
 
 
 def _locked() -> dict[str, list[str]]:
-    lock = (ROOT / "Cargo.lock").read_text(encoding="utf-8")
+    lock_path = ROOT / "Cargo.lock"
+    if not lock_path.exists():
+        pytest.skip("no Cargo.lock: it is not committed, and nothing has been built here")
+    lock = lock_path.read_text(encoding="utf-8")
     found: dict[str, list[str]] = {}
     for name, version in re.findall(r'^name = "([^"]+)"\nversion = "([^"]+)"', lock, re.MULTILINE):
         if name in PHF_FAMILY:
@@ -71,10 +77,10 @@ def test_the_phf_family_resolves_to_one_release() -> None:
 
 def test_the_phf_pair_is_on_the_release_the_msrv_allows() -> None:
     assert _rust_version() >= PHF_014_RUST_VERSION
-    (version,) = set(_locked()["phf"])
-    assert _version(version)[:2] >= (0, 14), (
-        f"phf resolves to {version}; the MSRV ({'.'.join(map(str, _rust_version()))}) "
-        "allows 0.14, which needs Rust 1.85"
+    requirement = _declared("phf")
+    assert _version(requirement)[:2] >= (0, 14), (
+        f"Cargo.toml requires phf {requirement}; the MSRV "
+        f"({'.'.join(map(str, _rust_version()))}) allows 0.14, which needs Rust 1.85"
     )
 
 

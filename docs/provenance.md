@@ -224,8 +224,8 @@ overridden by a language-specific table or the ISO 9 / GOST table.
 |-------|-------|--------|-------|
 | Latin-1 Supplement | U+0080–U+00FF | NFKD decomposition + convention | ~69% match Unicode NFKD; remainder uses conventional ASCII (AE, Th, ss, GBP, JPY) |
 | Latin Extended-A | U+0100–U+017F | NFKD decomposition + convention | ~62% NFKD; remainder follows Unidecode-like conventions for stroked/hooked letters |
-| Latin Extended-B | U+0180–U+024F | NFKD + Unidecode-like fallback | Letters without NFKD decomposition use phonetic approximation (Ŋ→N, Ɛ→E, Ʃ→Sh) |
-| IPA Extensions | U+0250–U+02AF | Phonetic approximation | 0% NFKD match; maps each IPA symbol to its nearest readable ASCII. Digraphs preferred over Unidecode's uppercase convention (ʃ→sh not S, ʒ→zh not Z) |
+| Latin Extended-B | U+0180–U+024F | NFKD + Unidecode-like fallback | Letters without NFKD decomposition use phonetic approximation (Ŋ→N, Ə→A, Ʃ→Sh) |
+| IPA Extensions | U+0250–U+02AF | Phonetic approximation | 0% NFKD match; maps each IPA symbol to its nearest readable ASCII. Digraphs preferred over Unidecode's uppercase convention (ʃ→sh not S, ʒ→zh not Z). One exception: ə→a, not the phonetic e, so it agrees with its capital Ə→A, the Azerbaijani convention in English (Əliyev→Aliyev) |
 | Latin Extended Additional | U+1E00–U+1EFF | NFKD decomposition | 99.6% NFKD match. Single exception: U+1E9E LATIN CAPITAL LETTER SHARP S → SS (no NFKD decomposition exists) |
 | Spacing Modifier Letters | U+02B0–U+02FF | Phonetic approximation | Modifier letters mapped to their base letter equivalents |
 | Latin Extended-C | U+2C60–U+2C7F | Other form of the case pair | Only the ten case-pair letters: each maps as its other form does, re-cased (Ɑ→A as ɑ→a, ⱥ→a as Ⱥ→A). No other letter in the block has a row (#1052) |

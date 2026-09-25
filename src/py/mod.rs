@@ -8,6 +8,7 @@
 //! and the `pyo3` dependency becomes optional (the final extraction sub-PR).
 
 pub mod anomalies;
+pub mod boundary;
 pub mod case_fold;
 pub mod collisions;
 pub mod confusables;

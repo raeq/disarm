@@ -15,9 +15,9 @@ code unit with exactly one ``U+FFFD`` (the Unicode replacement character). The
 substituted ``U+FFFD`` is terminal: this neutralizes the input, it does not recover
 the original bytes.
 
-The wrap is lazy: valid input (the overwhelming common case) takes the success path
-and pays nothing beyond an un-raised ``try``; only a call that actually fails at the
-boundary is scrubbed and retried. Wrapping every ``_core`` callable here — rather
+The wrap is lazy: valid input (the overwhelming common case) takes the success path,
+which never leaves native code (``_core.SurrogateSafe``); only a call that actually
+fails at the boundary is scrubbed and retried, in Python. Wrapping every ``_core`` callable here — rather
 than at each call site — keeps the contract uniform across all entrypoints (and the
 ``Text`` builder, which delegates to the public functions), so a new entrypoint is
 covered for free.
@@ -65,19 +65,33 @@ def _snapshot(value: Any) -> Any:
     return value
 
 
+def _retry(fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any] | None) -> Any:
+    """The failure path: scrub every string argument and call ``fn`` again."""
+    return fn(
+        *(_scrub(a) for a in args),
+        **{k: _scrub(v) for k, v in (kwargs or {}).items()},
+    )
+
+
 def _surrogate_safe(fn: _F) -> _F:
-    @functools.wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
-        try:
-            return fn(*args, **kwargs)
-        except UnicodeEncodeError:
-            return fn(
-                *(_scrub(a) for a in args),
-                **{k: _scrub(v) for k, v in kwargs.items()},
-            )
+    """``fn`` guarded by the scrub-and-retry above.
 
-    return wrapper  # type: ignore[return-value]
+    The guard is native (``_core.SurrogateSafe``): it forwards the call and enters
+    Python only when the call raised ``UnicodeEncodeError``. A Python wrapper function
+    cost 70-84 ns on every call, valid input included, which was two to four times the
+    native cost of a short call. ``update_wrapper`` gives it the wrapped function's
+    name, docstring and ``__wrapped__``, which ``help()`` and ``inspect.signature`` read.
+    """
+    guarded = _core.SurrogateSafe(fn, _retry)
+    functools.update_wrapper(guarded, fn)
+    return guarded  # type: ignore[return-value]
 
+
+# Entry points that keep the contract themselves and are re-exported unwrapped.
+# `_transliterate_entry` is the public `transliterate` (#277): its string arguments are
+# scrubbed natively (`src/py/boundary.rs`, `Utf8Arg`), because even the native guard's
+# extra call layer cost as much as a short call and lost Unidecode's ASCII benchmark cell.
+_SELF_GUARDED = frozenset({"_transliterate_entry"})
 
 # Re-export every `_core` member: functions wrapped with the boundary guard,
 # everything else (exception classes, the Transliterator type, constants) verbatim.
@@ -88,7 +102,9 @@ for _name in dir(_core):
         continue
     _obj = getattr(_core, _name)
     globals()[_name] = (
-        _surrogate_safe(_obj) if callable(_obj) and not isinstance(_obj, type) else _obj
+        _surrogate_safe(_obj)
+        if callable(_obj) and not isinstance(_obj, type) and _name not in _SELF_GUARDED
+        else _obj
     )
 
 del _name, _obj

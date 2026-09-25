@@ -45,8 +45,9 @@ VAR_KEYWORD = "var-keyword"
 
 # Builder classes whose constructor signature we compare via __init__.
 # Lexicon (HAI-SDLC 6.1) is constructed from a word collection, so — unlike the
-# return-only result objects in SKIP — it has an introspectable constructor.
-BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline", "Lexicon")
+# return-only result objects in SKIP — it has an introspectable constructor, and so
+# does SurrogateSafe, the native #469 boundary guard `_boundary.py` builds.
+BUILDER_CLASSES = ("_Slugifier", "_UniqueSlugifier", "_TextPipeline", "Lexicon", "SurrogateSafe")
 
 # Opaque/builtin types with no introspectable constructor signature.
 # These have no __text_signature__ and inspect.signature() raises on them,

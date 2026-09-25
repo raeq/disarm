@@ -104,7 +104,7 @@ def test_every_disarm_call_on_the_page_is_declared() -> None:
     assert missing == [], f"docs/java/api.md calls Disarm.{missing}, which Disarm.java lacks"
 
 
-def test_the_coverage_figures_are_the_parity_manifest_s() -> None:
+def test_the_coverage_figures_match_the_parity_manifest() -> None:
     operations = yaml.safe_load(PARITY.read_text())["operations"]
     covered = sum(1 for op in operations if op["names"].get("java") is not None)
     prose = " ".join(PAGE.read_text(encoding="utf-8").split())

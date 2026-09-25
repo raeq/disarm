@@ -71,5 +71,7 @@ class IntrospectionListsTest {
     @Test
     void theListsAreUnmodifiable() {
         assertThrows(UnsupportedOperationException.class, () -> Disarm.listLangs().add("xx"));
+        assertThrows(UnsupportedOperationException.class, () -> Disarm.listProfiles().add("xx"));
+        assertThrows(UnsupportedOperationException.class, () -> Disarm.reverseLangs().add("xx"));
     }
 }

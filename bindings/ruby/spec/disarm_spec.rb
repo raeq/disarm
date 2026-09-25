@@ -567,6 +567,9 @@ RSpec.describe Disarm do
       expect(Disarm.replace_emoji("x\u2122y")).to eq("x\u2122y")
       # One emoji, however many code points it is written with.
       expect(Disarm.replace_emoji("x1\u{FE0F}\u{20E3}y")).to eq("xy")
+      # U+FE0F makes an Emoji=Yes base an emoji, not an Extended_Pictographic one (#992).
+      expect(Disarm.replace_emoji("x\u00A9\u{FE0F}y")).to eq("xy")
+      expect(Disarm.replace_emoji("x\u2605\u{FE0F}y")).to eq("x\u2605\u{FE0F}y")
     end
 
     it "reports the per-script confusable denominator, not the population" do

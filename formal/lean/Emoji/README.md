@@ -74,8 +74,10 @@ Rust code branches on:
 
 **Tables.** `gen_tables.py` evaluates every table predicate on the alphabet and on
 all of ASCII, which is the character set of the names. It reads `Emoji_Presentation`,
-`Emoji`/`Extended_Pictographic`, `emoji_single`, `emoji_starters`, the #757 row set,
-`confusables_to_latin` and `General_Category=M`. Outside that domain every predicate
+`Emoji` alone (the VS16 arm, #992), `Emoji`/`Extended_Pictographic` (the #757 row set),
+`emoji_single`, `emoji_starters`, `confusables_to_latin` and `General_Category=M`. On
+this alphabet `isEmojiYes` and `isEmojiProperty` agree: every member with either
+property is `Emoji=Yes`, so #992 moved the model's citation and not its behaviour. Outside that domain every predicate
 is `false`/`none`, and no model input or output leaves the domain. The CLDR sequence
 table is exact for this alphabet: `multiKeys` holds every `emoji_multi.tsv` key made
 only of alphabet code points (8 keys: two keycaps, ❤‍🔥, two flags, 👨🏻, and 👨‍❤‍👨 with

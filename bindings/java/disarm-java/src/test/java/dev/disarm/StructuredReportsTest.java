@@ -50,6 +50,9 @@ class StructuredReportsTest {
         assertEquals("x\u2122y", Disarm.replaceEmoji("x\u2122y"));
         // One emoji, however many code points it is written with.
         assertEquals("xy", Disarm.replaceEmoji("x1\uFE0F\u20E3y"));
+        // U+FE0F makes an Emoji=Yes base an emoji, not an Extended_Pictographic one (#992).
+        assertEquals("xy", Disarm.replaceEmoji("x\u00A9\uFE0Fy"));
+        assertEquals("x\u2605\uFE0Fy", Disarm.replaceEmoji("x\u2605\uFE0Fy"));
     }
 
     @Test

@@ -133,9 +133,9 @@ module Disarm
     # The counterpart to +demojize+, and a different question of a different table.
     # +demojize+ asks what CLDR calls a character, so its domain is the name table, which
     # is wider than the emoji: <tt>demojize("x\u2122y")</tt> is "x trade mark y". This
-    # asks whether the UCD calls it an emoji — Emoji_Presentation=Yes, an Emoji or
-    # Extended_Pictographic base carrying U+FE0F, and the ZWJ, modifier, keycap and flag
-    # sequences on those. Nothing
+    # asks whether the UCD calls it an emoji — Emoji_Presentation=Yes, an Emoji=Yes base
+    # carrying U+FE0F (not an Extended_Pictographic one, so a black star with a selector
+    # stays), and the ZWJ, modifier, keycap and flag sequences on those. Nothing
     # else moves.
     #
     # +replacement+ is inserted exactly as given: "" closes an intra-word split and " "

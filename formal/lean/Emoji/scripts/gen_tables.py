@@ -7,6 +7,7 @@ Everything here is read from the repository's own source TSVs
 real tables projected onto the alphabet, not a hand-written guess:
 
 * ``isEmojiPresentation`` / ``isEmojiProperty``  <- emoji_presentation.tsv / emoji_property.tsv
+* ``isEmojiYes``                                <- emoji_yes.tsv (the VS16 arm, #992)
 * ``single``                                    <- emoji_single.tsv
 * ``multiKeys``                                 <- every emoji_multi.tsv key whose code
   points all lie in the alphabet (a trie walk over alphabet-only input can reach no
@@ -86,6 +87,7 @@ def tsv(name: str) -> dict[str, str]:
 
 ep = ranges("emoji_presentation.tsv")
 prop = ranges("emoji_property.tsv")
+yes = ranges("emoji_yes.tsv")
 single = {int(k, 16): v for k, v in tsv("emoji_single.tsv").items()}
 multi = {tuple(int(p, 16) for p in k.split("_")): v for k, v in tsv("emoji_multi.tsv").items()}
 starters = {
@@ -159,6 +161,13 @@ lines.append(
         "isEmojiProperty",
         "UCD Emoji or Extended_Pictographic (tables::is_emoji_property)",
         lambda cp: in_ranges(prop, cp),
+    )
+)
+lines.append(
+    pred(
+        "isEmojiYes",
+        "UCD Emoji=Yes alone, the base U+FE0F opens (tables::is_emoji_yes, #992)",
+        lambda cp: in_ranges(yes, cp),
     )
 )
 lines.append(

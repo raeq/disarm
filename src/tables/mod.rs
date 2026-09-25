@@ -896,6 +896,7 @@ pub fn is_word_joiner(ch: char) -> bool {
 
 include!(concat!(env!("OUT_DIR"), "/emoji_presentation_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/emoji_property_ranges.rs"));
+include!(concat!(env!("OUT_DIR"), "/emoji_yes_ranges.rs"));
 
 /// Binary search a sorted, non-overlapping `(start, end)` range table.
 #[inline]
@@ -922,22 +923,28 @@ pub(crate) fn is_emoji_presentation(ch: char) -> bool {
     in_range_set(EMOJI_PRESENTATION_RANGES, ch as u32)
 }
 
-/// UCD `Emoji=Yes` **or** `Extended_Pictographic=Yes`: *can* render as emoji, which
-/// `U+FE0F` turns on.
+/// UCD `Emoji=Yes` **or** `Extended_Pictographic=Yes`: pictographic at all.
 ///
-/// The name is narrower than the table. `scripts/gen_width_data.py` builds
-/// `emoji_property.tsv` from both properties, and `Extended_Pictographic` reserves whole
-/// blocks, unassigned code points included — so membership here says a code point is
-/// pictographic, not that it is `Emoji=Yes`. `U+2605` BLACK STAR is in it and is not an
-/// emoji.
+/// `Extended_Pictographic` reserves whole blocks, unassigned code points included, so
+/// membership says a code point is pictographic, not that it is an emoji: `U+2605` BLACK
+/// STAR is in it and is not one. Whether a `U+FE0F` makes a code point an emoji is
+/// [`is_emoji_yes`]'s question, and asking this one there deleted the star and 1,022
+/// unassigned code points whenever a selector followed (#992).
+#[inline]
+pub(crate) fn is_emoji_property(ch: char) -> bool {
+    in_range_set(EMOJI_PROPERTY_RANGES, ch as u32)
+}
+
+/// UCD `Emoji=Yes`: *can* render as emoji, which `U+FE0F` turns on.
 ///
-/// The complement that matters for #972: `U+00A9` and `U+2122` are `Emoji=Yes` and
+/// UTS #51 defines the emoji presentation sequence for these bases alone (#992). The
+/// complement that matters for #972: `U+00A9` and `U+2122` are `Emoji=Yes` and
 /// `Emoji_Presentation=No`, so `©` in ordinary text is a copyright sign and the same
 /// character followed by `U+FE0F` is an emoji. A replacement that ignored the
 /// distinction would delete the sign.
 #[inline]
-pub(crate) fn is_emoji_property(ch: char) -> bool {
-    in_range_set(EMOJI_PROPERTY_RANGES, ch as u32)
+pub(crate) fn is_emoji_yes(ch: char) -> bool {
+    in_range_set(EMOJI_YES_RANGES, ch as u32)
 }
 
 /// Whether this CLDR name row carries no Unicode emoji property at all (#757).

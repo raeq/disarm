@@ -33,6 +33,8 @@ from disarm import grapheme_len, grapheme_width, terminal_width
         ("́", 0),  # lone combining mark (I_w5)
         ("😀", 2),  # Emoji_Presentation
         ("☺️", 2),  # VS16 → emoji
+        ("\u00a9\ufe0f", 2),  # VS16 on an Emoji=Yes, text-default base
+        ("\u2605\ufe0f", 1),  # VS16 on Extended_Pictographic alone: no emoji presentation (#992)
         ("☺︎", 1),  # VS15 → text presentation
         ("🇫🇷", 2),  # regional-indicator flag
         ("1️⃣", 2),  # keycap

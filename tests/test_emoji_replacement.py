@@ -64,6 +64,47 @@ class TestTheEmojiPresentationSet:
         assert replace_emoji("x☺y") == "x☺y"
 
 
+class TestASelectorNeedsAnEmojiBase:
+    """`U+FE0F` opens an emoji presentation sequence only on an `Emoji=Yes` base (#992).
+
+    UTS #51 defines the sequence for `Emoji=Yes` bases alone. The VS16 arm asked the
+    wider `Emoji` OR `Extended_Pictographic` table, which reserves whole blocks, so
+    `replace_emoji` deleted a black star, and 1,022 unassigned code points, whenever a
+    selector followed.
+    """
+
+    @pytest.mark.parametrize(
+        ("base", "what"),
+        [
+            ("★", "BLACK STAR: Extended_Pictographic, not Emoji"),
+            ("⎈", "HELM SYMBOL: Extended_Pictographic, not Emoji"),
+            ("\U0001fc00", "unassigned, Extended_Pictographic by reservation"),
+        ],
+    )
+    def test_an_extended_pictographic_base_is_not_opened(self, base: str, what: str) -> None:
+        text = f"rated 3 {base}\ufe0f of 5"
+        assert replace_emoji(text) == text, what
+        # demojize strips a stray selector wherever it sits, as it does after `a`.
+        assert demojize(text) == f"rated 3 {base} of 5", what
+        assert "[?]" not in demojize(text), what
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "x\u263a\ufe0fy",  # U+263A: Emoji=Yes, text by default
+            "x\u00a9\ufe0fy",  # U+00A9: Emoji=Yes, text by default
+            "x\u2665\ufe0fy",  # U+2665: Emoji=Yes, text by default
+        ],
+    )
+    def test_an_emoji_base_still_is(self, text: str) -> None:
+        assert replace_emoji(text) == "xy"
+
+    def test_the_selector_is_treated_as_it_is_after_any_letter(self) -> None:
+        """A star with a selector is now what `a` with one always was."""
+        for base in ("a", "☆", "★"):
+            assert replace_emoji(f"x{base}\ufe0fy") == f"x{base}\ufe0fy", base
+
+
 class TestTheReplacementIsVerbatim:
     def test_no_padding_and_no_collapse(self) -> None:
         assert replace_emoji("aa 🔥 bb") == "aa  bb"

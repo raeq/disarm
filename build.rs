@@ -24,6 +24,12 @@ mod bitmap;
 mod confusables;
 #[path = "codegen/emoji_candidate.rs"]
 mod emoji_candidate;
+// The library's own romanizer, so the generated table is what it computes.
+#[path = "src/tables/hangul.rs"]
+#[allow(dead_code)]
+mod hangul;
+#[path = "codegen/hangul_table.rs"]
+mod hangul_table;
 #[path = "codegen/norm_boundary.rs"]
 mod norm_boundary;
 #[path = "codegen/phf_tables.rs"]
@@ -587,6 +593,9 @@ fn main() {
         "EMOJI_MULTI_STARTERS",
         "pub",
     );
+
+    // --- Hangul syllable romanizations, built here rather than on the first call ---
+    hangul_table::generate(&out_dir);
 
     // --- Case Folding (full Unicode CaseFolding.txt) ---
     generate_char_str_map(

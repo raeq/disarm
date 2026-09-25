@@ -101,3 +101,36 @@ def test_the_gate_keeps_symbols_on_both_sides_and_checks_the_result() -> None:
     assert re.search(r'CARGO_PROFILE_BENCH_STRIP:\s*"?false"?', workflow)
     assert "--save-summary=json" in workflow
     assert "scripts/check_iai_nonzero.py" in workflow
+
+
+def _push_paths() -> list[str]:
+    """The `on.push.paths` globs, in order."""
+    block = WORKFLOW.read_text().split("  push:", 1)[1].split("\nconcurrency:", 1)[0]
+    return re.findall(r'^\s+- "([^"]+)"$', block, re.MULTILINE)
+
+
+def _relevant_alternatives() -> list[str]:
+    """The alternatives of the `changes` job's perf-relevant `grep -qE`."""
+    pattern = re.search(r"grep -qE '\^\(([^']+)\)'; then\n\s+touched=true", WORKFLOW.read_text())
+    assert pattern, "the perf-relevant grep in the `changes` job has moved"
+    return pattern.group(1).split("|")
+
+
+def _as_alternative(glob: str) -> str:
+    """`src/**` -> `src/`, `build.rs` -> `build\\.rs$`: the regex a path glob means."""
+    if glob.endswith("/**"):
+        return glob[: -len("**")]
+    return glob.replace(".", "\\.") + "$"
+
+
+def test_push_paths_and_the_perf_relevant_grep_are_one_list():
+    """The two lists the header says MUST stay in lockstep, held equal.
+
+    A path in the grep but not the push filter is measured on a pull request and never
+    on main; `codegen/` was in neither while build.rs generated the tables the hot paths
+    read from it (the normalization boundaries, the emoji candidates, the confusable key
+    bitmaps), so a change there alone went unmeasured everywhere.
+    """
+    paths = _push_paths()
+    assert "codegen/**" in paths
+    assert sorted(_as_alternative(p) for p in paths) == sorted(_relevant_alternatives())

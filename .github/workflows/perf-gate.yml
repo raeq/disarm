@@ -32,6 +32,7 @@ on:
     # one guarantee that justifies making the PR run opt-in.
     paths:
       - "src/**"
+      - "codegen/**"
       - "benchmarks/**"
       - "examples/**"
       - "Cargo.toml"
@@ -96,7 +97,7 @@ jobs:
           echo "baseline commit: $base"
 
           if git diff --name-only "$base" HEAD \
-             | grep -qE '^(src/|benchmarks/|examples/|Cargo\.toml$|build\.rs$|requirements/bench\.txt$|\.github/workflows/perf-gate\.yml$)'; then
+             | grep -qE '^(src/|codegen/|benchmarks/|examples/|Cargo\.toml$|build\.rs$|requirements/bench\.txt$|\.github/workflows/perf-gate\.yml$)'; then
             touched=true
           else
             touched=false

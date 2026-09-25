@@ -11,3 +11,10 @@ include!(concat!(env!("OUT_DIR"), "/case_folding_phf.rs"));
 pub fn lookup(ch: char) -> Option<&'static str> {
     CASE_FOLD.get(&ch).copied()
 }
+
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![T::CharStr("CASE_FOLD", &CASE_FOLD)]
+}

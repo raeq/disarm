@@ -41,6 +41,13 @@ pub fn lookup_hanzi_toned(ch: char) -> Option<&'static str> {
         .or_else(|| lookup_hanzi(ch))
 }
 
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![T::CharStr("HANZI_PINYIN_TONED", &HANZI_PINYIN_TONED)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

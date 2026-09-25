@@ -115,3 +115,17 @@ pub fn resolve_map(target_script: &str) -> Option<&'static phf::Map<char, &'stat
         _ => None,
     }
 }
+
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![
+        T::CharStr("DIGIT_TR39", &DIGIT_TR39),
+        T::CharStr("TO_ARABIC", &TO_ARABIC),
+        T::CharStr("TO_CYRILLIC", &TO_CYRILLIC),
+        T::CharStr("TO_HEBREW", &TO_HEBREW),
+        T::CharStr("TO_LATIN", &TO_LATIN),
+        T::CharSet("UPSTREAM_CONFUSABLE_SOURCES", &UPSTREAM_CONFUSABLE_SOURCES),
+    ]
+}

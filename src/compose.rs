@@ -406,6 +406,13 @@ fn excluded_prefix(s: &str) -> Option<(char, usize)> {
     })
 }
 
+/// This module's generated `phf` tables, for [`crate::phf_integrity`].
+#[cfg(test)]
+pub(crate) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    use crate::phf_integrity::Table as T;
+    vec![T::StrChar("EXCLUDED_COMPOSITIONS", &EXCLUDED_COMPOSITIONS)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

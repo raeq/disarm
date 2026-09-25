@@ -1045,6 +1045,22 @@ pub const fn max_emoji_seq_len() -> usize {
     emoji_data::MAX_EMOJI_SEQ_LEN
 }
 
+/// Every generated `phf` table under `tables`, for [`crate::phf_integrity`]: the
+/// submodules' own lists, several of them private to this module, and `WORD_JOINERS`.
+#[cfg(test)]
+pub(crate) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
+    let mut tables = vec![crate::phf_integrity::Table::CharSet(
+        "WORD_JOINERS",
+        &WORD_JOINERS,
+    )];
+    tables.extend(case_folding_data::phf_tables());
+    tables.extend(confusables_data::phf_tables());
+    tables.extend(emoji_data::phf_tables());
+    tables.extend(hanzi_pinyin::phf_tables());
+    tables.extend(transliteration::phf_tables());
+    tables
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

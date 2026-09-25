@@ -156,8 +156,10 @@ fn any_mark_run(text: &str, mut visit: impl FnMut(Option<char>, &str) -> bool) -
     crate::normalize::mark_runs(text).any(|run| visit(run.base, &text[run.start..run.end]))
 }
 
-/// `text` with the NFD of each mark run replaced by `rewrite(base, nfd_of_run, out)`'s
-/// output: the whole text's NFD, rewritten run by run, without decomposing the rest.
+/// `text` with each mark run replaced by what `rewrite(base, run, out)` appends to `out`:
+/// the whole text's NFD, rewritten run by run, without decomposing the rest. `run` is the
+/// run as written, not decomposed; the callers take its NFD themselves, which is the part
+/// of the whole text's NFD that falls in the run.
 fn rewrite_mark_runs(
     text: &str,
     mut rewrite: impl FnMut(Option<char>, &str, &mut String),

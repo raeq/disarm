@@ -105,8 +105,13 @@ def test_the_gate_keeps_symbols_on_both_sides_and_checks_the_result() -> None:
 
 def _push_paths() -> list[str]:
     """The `on.push.paths` globs, in order."""
-    block = WORKFLOW.read_text().split("  push:", 1)[1].split("\nconcurrency:", 1)[0]
-    return re.findall(r'^\s+- "([^"]+)"$', block, re.MULTILINE)
+    text = WORKFLOW.read_text()
+    assert "  push:" in text, "the `on.push` trigger has moved"
+    block = text.split("  push:", 1)[1]
+    assert "\nconcurrency:" in block, "`concurrency:` no longer follows the triggers"
+    paths = re.findall(r'^\s+- "([^"]+)"$', block.split("\nconcurrency:", 1)[0], re.MULTILINE)
+    assert paths, "no `on.push.paths` entries found"
+    return paths
 
 
 def _relevant_alternatives() -> list[str]:

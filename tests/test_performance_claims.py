@@ -15,7 +15,7 @@ Two kinds of check, mirroring exactly what the doc-test blocks did:
   ``requirements/bench.txt`` are installed — ``perf-gate.yml`` and a local
   ``pip install -e .[bench]`` — and ``skip`` cleanly otherwise, exactly as the
   old blocks did via ``pytest.skip`` on ``ImportError``). The asserted floors are
-  deliberately far looser than the published figures (~11–116×): a loose floor
+  deliberately far looser than the published figures (~2.4–116×): a loose floor
   proves *direction and order of magnitude* on unknown, possibly loaded CI
   hardware without flaking, while the precise numbers live on the page and the
   ``perf-results`` branch.

@@ -1,7 +1,7 @@
 # Architecture: Performance
 
 The optimization strategies behind disarm's speed against pure-Python alternatives: 24–116×
-Unidecode on Latin-script text, ~13× on Cyrillic, Greek, Arabic and Hebrew, and ~2.4–4.8× on
+Unidecode on Latin-script text, ~13× on Cyrillic, Greek, Arabic, Persian and Hebrew, and ~2.4–4.8× on
 the Indic and Southeast Asian scripts, whose romanization does work Unidecode does not
 ([Performance](../performance.md) has the figures and the machine they were recorded on).
 

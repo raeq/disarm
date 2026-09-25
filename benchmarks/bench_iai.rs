@@ -49,6 +49,17 @@ fn homoglyph_doc() -> String {
     persona_corpus::build_doc("Москва раураl Ελλάδα gооgle аррlе micrоsоft Αθήνα ")
 }
 
+/// The ASCII document with one homoglyph at its end: a check that finds nothing until the
+/// last character, so it pays for the whole scan. `is_confusable` on `homoglyph_doc`
+/// returned at the first character, about 500 instructions, most of the estimate cold
+/// instruction-cache misses, so an unrelated change to code layout moved it past the
+/// gate's 5% (#1066: +7.3% on three fewer instructions).
+fn late_hit_doc() -> String {
+    let mut text = doc("ascii_doc");
+    text.push('\u{430}');
+    text
+}
+
 /// A short, typical per-call input (a name or a field), where call overhead dominates.
 fn short_unicode() -> String {
     persona_corpus::SHORT_UNICODE.to_owned()
@@ -187,7 +198,7 @@ fn find_confusables_doc(text: String) -> usize {
 
 #[library_benchmark]
 #[bench::ascii(doc("ascii_doc"))]
-#[bench::homoglyph(homoglyph_doc())]
+#[bench::late_hit(late_hit_doc())]
 fn is_confusable_doc(text: String) -> bool {
     black_box(is_confusable(black_box(&text), TargetScript::Latin))
 }

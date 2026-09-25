@@ -31,14 +31,19 @@ endgroup() {
 # kind of finding (the artifact's prefix: crash, timeout, oom, leak), what the target
 # asserted, and the input itself in Base64. The job log runs to 50,000 lines and the
 # uploaded artifact is behind a download, while an annotation is one API call away.
-# `%`, CR and LF are escaped as workflow commands require.
+# `%`, CR and LF are escaped as workflow commands require. Every command in it is
+# guarded, because it runs under `set -e` and a failure here would stop the other targets.
 report() {
     local t="$1" log="$2" artifact why input
     artifact="$(ls -t "fuzz/artifacts/$t"/* 2>/dev/null | head -n 1 || true)"
     why="$(grep -m 1 -A 4 -E "panicked at|ERROR: (libFuzzer|AddressSanitizer|LeakSanitizer)" "$log" \
         | cut -c 1-400 | tr '\n' ' ' || true)"
     input=""
-    [ -n "$artifact" ] && input="$(base64 -w 0 "$artifact")"
+    # Portable (GNU and BSD `base64` both read stdin and wrap differently, so drop the
+    # newlines), and never fatal: reporting a finding must not end the run.
+    if [ -n "$artifact" ]; then
+        input="$(base64 <"$artifact" 2>/dev/null | tr -d '\n' || true)"
+    fi
     local msg="$t failed: ${why:-see the job log}; artifact ${artifact:-none}; input (base64) ${input:-none}"
     msg="${msg//%/%25}"
     msg="${msg//$'\r'/%0D}"

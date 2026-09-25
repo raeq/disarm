@@ -197,6 +197,10 @@ jobs:
         if: needs.changes.outputs.perf == 'true'
         env:
           PYO3_PYTHON: python3
+          # Keep benchmark symbols on BOTH builds. Cargo.toml's [profile.bench] does this
+          # for the PR, but a merge-base from before it inherits release's `strip = true`,
+          # and a stripped benchmark measures 0 (see scripts/check_iai_nonzero.py).
+          CARGO_PROFILE_BENCH_STRIP: "false"
         run: |
           set -euo pipefail
           # #832: taken from the `changes` job rather than recomputed. On a push to
@@ -221,13 +225,16 @@ jobs:
             echo "::endgroup::"
             echo "::group::PR vs baseline (fail on >${CYCLES_LIMIT} regression)"
             cargo bench --no-default-features --bench bench_iai -- \
-              --baseline=base --callgrind-limits="${CYCLES_LIMIT}"
+              --baseline=base --callgrind-limits="${CYCLES_LIMIT}" --save-summary=json
             echo "::endgroup::"
           else
             echo "::notice::bench_iai is not present on the merge-base — bootstrap run."
             echo "Establishing the gate: running the bench once to confirm it executes."
-            cargo bench --no-default-features --bench bench_iai -- --save-baseline=pr
+            cargo bench --no-default-features --bench bench_iai -- --save-baseline=pr \
+              --save-summary=json
           fi
+          # A 0 on either side is no measurement, and 0 against 0 reads as "No change".
+          python3 scripts/check_iai_nonzero.py target/iai
 
   # ── Informational signals (V13–V15, V3, V5, V19) — never blocks the PR ───
   # NOT a required check, so a clean job-level skip on non-perf PRs is fine.

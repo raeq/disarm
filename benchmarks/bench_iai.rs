@@ -6,10 +6,14 @@
 //! (and so safe to hard-fail on). Cache simulation (not raw instruction count) is
 //! the metric, so cache-layout work (cluster C / #237) is visible to the gate.
 //!
-//! Doc-scale subset only (gate at doc scale — short-string numbers are
-//! FFI-dominated and must never gate a core cluster). The CI workflow runs this
-//! against both the PR and its merge-base and compares **directionally**
-//! (regression-only).
+//! Mostly doc scale: the 16 KiB persona documents are where a core cluster's cost shows.
+//! The `short` cases in `entry_points` are gated too, deliberately. The rule they
+//! replace ("short-string numbers are FFI-dominated and must never gate a core cluster")
+//! is right for the Python and criterion benches, where a short call is mostly binding
+//! overhead; here there is no binding, so a short input measures the core's own per-call
+//! setup, which the documents cannot see (`canonicalize` spent ~35K instructions on a
+//! 12-character name when this was written). The CI workflow runs this against both the
+//! PR and its merge-base and compares **directionally** (regression-only).
 //!
 //! Requires Valgrind, so it only *runs* in Linux CI; it *compiles* anywhere
 //! (the macros emit the harness; Valgrind is invoked at run time, not build time).

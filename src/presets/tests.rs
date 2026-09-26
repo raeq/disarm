@@ -1078,7 +1078,13 @@ fn every_zalgo_cap_runs_after_its_invisible_strip() {
         // it exactly as it hides the count from the cap — and a gate that names only
         // `Step::Zalgo(` would have gone on passing while a new step reintroduced
         // the bug it exists to catch.
-        for step in ["Step::Zalgo(", "Step::DropRepeatedMarks"] {
+        // `ZalgoIfOver` is the same cap, run a second time after a fold (#1072), and
+        // counts runs the same way, so it owes the same ordering.
+        for step in [
+            "Step::Zalgo(",
+            "Step::ZalgoIfOver(",
+            "Step::DropRepeatedMarks",
+        ] {
             let Some(z) = body.find(step) else {
                 continue;
             };
@@ -1115,9 +1121,10 @@ fn every_zalgo_cap_runs_after_its_invisible_strip() {
         }
     }
     assert!(
-        checked >= 6,
+        checked >= 7,
         "expected the cap AND the repeat rule in each of canonicalize, \
-         canonicalize_strict and sort_key; found {checked} — has the parser drifted?",
+         canonicalize_strict and sort_key, and canonicalize's second cap; found \
+         {checked} — has the parser drifted?",
     );
 }
 

@@ -171,3 +171,116 @@ def test_the_manifests_do_not_assert_the_disproved_property(manifest: str) -> No
         f"{manifest} claims it builds against the PUBLISHED core without the qualification "
         "#830 established"
     )
+
+
+# ---------------------------------------------------------------------------
+# The exact core, not any 0.MINOR.* (0.17.1)
+# ---------------------------------------------------------------------------
+#
+# The poll above waited for any non-yanked `0.MINOR.*`. On a minor release none exists
+# until publish.yml pushes it, so the wait was real. On a patch release the previous
+# patch already satisfies it: 0.17.1's wait-for-core passed in one request at 12:55,
+# the Node and JVM builds compiled `disarm v0.17.0`, npm and Maven published them at
+# 12:59-13:00, and core 0.17.1 reached crates.io at 13:03. The fix the release existed
+# for was in neither artifact. The gem did not publish only because its specs happened
+# to exercise that fix.
+
+#: Commands that compile the glue against whichever core the lockfile resolves.
+_COMPILES = ("cargo check", "cargo build", "napi build", "rake compile")
+_CROSS_GEM = "oxidize-rb/actions/cross-gem@"
+
+
+def _jobs(name: str) -> dict:
+    return yaml.safe_load(_text(name))["jobs"]
+
+
+def _root_version() -> str:
+    import tomllib
+
+    return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+
+
+def _compiles(step: dict) -> bool:
+    run = step.get("run") or ""
+    return any(command in run for command in _COMPILES) or str(step.get("uses", "")).startswith(
+        _CROSS_GEM
+    )
+
+
+def _pins(step: dict) -> bool:
+    return "pin_published_core.sh" in (step.get("run") or "")
+
+
+@pytest.mark.parametrize("name", PUBLISHERS)
+def test_the_poll_waits_for_the_version_this_ref_releases(name: str) -> None:
+    """The version expression, run for real, must yield the root crate's version.
+
+    Executed rather than pattern-matched: the old poll also read "a version" out of a
+    manifest, and read the wrong one.
+    """
+    import subprocess
+
+    job = _wait_for_core(name)
+    lines = [line.strip() for line in job.splitlines() if line.strip().startswith('want="$(')]
+    assert len(lines) == 1, f"{name}'s poll does not compute the version it waits for"
+    result = subprocess.run(
+        ["bash", "-c", lines[0] + '\nprintf %s "$want"'],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={"GITHUB_WORKSPACE": str(ROOT), "PATH": "/usr/bin:/bin"},
+    )
+    assert result.stdout == _root_version(), (
+        f"{name}'s poll waits for {result.stdout!r}, but this ref releases {_root_version()!r}"
+    )
+    assert 'grep -qxF "$want"' in job, (
+        f"{name}'s poll does not match the version exactly; a prefix or pattern match "
+        "lets the previous patch through"
+    )
+
+
+@pytest.mark.parametrize("name", PUBLISHERS)
+def test_every_compile_on_the_publish_path_is_pinned_first(name: str) -> None:
+    """An exact wait is not an exact build: the build resolves the lockfile itself.
+
+    Every step that compiles the glue must come after a step that pins the lockfile to
+    the release's core, in the same job.
+    """
+    compiling = 0
+    for job_name, job in _jobs(name).items():
+        pinned = False
+        for step in job.get("steps", []):
+            if _pins(step):
+                pinned = True
+            elif _compiles(step):
+                compiling += 1
+                assert pinned, (
+                    f"{name}: job `{job_name}` compiles "
+                    f"({step.get('name') or step.get('run') or step.get('uses')}) with no "
+                    "pin_published_core.sh step before it, so it builds against whatever "
+                    "0.MINOR.* is newest when it runs"
+                )
+    assert compiling, f"{name}: no compiling step found; the check above checked nothing"
+
+
+def test_the_pin_script_is_executable() -> None:
+    script = ROOT / "scripts" / "pin_published_core.sh"
+    assert script.exists()
+    assert script.stat().st_mode & 0o111, "scripts/pin_published_core.sh is not executable"
+
+
+def test_the_npm_publish_job_compiles_nothing() -> None:
+    """It ran `napi build` for the loader, which also compiles the addon.
+
+    A debug build for the runner's platform, written over the release prebuild: every
+    npm release through 0.17.1 shipped a debug linux-x64 addon of about 40 MB, built
+    against whichever core resolved when the publish job ran.
+    """
+    steps = _jobs("publish-node.yml")["publish"]["steps"]
+    for step in steps:
+        assert not _compiles(step), f"the npm publish job compiles: {step}"
+    runs = "\n".join(step.get("run") or "" for step in steps)
+    assert "sha256sum -c" in runs, (
+        "the npm publish job no longer verifies that the prebuilds it publishes are the "
+        "ones the build matrix made"
+    )

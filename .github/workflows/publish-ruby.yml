@@ -87,6 +87,11 @@ jobs:
           rustup-toolchain: stable
           bundler-cache: true
           cargo-cache: true
+      - name: Pin the lockfile to the core this ref releases
+        # Publish path only: the validation build above redirects to the in-repo core.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash ../../scripts/pin_published_core.sh .
       - run: bundle exec rake compile
       - run: bundle exec rake spec
       # Verify the docs' Ruby `# =>` examples against the freshly-built binding
@@ -114,22 +119,26 @@ jobs:
         with:
           persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
-        # This job has no working-directory default, so the manifest is referenced
-        # by full path — the extension crate's, not the gem-root workspace.
+        # The EXACT core this ref releases: the root Cargo.toml's version, not any
+        # 0.MINOR.* the glue pin allows. On a patch release the previous patch already
+        # satisfies the pin, so polling for the pin passed at once and 0.17.1's JVM
+        # and npm artifacts were built against core 0.17.0; this gem's specs caught
+        # it only because they happened to test the fix.
         shell: bash
         run: |
-          req="$(sed -nE 's/.*package = "disarm", version = "([0-9]+\.[0-9]+)".*/\1/p' bindings/ruby/ext/disarm/Cargo.toml | head -n1)"
-          if [ -z "$req" ]; then echo "::error::could not parse disarm_core version from bindings/ruby/ext/disarm/Cargo.toml"; exit 1; fi
-          esc="${req//./\\.}"
-          echo "Waiting for a non-yanked disarm $req.* on the crates.io sparse index…"
-          deadline=$((SECONDS + 600))
-          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qE "^${esc}\.[0-9]+$"; do
+          want="$(sed -n '/^\[package\]/,/^\[/s/^version = "\([^"]*\)".*/\1/p' "$GITHUB_WORKSPACE/Cargo.toml" | head -n1)"
+          if [ -z "$want" ]; then echo "::error::could not read the [package] version from Cargo.toml"; exit 1; fi
+          echo "Waiting for a non-yanked disarm $want on the crates.io sparse index…"
+          # publish.yml pushes the core after Tier 3 and the wheels: about 8 minutes
+          # for 0.17.1, so 10 was too close to the edge once the wait became exact.
+          deadline=$((SECONDS + 1800))
+          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qxF "$want"; do
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::disarm $req.* did not appear on crates.io within 10 minutes"; exit 1
+              echo "::error::disarm $want did not appear on crates.io within 30 minutes"; exit 1
             fi
             echo "  not yet; retrying in 15s…"; sleep 15
           done
-          echo "disarm $req.* is available on crates.io."
+          echo "disarm $want is available on crates.io."
 
       # #830: the poll above proves a 0.MINOR.* EXISTS on crates.io. It does not prove
       # the glue AT THIS REF can build against it, and between releases it usually
@@ -151,6 +160,9 @@ jobs:
           # all. Enabling the cache here would fail the gate before it reached the check
           # it exists to run.
           bundler-cache: false
+      - name: Pin the lockfile to the core this ref releases
+        shell: bash
+        run: bash scripts/pin_published_core.sh bindings/ruby
       - name: The published core must be one this glue compiles against (#830)
         shell: bash
         working-directory: bindings/ruby/ext/disarm
@@ -196,6 +208,11 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
+      # The cross-gem container mounts bindings/ruby, so it builds from this
+      # gem-root lockfile.
+      - name: Pin the lockfile to the core this ref releases
+        shell: bash
+        run: bash scripts/pin_published_core.sh bindings/ruby
       - uses: oxidize-rb/actions/cross-gem@ec90b4aa48795518d79be3f5cc478d1d7ccd02a8  # v1.5.0
         with:
           platform: ${{ matrix.platform }}

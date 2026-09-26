@@ -64,6 +64,11 @@ pub(super) enum Step {
     StripZeroWidth,
     CollapseWs,
     Zalgo(usize),
+    /// [`Step::Zalgo`] that leaves text it would not cut as it is, rather than
+    /// normalizing it to NFC. For a second cap after a step that can add a mark to a
+    /// stack, where text with no stack over the cap should come out unchanged: nearly
+    /// every call is then one scan.
+    ZalgoIfOver(usize),
     /// Drop a nonspacing mark that repeats on one base (UTS #39 §5.4, #835).
     ///
     /// Separate from [`Step::Zalgo`] on purpose: the cap is paired with `is_zalgo` by
@@ -368,6 +373,13 @@ pub(super) fn apply_into(
             Ok(true)
         }
         Step::Zalgo(cap) => {
+            zalgo::strip_zalgo_into(input, cap, out);
+            Ok(true)
+        }
+        Step::ZalgoIfOver(cap) => {
+            if !zalgo::exceeds_combining_run(input, cap) {
+                return Ok(false);
+            }
             zalgo::strip_zalgo_into(input, cap, out);
             Ok(true)
         }

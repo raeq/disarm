@@ -482,3 +482,25 @@ fn every_preset_takes_every_mark_of_a_fold_cycle() {
         }
     }
 }
+
+// -- 10. canonicalize: the fold moves a mark past the cap ------------------------------
+
+/// Found on 2026-09-26 by the `presets` target. The cap (three marks of one class on a
+/// base) ran before the confusable fold, and the fold turned `ģ` (a cedilla, below) into
+/// `ġ` (a dot, above): `ǧ` + U+0327 with three marks above kept all three, and then the
+/// `g` carried four above, which the next call cut. Only `numeric`: the other policies
+/// fold before the cap as well.
+#[test]
+fn canonicalize_caps_a_mark_the_fold_moved() {
+    use disarm::api::canonicalize_with;
+    let found = "\u{1E7}\u{327}\u{367}\u{327}\u{327}\u{327}\u{303}";
+    for policy in [
+        DigitPolicy::Numeric,
+        DigitPolicy::Tr39,
+        DigitPolicy::Preserve,
+    ] {
+        let once = canonicalize_with(found, policy).unwrap().into_owned();
+        assert_eq!(once, "\u{121}\u{30C}\u{367}", "{policy}");
+        assert_eq!(canonicalize_with(&once, policy).unwrap(), once, "{policy}");
+    }
+}

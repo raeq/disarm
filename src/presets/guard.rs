@@ -149,7 +149,7 @@ impl Actionable {
                     m.nfkc = true;
                     m.marks = true; // normalization composes/reorders combining marks
                 }
-                Step::Zalgo(cap) => {
+                Step::Zalgo(cap) | Step::ZalgoIfOver(cap) => {
                     m.marks = true; // a run of standalone marks can exceed the cap
                     m.zalgo_cap = Some(cap);
                 }

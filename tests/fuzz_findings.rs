@@ -7,10 +7,17 @@
 //! `docs/architecture/testing-guarantees.md` under *Fuzzing* for the list.
 
 use disarm::api::{
-    catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables,
-    normalize_confusables, sanitize_filename, search_key, search_key_with, slugify, sort_key_with,
-    DigitPolicy, NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript, Transliterate,
+    catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables, is_confusable,
+    normalize_confusables, normalize_confusables_with, sanitize_filename, search_key,
+    search_key_with, sort_key_with, try_slugify, DigitPolicy, NormalizationForm, OnUnknown,
+    Platform, SlugConfig, TargetScript, Transliterate,
 };
+
+/// `try_slugify` for the configs these tests build, every one with a valid `lang` (or
+/// none): the slug it returns is the one the deprecated infallible `slugify` returned.
+fn slugify(text: &str, config: &SlugConfig) -> String {
+    try_slugify(text, config).expect("a valid lang")
+}
 
 fn nfc(s: &str) -> String {
     disarm::api::normalize(s, NormalizationForm::Nfc)
@@ -94,7 +101,7 @@ fn assert_located(text: &str) {
         }
     }
     for t in [Transliterate::new(), Transliterate::new().lang("ru")] {
-        for u in t.find_untranslatable(text) {
+        for u in t.try_find_untranslatable(text).unwrap() {
             let rest = &text[u.offset..];
             assert!(rest.starts_with(u.ch), "{u:?} in {text:?}");
         }
@@ -110,7 +117,9 @@ fn a_mark_that_composes_with_nothing_is_at_its_own_offset() {
         "{found:?}"
     );
     // A variation selector is at its own offset, not its base's.
-    let found = Transliterate::new().find_untranslatable("x\u{FE0F}");
+    let found = Transliterate::new()
+        .try_find_untranslatable("x\u{FE0F}")
+        .unwrap();
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!((found[0].ch, found[0].offset), ('\u{FE0F}', 1));
 }
@@ -164,17 +173,26 @@ fn every_report_points_at_its_character() {
 #[test]
 fn a_partial_compatibility_recovery_is_reported() {
     let t = Transliterate::new();
-    assert_eq!(t.run("\u{1F240}"), "[?]ben[?]");
-    let found = t.find_untranslatable("x\u{1F240}y");
+    assert_eq!(t.try_run("\u{1F240}").unwrap(), "[?]ben[?]");
+    let found = t.try_find_untranslatable("x\u{1F240}y").unwrap();
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!((found[0].ch, found[0].offset), ('\u{1F240}', 1));
     // Reported exactly when the policies disagree on it.
-    let ignore = t.clone().on_unknown(OnUnknown::Ignore).run("\u{1F240}");
-    let preserve = t.clone().on_unknown(OnUnknown::Preserve).run("\u{1F240}");
+    let ignore = t
+        .clone()
+        .on_unknown(OnUnknown::Ignore)
+        .try_run("\u{1F240}")
+        .unwrap();
+    let preserve = t
+        .clone()
+        .on_unknown(OnUnknown::Preserve)
+        .try_run("\u{1F240}")
+        .unwrap();
     assert_ne!(ignore, preserve);
     // A compatibility character recovered whole is still not reported.
     assert!(t
-        .find_untranslatable("\u{FB01}\u{1D400}\u{337F}")
+        .try_find_untranslatable("\u{FB01}\u{1D400}\u{337F}")
+        .unwrap()
         .is_empty());
 }
 
@@ -191,15 +209,20 @@ fn nothing_reported_means_the_policies_agree() {
             continue;
         };
         let s = c.to_string();
-        if !t.find_untranslatable(&s).is_empty() {
+        if !t.try_find_untranslatable(&s).unwrap().is_empty() {
             continue;
         }
-        let ignore = t.clone().on_unknown(OnUnknown::Ignore).run(&s);
-        let preserve = t.clone().on_unknown(OnUnknown::Preserve).run(&s);
+        let ignore = t.clone().on_unknown(OnUnknown::Ignore).try_run(&s).unwrap();
+        let preserve = t
+            .clone()
+            .on_unknown(OnUnknown::Preserve)
+            .try_run(&s)
+            .unwrap();
         let replace = t
             .clone()
             .on_unknown(OnUnknown::Replace("\u{1}".into()))
-            .run(&s);
+            .try_run(&s)
+            .unwrap();
         assert_eq!(ignore, preserve, "U+{cp:04X}");
         assert_eq!(ignore, replace, "U+{cp:04X}");
     }
@@ -357,5 +380,199 @@ fn a_key_is_its_own_key_across_a_stripped_control() {
     assert_eq!(
         search_key("\u{16D67}\0\u{16D67}", None).unwrap(),
         "\u{16D68}"
+    );
+}
+
+// -- 9. normalize_confusables: a fold cycle outlasted the pass cap -------------------
+
+/// Found on 2026-09-26. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each
+/// pass takes one cedilla, and the loop stopped after eight. Nine cedillas tripped its
+/// debug assertion; from ten, the fold was not idempotent and what it returned was still
+/// confusable. The `c` and `i` + U+0309 cycles are the other two the tables hold.
+#[test]
+fn a_fold_cycle_takes_every_mark_however_many() {
+    for (base, mark) in [("C", "\u{327}"), ("c", "\u{327}"), ("i", "\u{309}")] {
+        for n in [9, 10, 64, 10_000] {
+            let text = format!("{base}{}", mark.repeat(n));
+            for policy in [
+                DigitPolicy::Numeric,
+                DigitPolicy::Tr39,
+                DigitPolicy::Preserve,
+            ] {
+                let once = normalize_confusables_with(&text, TargetScript::Latin, policy);
+                assert_eq!(once, base, "{base} + {n} marks ({policy})");
+            }
+            assert!(!is_confusable(
+                &normalize_confusables(&text, TargetScript::Latin),
+                TargetScript::Latin
+            ));
+        }
+    }
+    // The reported input, with a mark of another class after the run.
+    let crash = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\
+                 \u{327}\u{32A}\u{327}\u{327}\u{327}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+                 \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}";
+    let once = normalize_confusables(crash, TargetScript::Latin);
+    assert_eq!(normalize_confusables(&once, TargetScript::Latin), once);
+    assert!(once.contains("C\u{32A}\u{32A}\u{32C}"), "{once:?}");
+}
+
+/// The same cycles in the presets' and the pipeline's own fold loops, which iterate the
+/// fold and NFC (or NFKC, with a case fold in `skeleton_key`) under the same cap: the
+/// nightly run's input made `canonicalize_strict` return `Ç` and then `C`, and
+/// `skeleton_key` return `ç` and then `c`.
+#[test]
+fn every_preset_takes_every_mark_of_a_fold_cycle() {
+    use disarm::api as d;
+    let crash = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\
+                 \u{327}\u{32A}\u{327}\u{327}\u{327}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+                 \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}";
+    let mut inputs = vec![crash.to_owned()];
+    for (base, mark) in [("C", "\u{327}"), ("c", "\u{327}"), ("i", "\u{309}")] {
+        for n in [9, 10, 64, 2_000] {
+            inputs.push(format!("{base}{}", mark.repeat(n)));
+        }
+    }
+    let profiles = d::list_profiles();
+    for s in &inputs {
+        let head: String = s.chars().take(12).collect();
+        for policy in [
+            DigitPolicy::Numeric,
+            DigitPolicy::Tr39,
+            DigitPolicy::Preserve,
+        ] {
+            let builders: [(&str, &dyn Fn(&str) -> String); 7] = [
+                ("canonicalize", &|t| {
+                    d::canonicalize_with(t, policy).unwrap().into_owned()
+                }),
+                ("canonicalize_strict", &|t| {
+                    d::canonicalize_strict_with(t, policy).unwrap().into_owned()
+                }),
+                ("strip_obfuscation", &|t| {
+                    d::strip_obfuscation_with(t, policy).unwrap().into_owned()
+                }),
+                ("catalog_key", &|t| {
+                    catalog_key_with(t, None, false, policy)
+                        .unwrap()
+                        .into_owned()
+                }),
+                ("search_key", &|t| {
+                    search_key_with(t, None, policy).unwrap().into_owned()
+                }),
+                ("sort_key", &|t| {
+                    sort_key_with(t, None, policy).unwrap().into_owned()
+                }),
+                ("skeleton_key", &|t| {
+                    d::skeleton_key(t, policy).unwrap().into_owned()
+                }),
+            ];
+            for (name, f) in builders {
+                let once = f(s);
+                assert_eq!(f(&once), once, "{name} ({policy}) on {head:?}...");
+            }
+        }
+        for profile in &profiles {
+            let pipe = d::get_pipeline(profile).unwrap();
+            let once = pipe.process(s).unwrap();
+            assert_eq!(
+                pipe.process(&once).unwrap(),
+                once,
+                "{profile} on {head:?}..."
+            );
+        }
+    }
+}
+
+// -- 10. canonicalize: the fold moves a mark past the cap ------------------------------
+
+/// Found on 2026-09-26 by the `presets` target. The cap (three marks of one class on a
+/// base) ran before the confusable fold, and the fold turned `ģ` (a cedilla, below) into
+/// `ġ` (a dot, above): `ǧ` + U+0327 with three marks above kept all three, and then the
+/// `g` carried four above, which the next call cut. Only `numeric`: the other policies
+/// fold before the cap as well.
+#[test]
+fn canonicalize_caps_a_mark_the_fold_moved() {
+    use disarm::api::canonicalize_with;
+    let found = "\u{1E7}\u{327}\u{367}\u{327}\u{327}\u{327}\u{303}";
+    for policy in [
+        DigitPolicy::Numeric,
+        DigitPolicy::Tr39,
+        DigitPolicy::Preserve,
+    ] {
+        let once = canonicalize_with(found, policy).unwrap().into_owned();
+        assert_eq!(once, "\u{121}\u{30C}\u{367}", "{policy}");
+        assert_eq!(canonicalize_with(&once, policy).unwrap(), once, "{policy}");
+    }
+}
+
+// -- 11. slugify: a separator of word characters exposed a joiner ---------------------
+
+/// Found on 2026-09-26 by the `slugify` target. Under `allow_unicode` a joiner is kept
+/// only between two kept characters (#711), and the edges are trimmed of one, but only
+/// before the trailing separator is taken off. A separator the caller makes of word
+/// characters can match the end of a word, so taking it off exposed the joiner before
+/// it: `"ab\u{200D}6"` with `separator = "6"` gave `ab\u{200D}`. The stopword filter,
+/// which splits on the separator again, and a truncation could each end the slug on the
+/// same kind of spot, inside a word, just after a joiner.
+#[test]
+fn a_word_character_separator_leaves_no_joiner_at_the_edge() {
+    let joined =
+        |s: &str| s.starts_with(['\u{200C}', '\u{200D}']) || s.ends_with(['\u{200C}', '\u{200D}']);
+    let found = "\u{101D}\u{102D}1\u{200D}\u{20E3}B66\u{FFFD}1\u{200D}66\u{0}6666666666";
+    let mut checked = 0;
+    for sep in ["6", "x", "66", "6x", "ab"] {
+        for joiner in ['\u{200D}', '\u{200C}'] {
+            let inputs = [
+                format!("ab{joiner}{sep}"),
+                format!("ab{joiner}{sep}cd"),
+                format!("a b{joiner}{sep} cd"),
+                format!("ab{joiner}{sep}{joiner}{sep}"),
+                found.to_owned(),
+            ];
+            for input in &inputs {
+                for max_length in 0..=input.len() {
+                    for word_boundary in [false, true] {
+                        // The stopword filter splits on the separator again, and the
+                        // empty word matches an empty piece.
+                        for stopwords in [&[][..], &[""][..]] {
+                            let config = SlugConfig::new()
+                                .with_separator(sep)
+                                .with_allow_unicode(true)
+                                .with_max_length(max_length)
+                                .with_word_boundary(word_boundary)
+                                .with_stopwords(stopwords.iter().copied());
+                            let out = slugify(input, &config);
+                            checked += 1;
+                            assert!(
+                                !joined(&out),
+                                "{out:?} from {input:?}, separator {sep:?}, max_length \
+                                 {max_length}, word_boundary {word_boundary}, stopwords \
+                                 {stopwords:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(checked > 1_000, "{checked}");
+    // The reported configuration exactly.
+    let config = SlugConfig::new()
+        .with_separator("6666")
+        .with_lowercase(false)
+        .with_max_length(63)
+        .with_word_boundary(true)
+        .with_save_order(true)
+        .with_stopwords(["", "", ""])
+        .with_allow_unicode(true);
+    assert!(!joined(&slugify(found, &config)));
+    assert_eq!(
+        slugify(
+            "ab\u{200D}6",
+            &SlugConfig::new()
+                .with_separator("6")
+                .with_allow_unicode(true)
+        ),
+        "ab"
     );
 }

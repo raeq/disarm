@@ -13,7 +13,7 @@ use disarm::{DisarmStr, ErrorMode};
 fn transliterate_convenience_equals_default_builder() {
     assert_eq!(
         api::transliterate("Москва"),
-        Transliterate::new().run("Москва")
+        Transliterate::new().try_run("Москва").unwrap()
     );
     assert_eq!(api::transliterate("Москва"), "Moskva");
     assert_eq!(api::transliterate("hello"), "hello");
@@ -22,9 +22,18 @@ fn transliterate_convenience_equals_default_builder() {
 #[test]
 fn scheme_is_plumbed() {
     // Each scheme builds and runs; ISO 9 differs from the default for Cyrillic.
-    let default = Transliterate::new().scheme(Scheme::Default).run("я");
-    let iso9 = Transliterate::new().scheme(Scheme::StrictIso9).run("я");
-    let gost = Transliterate::new().scheme(Scheme::GostR7034).run("я");
+    let default = Transliterate::new()
+        .scheme(Scheme::Default)
+        .try_run("я")
+        .unwrap();
+    let iso9 = Transliterate::new()
+        .scheme(Scheme::StrictIso9)
+        .try_run("я")
+        .unwrap();
+    let gost = Transliterate::new()
+        .scheme(Scheme::GostR7034)
+        .try_run("я")
+        .unwrap();
     assert_ne!(default, iso9);
     assert!(!default.is_empty() && !iso9.is_empty() && !gost.is_empty());
 }
@@ -34,18 +43,23 @@ fn on_unknown_policies() {
     // U+1F600 has no romanization.
     let s = "a\u{1F600}b";
     assert_eq!(
-        Transliterate::new().on_unknown(OnUnknown::Ignore).run(s),
+        Transliterate::new()
+            .on_unknown(OnUnknown::Ignore)
+            .try_run(s)
+            .unwrap(),
         "ab"
     );
     assert_eq!(
         Transliterate::new()
             .on_unknown(OnUnknown::Replace("_".into()))
-            .run(s),
+            .try_run(s)
+            .unwrap(),
         "a_b"
     );
     assert!(Transliterate::new()
         .on_unknown(OnUnknown::Preserve)
-        .run(s)
+        .try_run(s)
+        .unwrap()
         .contains('\u{1F600}'));
 }
 
@@ -98,7 +112,10 @@ fn slugconfig_builder_methods() {
     let cfg = SlugConfig::default()
         .with_separator("_")
         .with_lowercase(true);
-    assert_eq!(api::slugify("Héllo Wörld", &cfg), "hello_world");
+    assert_eq!(
+        api::try_slugify("Héllo Wörld", &cfg).unwrap(),
+        "hello_world"
+    );
 }
 
 #[test]

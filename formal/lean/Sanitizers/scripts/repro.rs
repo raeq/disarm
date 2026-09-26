@@ -30,19 +30,19 @@ fn main() {
     }
     // Slug findings
     let c = SlugConfig::new().with_separator("-_").with_max_length(2);
-    println!("F5 {:?}", api::slugify("a b", &c));
+    println!("F5 {:?}", api::try_slugify("a b", &c).unwrap());
     let c = SlugConfig::new().with_max_length(9).with_word_boundary(true);
-    println!("F6 {:?}", api::slugify("very long title here", &c));
+    println!("F6 {:?}", api::try_slugify("very long title here", &c).unwrap());
     let c = SlugConfig::new().with_stopwords(["The"]);
-    println!("F7 {:?}", api::slugify("The Fox", &c));
+    println!("F7 {:?}", api::try_slugify("The Fox", &c).unwrap());
     let c = SlugConfig::new().with_separator("").with_stopwords(["b"]);
-    println!("F8 {:?}", api::slugify("abc", &c));
+    println!("F8 {:?}", api::try_slugify("abc", &c).unwrap());
     let c = SlugConfig::new().with_allow_unicode(true);
-    println!("F4 {:?}", api::slugify("\u{24b6}dmin", &c));
-    println!("F10 {:?} {:?}", api::slugify("T\u{308}", &c), api::slugify("\u{1e97}", &c));
-    println!("F11 {:?}", api::slugify("\u{1f82}", &c));
+    println!("F4 {:?}", api::try_slugify("\u{24b6}dmin", &c).unwrap());
+    println!("F10 {:?} {:?}", api::try_slugify("T\u{308}", &c).unwrap(), api::try_slugify("\u{1e97}", &c).unwrap());
+    println!("F11 {:?}", api::try_slugify("\u{1f82}", &c).unwrap());
     let c = SlugConfig::new().with_allow_unicode(true).with_max_length(4);
-    println!("F13 {:?}", api::slugify("a\u{200d}b", &c));
+    println!("F13 {:?}", api::try_slugify("a\u{200d}b", &c).unwrap());
     let d = api::decode_to_utf8(&[0xFE, 0xFF, 0, b'A'], Some("utf-8"), 0.0, true).unwrap();
     println!("F14 {:?} {}", d.text, d.had_errors);
     println!("F15 {:?}", sf("%\u{ff05}\u{ff12}\u{ff25}\u{ff05}\u{ff12}\u{ff25}\u{ff05}\u{ff12}\u{ff26}etc.txt", "_", 255, true));

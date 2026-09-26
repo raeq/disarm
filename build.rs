@@ -10,7 +10,7 @@
 //!   - char sets:      `HEXCODEPOINT`
 
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Write as _;
 use std::fs;
@@ -18,8 +18,20 @@ use std::path::{Path, PathBuf};
 
 #[path = "codegen/arrays.rs"]
 mod arrays;
+#[path = "codegen/bitmap.rs"]
+mod bitmap;
 #[path = "codegen/confusables.rs"]
 mod confusables;
+#[path = "codegen/emoji_candidate.rs"]
+mod emoji_candidate;
+// The library's own romanizer, so the generated table is what it computes.
+#[path = "src/tables/hangul.rs"]
+#[allow(dead_code)]
+mod hangul;
+#[path = "codegen/hangul_table.rs"]
+mod hangul_table;
+#[path = "codegen/norm_boundary.rs"]
+mod norm_boundary;
 #[path = "codegen/phf_tables.rs"]
 mod phf_tables;
 #[path = "codegen/ranges.rs"]
@@ -54,6 +66,18 @@ const CONFUSABLE_TABLES: [(&str, &str, &str); 4] = [
     ("arabic", "confusables_to_arabic.tsv", "TO_ARABIC"),
     ("hebrew", "confusables_to_hebrew.tsv", "TO_HEBREW"),
 ];
+
+/// Append `{ident}_BMP`, the BMP keys of the confusable map `ident`, so a lookup can
+/// answer a miss with one bit instead of a hash probe. Built from the same `entries`
+/// the map is, after every injected row.
+fn emit_key_bitmap(code: &mut String, ident: &str, entries: &BTreeMap<u32, String>) {
+    bitmap::emit_bmp_bitmap(
+        code,
+        &format!("{ident}_BMP"),
+        &format!("U+{{cp}} is a key of `{ident}`"),
+        |c| entries.contains_key(&u32::from(c)),
+    );
+}
 
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -172,7 +196,8 @@ fn main() {
             }
         }
 
-        let code = build_char_str_map(&entries, "TO_LATIN", "");
+        let mut code = build_char_str_map(&entries, "TO_LATIN", "");
+        emit_key_bitmap(&mut code, "TO_LATIN", &entries);
         fs::write(out_dir.join("confusables_phf.rs"), code).unwrap();
 
         // ASCII confusable sources for the preset fast-path guard (#458). The
@@ -211,7 +236,8 @@ fn main() {
             !entries.is_empty(),
             "confusables_to_cyrillic.tsv: expected ≥1 entries, got 0",
         );
-        let code = build_char_str_map(&entries, "TO_CYRILLIC", "");
+        let mut code = build_char_str_map(&entries, "TO_CYRILLIC", "");
+        emit_key_bitmap(&mut code, "TO_CYRILLIC", &entries);
         fs::write(out_dir.join("confusables_to_cyrillic_phf.rs"), code).unwrap();
     }
 
@@ -225,7 +251,8 @@ fn main() {
     for &(script, table, ident) in &CONFUSABLE_TABLES[2..] {
         let entries = read_char_str_tsv(&data_dir.join(table));
         assert!(!entries.is_empty(), "{table}: expected ≥1 entries, got 0");
-        let code = build_char_str_map(&entries, ident, "");
+        let mut code = build_char_str_map(&entries, ident, "");
+        emit_key_bitmap(&mut code, ident, &entries);
         fs::write(
             out_dir.join(format!("confusables_to_{script}_phf.rs")),
             code,
@@ -295,6 +322,11 @@ fn main() {
         )
         .unwrap();
     }
+
+    // --- Normalization-boundary bitmaps ---
+    // Which BMP characters the normalizer can skip, per form, from the same crate that
+    // normalizes (see codegen/norm_boundary.rs and src/normalize.rs).
+    norm_boundary::generate(&out_dir);
 
     // --- Digit-policy overrides (#561) ---
     // The rows where disarm folds a non-Latin digit to the ASCII DIGIT and TR39 folds it
@@ -536,6 +568,10 @@ fn main() {
         fs::write(out_dir.join("emoji_non_emoji_phf.rs"), code).unwrap();
     }
 
+    // The BMP characters a demojize scanner may act on; everything else is copied
+    // without a table probe.
+    emoji_candidate::generate(data_dir, &out_dir);
+
     // Production matcher (#242 item 4): compact code-point trie.
     generate_emoji_trie(
         &data_dir.join("emoji_multi.tsv"),
@@ -558,6 +594,9 @@ fn main() {
         "pub",
     );
 
+    // --- Hangul syllable romanizations, built here rather than on the first call ---
+    hangul_table::generate(&out_dir);
+
     // --- Case Folding (full Unicode CaseFolding.txt) ---
     generate_char_str_map(
         &data_dir.join("case_folding.tsv"),
@@ -565,6 +604,14 @@ fn main() {
         "CASE_FOLD",
         "pub",
     );
+    // Its BMP keys, so a fold answers the common miss (an already-folded character)
+    // with one bit rather than a hash probe.
+    {
+        let entries = read_char_str_tsv(&data_dir.join("case_folding.tsv"));
+        let mut code = String::new();
+        emit_key_bitmap(&mut code, "CASE_FOLD", &entries);
+        fs::write(out_dir.join("case_folding_bmp.rs"), code).unwrap();
+    }
 
     // --- Transliteration: default table (flat BMP array) ---
     {
@@ -709,6 +756,14 @@ fn main() {
         &data_dir.join("emoji_property.tsv"),
         &out_dir.join("emoji_property_ranges.rs"),
         "EMOJI_PROPERTY_RANGES",
+    );
+    // #992: `Emoji=Yes` alone, the base UTS #51 defines an emoji presentation sequence
+    // for. The table above adds `Extended_Pictographic`, which reserves whole blocks, so
+    // a selector after U+2605 BLACK STAR or an unassigned U+1FC00 opened a sequence there.
+    generate_range_set(
+        &data_dir.join("emoji_yes.tsv"),
+        &out_dir.join("emoji_yes_ranges.rs"),
+        "EMOJI_YES_RANGES",
     );
     // #774: the assigned-ness gate in front of the block-range script table.
     generate_range_set(

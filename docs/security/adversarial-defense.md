@@ -166,7 +166,7 @@ its exact signature (e.g. Rust's `normalize_confusables` takes an explicit
 | Fold confusables in a string (TR39) | `normalize_confusables` | NFKC-free, single pass |
 | Maximum deobfuscation (homoglyph + zalgo + invisible + bidi) | `strip_obfuscation` | resolve deletions → NFKC → strip zalgo → strip bidi → strip zero-width → strip invisibles → confusables → strip accents → strip control → collapse → NFC (emoji left in place, #910) |
 | Clean untrusted user input | `canonicalize_strict` | resolve deletions → NFKC → strip bidi → strip zero-width → strip control → strip invisibles → confusables (with the cross-script mark strip) → drop repeated marks → strip zalgo → collapse → NFC |
-| General security cleanup | `canonicalize` | resolve deletions → NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → drop repeated marks → cap marks → NFC → confusables and NFC to a fixed point → drop repeated marks |
+| General security cleanup | `canonicalize` | resolve deletions → NFKC → strip bidi → strip invisibles → strip control/zero-width → collapse → drop repeated marks → cap marks → NFC → confusables and NFC to a fixed point → drop repeated marks → cap marks |
 | Detect (don't transform) | `is_confusable`, `is_mixed_script` | predicate |
 | Check a domain for IDN spoofing | `is_suspicious_hostname` | per-label script + confusable analysis |
 

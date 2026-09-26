@@ -93,8 +93,11 @@ fn e1_registered_replacements_reach_try_run() {
         .unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].offset, 3, "offset into the replaced text");
-    // The infallible forms are the tables alone, as documented.
-    assert_eq!(Transliterate::new().run(&text), text);
+    // The infallible form is the tables alone, as documented. `run` is deprecated
+    // (removed in 1.0); until then this pins what it does.
+    #[allow(deprecated)]
+    let tables_alone = Transliterate::new().run(&text);
+    assert_eq!(tables_alone, text);
     assert!(api::remove_replacement(key).unwrap());
     assert_eq!(Transliterate::new().try_run(&text).unwrap(), text);
     // Nothing changed, so the result borrows the input.

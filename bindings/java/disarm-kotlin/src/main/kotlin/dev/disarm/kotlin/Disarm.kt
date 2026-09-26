@@ -389,3 +389,12 @@ fun String.findUnmappedConfusables(
 fun listScripts(): List<String> = JDisarm.listScripts()
 
 fun listContextLangs(): List<String> = JDisarm.listContextLangs()
+
+/** Every language code `transliterate` accepts as `lang`, sorted (#981). */
+fun listLangs(): List<String> = JDisarm.listLangs()
+
+/** Every policy profile name [getPipeline] accepts, sorted (#981). */
+fun listProfiles(): List<String> = JDisarm.listProfiles()
+
+/** Every language code with a reverse table, from Latin back to the native script (#981). */
+fun reverseLangs(): List<String> = JDisarm.reverseLangs()

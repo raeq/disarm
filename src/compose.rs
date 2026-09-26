@@ -140,7 +140,25 @@ pub(crate) const fn composes_with_preceding_starter(c: char) -> bool {
 /// starter that composes backwards ([`composes_with_preceding_starter`]).
 #[inline]
 fn is_cluster_follower(c: char) -> bool {
+    // Below U+0590 a mark is in one of two sub-blocks and nothing composes backwards
+    // (see `could_compose`), so the common letters skip the property lookup.
+    let u = c as u32;
+    if u < 0x0590 {
+        return (0x0300..=0x036F).contains(&u) || (0x0483..=0x0489).contains(&u);
+    }
     is_combining_mark(c) || composes_with_preceding_starter(c)
+}
+
+/// Can no unit [`composed`] builds continue into `c`? True unless `c` is a cluster
+/// follower or a Hangul vowel or trailing jamo. A string cut before each such `c` folds
+/// piece by piece exactly as it folds whole, which is what the confusables fixed point
+/// relies on to work one span at a time.
+#[inline]
+pub(crate) fn starts_unit(c: char) -> bool {
+    let u = c as u32;
+    !is_cluster_follower(c)
+        && !(HANGUL_V_BASE..=HANGUL_V_LAST).contains(&u)
+        && !(HANGUL_T_FIRST..=HANGUL_T_LAST).contains(&u)
 }
 
 pub(crate) struct Composed<'a> {
@@ -266,7 +284,16 @@ impl Iterator for Composed<'_> {
         // capacity — no per-cluster `String` allocation on mark-heavy input.
         let mut scratch = std::mem::take(&mut self.scratch);
         scratch.clear();
-        scratch.extend(self.text[start..end].nfc());
+        let cluster = &self.text[start..end];
+        // Quick check Yes means the cluster is already NFC, which most are (a consonant
+        // and its vowel sign, a letter and a mark with no precomposed form).
+        if unicode_normalization::is_nfc_quick(cluster.chars())
+            == unicode_normalization::IsNormalized::Yes
+        {
+            scratch.push_str(cluster);
+        } else {
+            scratch.extend(cluster.nfc());
+        }
         self.recompose_excluded(&scratch, start);
         self.scratch = scratch;
         self.attribute(start, end);
@@ -367,13 +394,18 @@ impl Composed<'_> {
     /// `&str` by char boundaries (a fixed stack array of cut points, no `Vec`).
     fn recompose_excluded(&mut self, nfc: &str, start: usize) {
         // Whole-cluster fast path: the common excluded pair resolves in one lookup.
-        if let Some(&precomposed) = EXCLUDED_COMPOSITIONS.get(nfc) {
-            self.pending.push_back((precomposed, start));
-            return;
+        if may_start_excluded(nfc) {
+            if let Some(&precomposed) = EXCLUDED_COMPOSITIONS.get(nfc) {
+                self.pending.push_back((precomposed, start));
+                return;
+            }
         }
         let mut rest = nfc;
         while !rest.is_empty() {
-            if let Some((precomposed, len)) = excluded_prefix(rest) {
+            if let Some((precomposed, len)) = may_start_excluded(rest)
+                .then(|| excluded_prefix(rest))
+                .flatten()
+            {
                 self.pending.push_back((precomposed, start));
                 rest = &rest[len..];
             } else {
@@ -383,6 +415,19 @@ impl Composed<'_> {
                 rest = &rest[ch.len_utf8()..];
             }
         }
+    }
+}
+
+/// Whether some composition-excluded key could be a prefix of `s`: its first two chars
+/// are the first two of a key. Keys are hashed strings, and most clusters (an Indic
+/// consonant and its vowel sign, a Latin letter and an accent) start no key, so asking
+/// this first spares the map probes at nearly every position.
+#[inline]
+fn may_start_excluded(s: &str) -> bool {
+    let mut chars = s.chars();
+    match (chars.next(), chars.next()) {
+        (Some(a), Some(b)) => EXCLUDED_COMPOSITIONS_HEADS.binary_search(&(a, b)).is_ok(),
+        _ => false,
     }
 }
 
@@ -416,6 +461,39 @@ pub(crate) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The heads are what the pre-check assumes: sorted, and a key's own first two chars.
+    #[test]
+    fn every_excluded_key_passes_the_head_check() {
+        assert!(EXCLUDED_COMPOSITIONS_HEADS.windows(2).all(|w| w[0] < w[1]));
+        for key in EXCLUDED_COMPOSITIONS.keys() {
+            assert!(may_start_excluded(key), "{key:?}");
+            assert!(may_start_excluded(&format!("{key}\u{301}x")), "{key:?}");
+        }
+    }
+
+    /// No excluded composition holds a character twice in a row, so a run of one mark
+    /// meets the map at its first and last copy only. The confusables fixed point skips
+    /// the repeats of a fold cycle on that basis (`skip_cycle`).
+    #[test]
+    fn no_excluded_key_repeats_a_character() {
+        for key in EXCLUDED_COMPOSITIONS.keys() {
+            let chars: Vec<char> = key.chars().collect();
+            assert!(chars.windows(2).all(|w| w[0] != w[1]), "{key:?}");
+        }
+    }
+
+    #[test]
+    fn the_follower_range_is_the_follower_rule() {
+        for c in (0u32..0x11_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                is_cluster_follower(c),
+                is_combining_mark(c) || composes_with_preceding_starter(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
+        }
+    }
 
     fn chars(text: &str) -> Vec<char> {
         composed(text).map(|(c, _)| c).collect()

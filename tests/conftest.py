@@ -347,6 +347,9 @@ def _step_tuple(name: str, payload: str) -> tuple[str, str | None]:
         return ("strip_invisibles", {"COMPARISON_STRIP": "comparison"}.get(payload, "rendering"))
     if name == "Zalgo":
         return ("strip_zalgo", "max_marks=0" if payload == "0" else None)
+    if name == "ZalgoIfOver":
+        # The same cap; it only leaves text it would not cut unrenormalized.
+        return ("strip_zalgo", None)
     if name == "Transliterate":
         return ("transliterate", None)
     if name == "Demojize":

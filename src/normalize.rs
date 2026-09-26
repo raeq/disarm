@@ -60,14 +60,236 @@ pub(crate) fn normalize_into(
         out.push_str(text);
         return Ok(());
     }
-    match form {
-        "NFC" => out.extend(text.nfc()),
-        "NFD" => out.extend(text.nfd()),
-        "NFKC" => out.extend(text.nfkc()),
-        "NFKD" => out.extend(text.nfkd()),
+    let form = match form {
+        "NFC" => Form::Nfc,
+        "NFD" => Form::Nfd,
+        "NFKC" => Form::Nfkc,
+        "NFKD" => Form::Nfkd,
         _ => unreachable!("validate_form guarantees a known normalization form"),
-    }
+    };
+    normalize_segmented(text, form, out);
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+enum Form {
+    Nfc,
+    Nfd,
+    Nfkc,
+    Nfkd,
+}
+
+// `NFC_BOUNDARY`, `NFD_BOUNDARY`, `NFKC_BOUNDARY`, `NFKD_BOUNDARY`: one bit per BMP code
+// point, set where `is_boundary_lookup` is true (codegen/norm_boundary.rs).
+include!(concat!(env!("OUT_DIR"), "/norm_boundary.rs"));
+
+/// Whether a normalization boundary sits before `c` (see [`is_boundary_lookup`]).
+///
+/// A bit test for the BMP, generated at build time from the same rule; the two table
+/// lookups the rule costs made the check dearer than normalizing on scripts where almost
+/// every character is non-ASCII and unchanged (`search_key` on Cyrillic, +10%).
+#[inline]
+fn is_boundary(c: char, form: Form) -> bool {
+    let cp = u32::from(c);
+    if cp > 0xFFFF {
+        return is_boundary_lookup(c, form);
+    }
+    let table = match form {
+        Form::Nfc => &NFC_BOUNDARY,
+        Form::Nfd => &NFD_BOUNDARY,
+        Form::Nfkc => &NFKC_BOUNDARY,
+        Form::Nfkd => &NFKD_BOUNDARY,
+    };
+    table[(cp >> 6) as usize] >> (cp & 63) & 1 == 1
+}
+
+/// Whether a normalization boundary sits before `c`: a starter that passes `form`'s quick
+/// check.
+///
+/// Quick check Yes means `c` is already in `form` and, for the composing forms, never
+/// composes with what precedes it (a character that can is `Maybe`). Combining class 0
+/// means canonical reordering cannot move a mark across it. So the text before `c`
+/// normalizes the same whether or not anything follows it, and `c` itself is left as it
+/// is: normalizing the pieces between boundaries and concatenating them is normalizing
+/// the whole. `tests/normalize_segmented.rs` holds the two equal.
+fn is_boundary_lookup(c: char, form: Form) -> bool {
+    use unicode_normalization::{
+        char::canonical_combining_class, is_nfc_quick, is_nfd_quick, is_nfkc_quick, is_nfkd_quick,
+        IsNormalized,
+    };
+    if canonical_combining_class(c) != 0 {
+        return false;
+    }
+    let one = std::iter::once(c);
+    let quick = match form {
+        Form::Nfc => is_nfc_quick(one),
+        Form::Nfd => is_nfd_quick(one),
+        Form::Nfkc => is_nfkc_quick(one),
+        Form::Nfkd => is_nfkd_quick(one),
+    };
+    quick == IsNormalized::Yes
+}
+
+/// Whether `c` is its own NFD and not a combining mark: a character that ends the base
+/// before it, which NFD leaves in place and never reorders a mark across.
+///
+/// The mark walks in `crate::zalgo` step over these without decomposing anything, since
+/// the NFD of a text split before each of them is the NFD of the pieces.
+#[inline]
+pub(crate) fn is_nfd_plain(c: char) -> bool {
+    let cp = u32::from(c);
+    if cp > 0xFFFF {
+        return is_nfd_plain_lookup(c);
+    }
+    NFD_PLAIN[(cp >> 6) as usize] >> (cp & 63) & 1 == 1
+}
+
+fn is_nfd_plain_lookup(c: char) -> bool {
+    is_boundary_lookup(c, Form::Nfd) && !unicode_normalization::char::is_combining_mark(c)
+}
+
+/// A maximal run of characters that are not [plain](is_nfd_plain): `start..end` in the
+/// text, and `base`, the plain character just before it (`None` at the start of the text).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct MarkRun {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) base: Option<char>,
+}
+
+/// The [`MarkRun`]s of `text`, in order.
+///
+/// What the per-base NFD walks (`crate::zalgo`, `strip_accents`) have to look at. A plain
+/// character is its own NFD and NFD never reorders across it, so the NFD of the text is
+/// the plain characters as they are with the NFD of each run between them; and it is not a
+/// mark, so it ends the base before it: a walk entering a run holds exactly the state a
+/// fresh one has after reading `base`. So a walk over the runs alone, each started from
+/// `base`, sees at every run what the walk over the whole text's NFD saw there, and the
+/// text between runs, nearly all of ordinary text, is never decomposed. ASCII is plain
+/// and is never decoded.
+pub(crate) fn mark_runs(text: &str) -> MarkRuns<'_> {
+    MarkRuns {
+        text,
+        i: 0,
+        base: None,
+    }
+}
+
+pub(crate) struct MarkRuns<'a> {
+    text: &'a str,
+    i: usize,
+    base: Option<char>,
+}
+
+impl Iterator for MarkRuns<'_> {
+    type Item = MarkRun;
+
+    fn next(&mut self) -> Option<MarkRun> {
+        let text = self.text;
+        let bytes = text.as_bytes();
+        // Locals rather than fields in the loops, written back once per run.
+        let (mut i, mut base) = (self.i, self.base);
+        // Skip plain characters, remembering the last as the base.
+        let start = loop {
+            let Some(&b) = bytes.get(i) else {
+                self.i = i;
+                self.base = base;
+                return None;
+            };
+            if b < 0x80 {
+                base = Some(char::from(b));
+                i += 1;
+                continue;
+            }
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            if !is_nfd_plain(c) {
+                break i;
+            }
+            base = Some(c);
+            i += c.len_utf8();
+        };
+        // Extend the run to the next plain character.
+        while let Some(&b) = bytes.get(i) {
+            if b < 0x80 {
+                break;
+            }
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            if is_nfd_plain(c) {
+                break;
+            }
+            i += c.len_utf8();
+        }
+        self.i = i;
+        self.base = base;
+        Some(MarkRun {
+            start,
+            end: i,
+            base,
+        })
+    }
+}
+
+/// NFC of `text` into `out` (cleared first): [`normalize_into`] for a caller that has no
+/// form string to validate.
+pub(crate) fn nfc_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+    } else {
+        normalize_segmented(text, Form::Nfc, out);
+    }
+}
+
+fn append_normalized(segment: &str, form: Form, out: &mut String) {
+    match form {
+        Form::Nfc => out.extend(segment.nfc()),
+        Form::Nfd => out.extend(segment.nfd()),
+        Form::Nfkc => out.extend(segment.nfkc()),
+        Form::Nfkd => out.extend(segment.nfkd()),
+    }
+}
+
+/// Normalize `text` into `out`, running the normalizer only over the segments that need
+/// it and copying everything else.
+///
+/// The full-string iterator decomposed and recomposed every character, although in
+/// ordinary text almost every one is a boundary that normalization leaves alone: mixed
+/// web text changes at a quote, an ellipsis or a trademark sign. A segment runs from one
+/// boundary to the next; a segment holding only its boundary is copied, any other is
+/// normalized on its own. ASCII bytes are boundaries in every form and are never decoded.
+fn normalize_segmented(text: &str, form: Form, out: &mut String) {
+    let bytes = text.as_bytes();
+    out.reserve(text.len());
+    let mut copied = 0; // text[..copied] is in `out`
+    let mut segment = 0; // start of the segment being read: a boundary, or 0
+    let mut dirty = false; // text[segment..i] needs the normalizer
+    let mut i = 0;
+    while i < bytes.len() {
+        let (boundary, len) = if bytes[i] < 0x80 {
+            (true, 1)
+        } else {
+            let c = text[i..].chars().next().expect("`i` is a char boundary");
+            (is_boundary(c, form), c.len_utf8())
+        };
+        if boundary {
+            if dirty {
+                out.push_str(&text[copied..segment]);
+                append_normalized(&text[segment..i], form, out);
+                copied = i;
+                dirty = false;
+            }
+            segment = i;
+        } else {
+            dirty = true;
+        }
+        i += len;
+    }
+    if dirty {
+        out.push_str(&text[copied..segment]);
+        append_normalized(&text[segment..], form, out);
+    } else {
+        out.push_str(&text[copied..]);
+    }
 }
 
 /// Check if text is already in the specified normalization form.
@@ -144,6 +366,35 @@ pub(crate) fn is_normalized_stream_safe(text: &str, form: &str) -> Result<bool, 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The build-time bitmaps say what the rule says, for every BMP scalar and form. This
+    /// is also what catches a build-dependency copy of `unicode-normalization` that
+    /// disagrees with the runtime one.
+    #[test]
+    fn boundary_bitmaps_match_the_lookup() {
+        for form in [Form::Nfc, Form::Nfd, Form::Nfkc, Form::Nfkd] {
+            for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+                assert_eq!(
+                    is_boundary(c, form),
+                    is_boundary_lookup(c, form),
+                    "U+{:04X}",
+                    u32::from(c)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn plain_bitmap_matches_the_lookup() {
+        for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                is_nfd_plain(c),
+                is_nfd_plain_lookup(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
+        }
+    }
 
     #[test]
     fn test_nfc_roundtrip() {

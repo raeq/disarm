@@ -31,7 +31,7 @@ The entire pipeline is deterministic, O(n), and fail-safe: if detection is uncer
     // Stage 1: Cyrillic detected → ambiguous script
     // Stage 2: ї found → Ukrainian discriminator hit
     // Stage 3: returns "uk"
-    assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Київ").unwrap(), "Kyiv");
     ```
 
 === "Ruby"
@@ -206,22 +206,22 @@ Key properties:
     use disarm::api::Transliterate;
 
     // Ukrainian: ї is exclusive to Ukrainian Cyrillic
-    assert_eq!(Transliterate::new().lang("auto").run("Київ"), "Kyiv");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Київ").unwrap(), "Kyiv");
 
     // Serbian: ћ is exclusive to Serbian Cyrillic
-    assert_eq!(Transliterate::new().lang("auto").run("Београд"), "Beograd");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Београд").unwrap(), "Beograd");
 
     // Persian: پ is exclusive to Persian Arabic
-    assert_eq!(Transliterate::new().lang("auto").run("پارسی"), "parsy");
+    assert_eq!(Transliterate::new().lang("auto").try_run("پارسی").unwrap(), "parsy");
 
     // Vietnamese: ơ is exclusive to Vietnamese Latin
-    assert_eq!(Transliterate::new().lang("auto").run("Hà Nội"), "Ha Noi");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Hà Nội").unwrap(), "Ha Noi");
 
     // German: ß is exclusive to German Latin
-    assert_eq!(Transliterate::new().lang("auto").run("Straße"), "Strasse");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Straße").unwrap(), "Strasse");
 
     // No discriminator: Москва has no exclusive chars
-    assert_eq!(Transliterate::new().lang("auto").run("Москва"), "Moskva");
+    assert_eq!(Transliterate::new().lang("auto").try_run("Москва").unwrap(), "Moskva");
     ```
 
 === "Ruby"

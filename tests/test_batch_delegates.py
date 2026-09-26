@@ -90,3 +90,23 @@ def test_every_batch_function_agrees_with_its_single_form(batch) -> None:
     corpus = ["≠", "∄", "café", "Ｈéllo", "abc", "", "Ünïcödé", "москва", "北京", "á"]
     single = [batch([one])[0] for one in corpus]
     assert batch(corpus) == single
+
+
+def test_batch_transliterate_returns_unchanged_items_as_themselves() -> None:
+    """The list form hands back the original object for an item the engine leaves
+    unchanged, as the single call does, and allocates only for the ones it changes.
+
+    It used to copy every item into Rust and every result back out, which cost more per
+    item than a loop of single calls on ASCII-heavy lists.
+    """
+    import disarm
+
+    texts = [f"plain {i} text" for i in range(40)] + ["café", "Москва"]
+    out = disarm.transliterate(texts)
+    assert out == [disarm.transliterate(t) for t in texts]
+    for original, result in zip(texts, out, strict=True):
+        if result == original:
+            assert result is original, original
+        else:
+            assert result is not original, original
+    assert out[-2:] == ["cafe", "Moskva"]

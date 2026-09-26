@@ -25,14 +25,15 @@ fn main() {
     let moscow = Transliterate::new()
         .scheme(Scheme::StrictIso9)
         .on_unknown(OnUnknown::Replace("?".into()))
-        .run("Москва");
+        .try_run("Москва")
+        .unwrap();
     assert!(moscow.is_ascii());
 
     // Canonicalization primitives.
     assert_eq!(api::strip_accents("café"), "cafe");
     assert_eq!(api::fold_case("ﬁ"), "fi");
     assert_eq!(
-        api::slugify("Héllo Wörld", &api::SlugConfig::default()),
+        api::try_slugify("Héllo Wörld", &api::SlugConfig::default()).unwrap(),
         "hello-world"
     );
 

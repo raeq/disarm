@@ -17,7 +17,7 @@ use disarm::api::{detect_scripts, is_mixed_script};
 use disarm::api::{find_confusables, is_confusable};
 use disarm::api::{grapheme_len, grapheme_split};
 use disarm::api::{normalize_confusables, TargetScript};
-use disarm::api::{slugify, SlugConfig};
+use disarm::api::{try_slugify, SlugConfig};
 use disarm::tables::lookup_default;
 
 // ---------------------------------------------------------------------------
@@ -61,14 +61,19 @@ fn bench_transliterate(c: &mut Criterion) {
     ] {
         group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
-            b.iter(|| Transliterate::new().run(black_box(text)));
+            b.iter(|| Transliterate::new().try_run(black_box(text)).unwrap());
         });
     }
 
     // Language-specific transliteration
     group.throughput(text_throughput(CYRILLIC));
     group.bench_function("cyrillic_lang_ru", |b| {
-        b.iter(|| Transliterate::new().lang("ru").run(black_box(CYRILLIC)));
+        b.iter(|| {
+            Transliterate::new()
+                .lang("ru")
+                .try_run(black_box(CYRILLIC))
+                .unwrap()
+        });
     });
 
     group.finish();
@@ -120,7 +125,7 @@ fn bench_slugify(c: &mut Criterion) {
     ] {
         group.throughput(text_throughput(input));
         group.bench_with_input(BenchmarkId::new("default", name), input, |b, text| {
-            b.iter(|| slugify(black_box(text), &default_config));
+            b.iter(|| try_slugify(black_box(text), &default_config).unwrap());
         });
     }
 
@@ -131,7 +136,7 @@ fn bench_slugify(c: &mut Criterion) {
     let bounded_input = "The Quick Brown Fox Jumps Over The Lazy Dog";
     group.throughput(text_throughput(bounded_input));
     group.bench_function("bounded_30_word_boundary", |b| {
-        b.iter(|| slugify(black_box(bounded_input), &bounded_config));
+        b.iter(|| try_slugify(black_box(bounded_input), &bounded_config).unwrap());
     });
 
     group.finish();

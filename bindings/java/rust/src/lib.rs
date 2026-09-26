@@ -1292,6 +1292,24 @@ pub fn listContextLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<
     })
 }
 
+/// Every language code `transliterate` accepts as `lang`, sorted (#981).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn listLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
+    map_str_array_nullary(env, api::list_langs)
+}
+
+/// Every policy profile name `getPipeline` accepts, sorted (#981).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn listProfiles<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
+    map_str_array_nullary(env, api::list_profiles)
+}
+
+/// Every language code with a reverse (Latin to native script) table (#981).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn reverseLangs<'l>(env: EnvUnowned<'l>, _class: JClass<'l>) -> JObject<'l> {
+    map_str_array_nullary(env, api::reverse_langs)
+}
+
 // ── Metadata introspection (record returns) ─────────────────────────────────────
 
 /// Static facts about a language `code`; throws on an unknown code.

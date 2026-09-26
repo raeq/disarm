@@ -3,13 +3,13 @@ import Presets.Fixes
 /-!
 # Bounded exhaustive checks (`native_decide`)
 
-`W3` is every word of length at most 3 over the 38-letter input alphabet (56,355 words), the
+`W3` is every word of length at most 3 over the 40-letter input alphabet (65,641 words), the
 same words `scripts/difftest.py --exhaustive 3` sends through the library, on which the model
 and the library agree exactly. So each result here about the *current* model is also a
 result about the built library on those words.
 
-`S4` is every word of length exactly 4 over the 23-letter sub-alphabet that carries the
-findings (279,841 words), used for the headline properties.
+`S4` is every word of length exactly 4 over the 25-letter sub-alphabet that carries the
+findings (390,625 words), used for the headline properties.
 -/
 
 namespace Presets.Bounded
@@ -19,7 +19,7 @@ open Presets
 def W3 : List Str := wordsUpTo inputAlphabet 3
 def S4 : List Str := wordsOfLen small 4
 
-theorem W3_size : W3.length = 56355 := by native_decide
+theorem W3_size : W3.length = 65641 := by native_decide
 
 /-! ## Idempotence that holds
 
@@ -27,38 +27,44 @@ Each property is a `Bool` over a word list, stated for `W3` and again for `S4`. 
 
 def holdIdem (ws : List Str) : Bool :=
   [Pol.numeric, .tr39, .preserve].all (fun p =>
-    idemOn (canonicalize p) ws && idemOn (canonicalizeStrict p) ws && idemOn (catalogKey p) ws)
+    idemOn (canonicalizeStrict p) ws && idemOn (catalogKey p) ws)
+  && idemOn (canonicalize .tr39) ws && idemOn (canonicalize .preserve) ws
   && idemOn (searchKey .numeric) ws && idemOn (sortKey .numeric) ws && idemOn stripFormat ws
   && ["code_context", "library_catalog_key_eu", "rag_ingest", "scholarly_cyrillic_iso9",
       "search_index"].all (fun n => idemOn (profile n .numeric) ws)
   && idemOn (profile "library_catalog_key_eu" .tr39) ws
 
-/-- `canonicalize`, `canonicalize_strict` and `catalog_key` under all three policies,
-`search_key` and `sort_key` under the default, `strip_format`, and five of the eight
-profiles are fixed points on every word of `W3`. -/
-theorem idem_W3 : holdIdem W3 := by native_decide
-/-- ... and on every word of `S4`. -/
+/-- `canonicalize_strict` and `catalog_key` under all three policies, `canonicalize` under
+`tr39` and `preserve`, `search_key` and `sort_key` under the default, `strip_format`, and
+five of the eight profiles are fixed points on every word of `W3`, and so is `canonicalize`
+under the default. -/
+theorem idem_W3 : holdIdem W3 && idemOn (canonicalize .numeric) W3 := by native_decide
+/-- ... and all but `canonicalize` under the default on every word of `S4`. -/
 theorem idem_S4 : holdIdem S4 := by native_decide
 
-/-! ## Idempotence that fails: how often, on `W3` -/
+/-! ## Idempotence that fails: how often, on `W3` (and `S4` for Finding 8) -/
+
+/-- Finding 8: `ģ` and three marks above, no two adjacent marks the same (3 * 2 * 2 words). -/
+theorem canonicalize_failures : (idemFailures (canonicalize .numeric) S4).length = 12 := by
+  native_decide
 
 theorem skeleton_key_failures :
-    (idemFailures (skeletonKey .numeric) W3).length = 5092 ∧
-    (idemFailures (skeletonKey .tr39) W3).length = 5174 ∧
-    (idemFailures (skeletonKey .preserve) W3).length = 5092 := by native_decide
+    (idemFailures (skeletonKey .numeric) W3).length = 5811 ∧
+    (idemFailures (skeletonKey .tr39) W3).length = 5897 ∧
+    (idemFailures (skeletonKey .preserve) W3).length = 5811 := by native_decide
 theorem search_key_policy_failures :
-    (idemFailures (searchKey .tr39) W3).length = 8206 ∧
-    (idemFailures (searchKey .preserve) W3).length = 8206 := by native_decide
+    (idemFailures (searchKey .tr39) W3).length = 9116 ∧
+    (idemFailures (searchKey .preserve) W3).length = 9116 := by native_decide
 theorem sort_key_policy_failures :
-    (idemFailures (sortKey .tr39) W3).length = 8206 ∧
-    (idemFailures (sortKey .preserve) W3).length = 8206 := by native_decide
+    (idemFailures (sortKey .tr39) W3).length = 9123 ∧
+    (idemFailures (sortKey .preserve) W3).length = 9123 := by native_decide
 theorem strip_obfuscation_failures :
     (idemFailures (stripObfuscation .numeric) W3).length = 1 := by native_decide
 theorem ml_normalize_failures : (idemFailures (mlNormalize true) W3).length = 2 := by native_decide
 theorem profile_failures :
-    (idemFailures (profile "llm_guardrail" .numeric) W3).length = 331 ∧
-    (idemFailures (profile "ml_corpus_normalize" .numeric) W3).length = 80 ∧
-    (idemFailures (profile "normalize_web_input" .numeric) W3).length = 112 := by native_decide
+    (idemFailures (profile "llm_guardrail" .numeric) W3).length = 351 ∧
+    (idemFailures (profile "ml_corpus_normalize" .numeric) W3).length = 85 ∧
+    (idemFailures (profile "normalize_web_input" .numeric) W3).length = 152 := by native_decide
 
 /-! ## The fast-path guard is sound for every shipped preset, on `W3`
 
@@ -77,7 +83,8 @@ theorem guard_sound_S4 : guardSound S4 := by native_decide
 
 def fixesIdem (ws : List Str) : Bool :=
   [Pol.numeric, .tr39, .preserve].all (fun p =>
-    idemOn (skeletonKeyFixed p) ws && idemOn (searchKeyFixed p) ws && idemOn (sortKeyFixed p) ws
+    idemOn (canonicalizeFixed p) ws && idemOn (skeletonKeyFixed p) ws && idemOn (searchKeyFixed p) ws
+    && idemOn (sortKeyFixed p) ws
     && idemOn (stripObfuscationFixed p) ws)
   && idemOn (mlNormalizeFixed true) ws && idemOn (mlNormalizeFixed false) ws
   && profileNames.all (fun n => idemOn (profileFixed n .numeric) ws && idemOn (profileFixed n .tr39) ws)
@@ -94,6 +101,6 @@ theorem skeleton_fixed_nfc :
 /-- The targeted profile fix (one more mark strip, strips ahead of NORMALIZE) is not enough
 for `normalize_web_input`: a PUA code point still separates a composition. -/
 theorem targeted_insufficient :
-    (idemFailures (profileTargeted "normalize_web_input" .numeric) W3).length = 28 := by native_decide
+    (idemFailures (profileTargeted "normalize_web_input" .numeric) W3).length = 38 := by native_decide
 
 end Presets.Bounded

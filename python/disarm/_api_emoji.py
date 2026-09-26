@@ -36,8 +36,9 @@ def demojize(
 
     **Replacing** (``replacement=...``) asks *is this an emoji by the UCD's properties?*,
     so its domain is the emoji-presentation set: ``Emoji_Presentation=Yes``, an
-    ``Emoji`` or ``Extended_Pictographic`` base carrying ``U+FE0F``, and the ZWJ,
-    modifier, keycap and flag sequences built on those. Nothing else moves — ``©`` and ``™`` stay, where naming
+    ``Emoji=Yes`` base carrying ``U+FE0F`` (not an ``Extended_Pictographic`` one, so
+    ``★`` + ``U+FE0F`` stays, #992), and the ZWJ, modifier, keycap and flag sequences
+    built on those. Nothing else moves — ``©`` and ``™`` stay, where naming
     would have written a word over them (#972).
 
     Args:
@@ -136,9 +137,9 @@ def replace_emoji(text: str, replacement: str = "") -> str:
     `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
     which is wider than the emoji: ``demojize("x™y")`` is ``"x trade mark y"``. This asks
     *is this an emoji by the UCD's properties?*, so its domain is the emoji-presentation
-    set — ``Emoji_Presentation=Yes``, an ``Emoji`` or ``Extended_Pictographic`` base
-    carrying ``U+FE0F``, and the ZWJ, modifier, keycap and flag sequences built on
-    those. Nothing else moves.
+    set — ``Emoji_Presentation=Yes``, an ``Emoji=Yes`` base carrying ``U+FE0F`` (not an
+    ``Extended_Pictographic`` one, so ``★`` + ``U+FE0F`` stays, #992), and the ZWJ,
+    modifier, keycap and flag sequences built on those. Nothing else moves.
 
     Identical to ``demojize(text, replacement=...)``; this is the spelling every other
     binding carries, and the one to reach for when the operation is the point rather than

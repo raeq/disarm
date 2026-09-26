@@ -207,7 +207,7 @@ An NFC-first canonicalization keeps the door open to a clean round-trip:
 
     let native = "Москва";
     let canonical = api::normalize(native, NormalizationForm::Nfc); // canonical, lossless
-    let romanized = Transliterate::new().lang("ru").run(&canonical);
+    let romanized = Transliterate::new().lang("ru").try_run(&canonical).unwrap();
     assert_eq!(romanized, "Moskva");                                // => "Moskva"
     let back = api::reverse_transliterate(&romanized, ReverseLang::Russian);
     assert_eq!(back, "Москва");                                     // => "Москва"  round-trips

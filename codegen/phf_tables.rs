@@ -91,10 +91,39 @@ pub(crate) fn generate_excluded_compositions_map(
         .map(|(key, _)| key.chars().count())
         .max()
         .unwrap_or(0);
+    // The first two chars of every key, sorted and deduplicated: a key can only match
+    // where these do, so the lookup-time scan probes the map only there. Every key is a
+    // base and at least one mark, which is what makes a pair a necessary condition.
+    let mut heads: Vec<(char, char)> = formatted
+        .iter()
+        .map(|(key, _)| {
+            let mut chars = key.chars();
+            match (chars.next(), chars.next()) {
+                (Some(a), Some(b)) => (a, b),
+                _ => panic!("excluded composition key {key:?} is shorter than two chars"),
+            }
+        })
+        .collect();
+    heads.sort_unstable();
+    heads.dedup();
+    let heads_code: Vec<String> = heads
+        .iter()
+        .map(|(a, b)| {
+            format!(
+                "('\\u{{{:04X}}}', '\\u{{{:04X}}}')",
+                u32::from(*a),
+                u32::from(*b)
+            )
+        })
+        .collect();
     let code = format!(
         "{vis_prefix}static {name}: phf::Map<&'static str, char> = {};\n\
-         {vis_prefix}const {name}_MAX_KEY_CHARS: usize = {max_key_chars};\n",
-        builder.build()
+         {vis_prefix}const {name}_MAX_KEY_CHARS: usize = {max_key_chars};\n\
+         /// The first two chars of every key of `{name}`, sorted.\n\
+         {vis_prefix}static {name}_HEADS: [(char, char); {}] = [{}];\n",
+        builder.build(),
+        heads.len(),
+        heads_code.join(", ")
     );
     fs::write(out_path, code)
         .unwrap_or_else(|e| panic!("Failed to write {}: {e}", out_path.display()));

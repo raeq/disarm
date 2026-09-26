@@ -104,15 +104,56 @@ pub fn lookup(ch: char, target_script: &str) -> Option<&'static str> {
 /// U+0022 `"`→`''`, U+0060 `` ` ``→`'`), so ASCII input is *not* identity even
 /// for `target="latin"`.
 #[inline]
-pub fn resolve_map(target_script: &str) -> Option<&'static phf::Map<char, &'static str>> {
-    match target_script {
-        "latin" => Some(&TO_LATIN),
-        "cyrillic" => Some(&TO_CYRILLIC),
+pub fn resolve_map(target_script: &str) -> Option<ConfusableMap> {
+    let (map, bmp) = match target_script {
+        "latin" => (&TO_LATIN, &TO_LATIN_BMP),
+        "cyrillic" => (&TO_CYRILLIC, &TO_CYRILLIC_BMP),
         // #792: the RTL targets. Opt-in like `cyrillic` — no preset consumes a non-Latin
         // target, so these add a view rather than changing any existing answer.
-        "arabic" => Some(&TO_ARABIC),
-        "hebrew" => Some(&TO_HEBREW),
-        _ => None,
+        "arabic" => (&TO_ARABIC, &TO_ARABIC_BMP),
+        "hebrew" => (&TO_HEBREW, &TO_HEBREW_BMP),
+        _ => return None,
+    };
+    Some(ConfusableMap { map, bmp })
+}
+
+/// One target script's confusable map, and a bitmap of its keys in the BMP.
+///
+/// Almost every character a fold or a check reads is not a key, and the bitmap answers
+/// that with one bit where the map would hash the character first: `normalize_confusables`
+/// on ASCII text spent 170 instructions a byte probing a map that holds three ASCII keys.
+/// [`get`](Self::get) and [`contains_key`](Self::contains_key) consult it; everything else
+/// is the map's own, through `Deref`. Both are generated from the same rows by build.rs,
+/// and `tests::key_bitmaps_match_the_maps` holds them equal over the BMP.
+#[derive(Clone, Copy)]
+pub struct ConfusableMap {
+    map: &'static phf::Map<char, &'static str>,
+    bmp: &'static [u64; 1024],
+}
+
+impl ConfusableMap {
+    /// The map's value for `ch`, as `phf::Map::get`.
+    #[inline]
+    pub fn get(&self, ch: &char) -> Option<&'static &'static str> {
+        let cp = u32::from(*ch);
+        if cp <= 0xFFFF && self.bmp[(cp >> 6) as usize] >> (cp & 63) & 1 == 0 {
+            return None;
+        }
+        self.map.get(ch)
+    }
+
+    /// Whether `ch` is a key, as `phf::Map::contains_key`.
+    #[inline]
+    pub fn contains_key(&self, ch: &char) -> bool {
+        self.get(ch).is_some()
+    }
+}
+
+impl std::ops::Deref for ConfusableMap {
+    type Target = phf::Map<char, &'static str>;
+
+    fn deref(&self) -> &Self::Target {
+        self.map
     }
 }
 
@@ -128,4 +169,28 @@ pub(super) fn phf_tables() -> Vec<crate::phf_integrity::Table> {
         T::CharStr("TO_LATIN", &TO_LATIN),
         T::CharSet("UPSTREAM_CONFUSABLE_SOURCES", &UPSTREAM_CONFUSABLE_SOURCES),
     ]
+}
+
+#[cfg(test)]
+mod bitmap_tests {
+    use super::*;
+
+    #[test]
+    fn key_bitmaps_match_the_maps() {
+        for script in ["latin", "cyrillic", "arabic", "hebrew"] {
+            let resolved = resolve_map(script).unwrap();
+            for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+                assert_eq!(
+                    resolved.get(&c),
+                    resolved.map.get(&c),
+                    "{script} U+{:04X}",
+                    u32::from(c)
+                );
+            }
+            // Astral keys bypass the bitmap and still resolve.
+            for (&key, value) in resolved.entries() {
+                assert_eq!(resolved.get(&key), Some(value), "{script} {key:?}");
+            }
+        }
+    }
 }

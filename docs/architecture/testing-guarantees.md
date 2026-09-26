@@ -79,6 +79,7 @@ These tests iterate over every element in a bounded Unicode domain. Unlike prope
 | All CJK Unified Ideographs (U+4E00–U+9FFF) | 20,992 | Output is ASCII, unmapped count < 200 |
 | 15 Indic script blocks | ~2,000 codepoints | Every consonant/vowel/virama in the block is correctly classified |
 | Determinism | 10 × 100 runs | Same mixed-script input produces identical output 100 times |
+| Mark stacks on the confusable fold (`tests/mark_stacking.rs`) | 22,407 | Every base the four confusable tables reach, crossed with every mark that composes with it, stacked 1–12 and 33 deep, under all three digit policies: a fixed point, and complete under `numeric` and `tr39`. See [Run length](#run-length-what-the-bounded-checks-could-not-see) |
 
 **Total exhaustive coverage: ~159,000+ individually verified codepoints.**
 
@@ -113,8 +114,79 @@ Exhaustive testing is not formal verification. We are precise about the boundary
 | Unicode version drift | New Unicode versions add codepoints | CI tracks Unicode version; unknown chars handled by ErrorMode |
 | Memory safety / UB | Requires Miri (nightly-only) | `unsafe_code = "forbid"` in Cargo.toml — zero unsafe anywhere |
 | Absence of panics | Requires Kani bounded model checking (nightly-only) | Property tests with 1,000+ random inputs; no panics in 2,900+ tests; cargo-fuzz over arbitrary bytes and text (below) |
+| Run length beyond the tested shapes | An exhaustive sweep fixes the shape of its inputs, and a bounded check proves nothing about inputs longer than its bound: the Lean check of the fold's convergence stopped at five characters, and the failure it was meant to rule out needs ten | `tests/mark_stacking.rs` stacks marks past every pass cap in the code; cargo-fuzz grows and repeats input freely. See [Run length](#run-length-what-the-bounded-checks-could-not-see) |
 
 **Future**: When nightly Rust is available in CI, we plan to add Kani bounded model checking — a form of formal verification that would prove absence of panics and overflow in `romanize_hangul`, `indic_char_role`, and decomposition arithmetic — and Miri UB detection.
+
+---
+
+## Run length: what the bounded checks could not see
+
+The confusable fold iterated to a fixed point under a cap of eight passes (#434, 0.11.1),
+on the argument that "each pass removes at least one mark, so it converges in a couple
+of iterations". That argument bounds the passes by the number of marks, which the input
+chooses. `C` + U+0327 composes to `Ç`, which folds back to `C`, so every pass takes one
+cedilla: nine used up the cap, and from ten a release build returned a string that was
+still confusable and folded again on a second call. The presets, the pipeline and
+`skeleton_key` iterate the same fold in loops of their own under the same cap, and
+`canonicalize_strict` joined them when #862 (0.15.0) moved its mark cap after the fold.
+The nightly fuzz run found it on 2026-09-26, two nights after fuzzing was added (#1071).
+
+Every layer above had a reason it could not, and none of them was bad luck:
+
+| Layer | Why it could not see a stack of ten |
+|---|---|
+| Lean model of the fold | Every symbol of the failure is in its alphabet (`C`, U+0327, U+04AA), but the convergence check covers every string up to length five: at most four cedillas, five passes. No amount of checking at that bound reaches ten |
+| Lean differential test | It checks that the model and the library agree, and they shared the cap. On the failing input they agree on the wrong answer |
+| Library sweeps and exhaustive tests | Every one crosses a base with one or two marks, so none can take more than three passes. "No swept input reached the cap" was true by construction |
+| Property tests (proptest, Hypothesis) | They draw characters independently. With U+0327 at 1.4% of draws, the likeliest generator here, a run of ten after a `c` comes up about once in 10^19 strings |
+| The `debug_assert` on the cap | It fires only in a debug build, and only on input nothing generated |
+| cargo-fuzz | libFuzzer inserts repeated bytes and copies input into itself, so runs are cheap for it. It found the bug |
+
+A second finding the same day had the opposite cause (#1072). `canonicalize` caps
+stacked marks before the fold, and the fold can move a mark to another class: `ģ` (a
+cedilla, below) folds to `ġ` (a dot, above). `ģ` and three marks above is four
+characters, inside the Presets model's exhaustive bound, but that model's alphabet had
+no fold that moves a mark, so the bound never mattered. With `ģ` and a third mark above
+added to the alphabet, the model's length-4 check fails on 12 words, every one `ģ` and
+three marks above.
+
+**What changed.** The loops no longer stop at a cap (#1071), `canonicalize` caps again
+after the fold (#1072), and `tests/mark_stacking.rs` tests run length on purpose, on
+`disarm::api`, in PR CI:
+
+* the fold on every base the four tables reach (their sources, their values' characters,
+  and each canonical prefix of a source's decomposition) crossed with every mark that
+  composes with it, canonically or through a composition exclusion, stacked 1–12 and 33
+  deep, under all three policies;
+* every builder under every policy and every profile, on each stack whose composition
+  is itself a fold source, and on each of those beside one to four marks of another
+  class;
+* one stack of 20,000 per cycle, which must settle in the fold, `canonicalize_strict`
+  and `skeleton_key` inside a time a pass per mark could not meet.
+
+The cases come from the tables in `src/tables/data/`, not a list of known cycles, so a
+table change that adds one is covered the day it lands, and floors on the derived sets
+keep the test from passing by finding nothing. Run on the code before each fix, it
+fails: all three tests before #1071 (in a release build too, where the assertion is
+compiled out, from `C` and ten cedillas exactly), and the builders before #1072.
+
+**What it means for the other bounded claims.**
+
+* A loop cap is a claim about the input. Either prove a constant bound, or finish the
+  work some other way when the cap is reached; an argument whose bound grows with the
+  input does not justify a constant.
+* A bounded check says nothing above its bound. Each one should say how long its
+  shortest possible counterexample could be, and a result is evidence only if that is
+  within the bound.
+* A sweep varies which characters appear. Run length is a separate dimension, and a
+  sweep that fixes it at one or two cannot see a defect that needs ten.
+* Differential testing against a model finds where they differ, never a defect the
+  model shares.
+* A model's alphabet needs a representative of every class the code branches on. "A
+  fold that moves a mark to another combining class" was not one of the Presets
+  model's classes. It is now (Finding 8 in `formal/lean/Presets/README.md`), with the
+  fix #1072 made as a model variant that the bounded checks show is a fixed point.
 
 ---
 
@@ -182,10 +254,10 @@ Throughput follows the work per input: `presets` runs every builder at least twi
 managed about 360 inputs a second, `decode_bytes` calls the decoder thirteen times per
 input at about 720, and `slugify` about 4,000.
 
-The runs found documented properties that did not hold: six in the first runs, and two
-more on 2026-09-24. Each is reproduced through the public API in `tests/fuzz_findings.rs`
-(and `tests/test_fuzz_findings.py` where the binding reaches it), and each target asserts
-the full property once its finding is resolved:
+The runs found documented properties that did not hold: six in the first runs, two more
+on 2026-09-24, and three on 2026-09-26. Each is reproduced through the public API in
+`tests/fuzz_findings.rs` (and `tests/test_fuzz_findings.py` where the binding reaches
+it), and each target asserts the full property once its finding is resolved:
 
 | Surface | Documented | Reproduction | Resolution |
 |---|---|---|---|
@@ -197,6 +269,9 @@ the full property once its finding is resolved:
 | `transliterate`, invariant I7 | output bytes at most five per input byte plus one per input character | With `tones=True`, U+337F gives `zhu sh\u00ec hu\u00ec sh\u00e8`: 18 bytes for 3. I1-I3 were scoped to `tones=False`; I7 was not. | Scoped: I7 is stated for `tones=False`, as I1-I3 are, and `docs/formal-verification.md` says why. It bounds the ASCII normalizer; toned pinyin is a display form whose vowels are two bytes. |
 | `catalog_key_with`, `search_key_with` | idempotent under every digit policy (the Presets model, #1024, #1029) | Found on 2026-09-24: `"\ufffd\ufffd\U00016d67\x16\U00016d67"` keys as the two Kirat Rai vowel signs, and the key of that is U+16D68. The control is stripped after the last step that composes. | Fixed: both builders end with an NFC pass, as `sort_key` and `ml_normalize` do. No fixture row moved; three were added. |
 | `slugify` with `allow_unicode` | none of the circled and squared Latin symbols in the slug (#1028) | Found on 2026-09-24: a slug kept U+24B6 under a separator of NULs, `/`, U+24B6 and `d`. The U+24B6 was the separator's, inserted as given between two words. | Not a library defect: the target checked the whole slug where the property is about the words. It now checks the words, and `SlugConfig::separator` says a separator is inserted as given. |
+| `normalize_confusables` | idempotent, and complete: `is_confusable` is false on the output (#522) | Found on 2026-09-26: `\u04aa` followed by eight U+0327 among marks of another class. `\u04aa` folds to `C`, and `C` + U+0327 composes to `Ç`, which folds back to `C`, so each pass takes one cedilla. The loop stopped at eight passes (`MAX_CONFUSABLE_PASSES`): the input used them all, which tripped the loop's debug assertion. One cedilla more (`C` and ten, or `\u04aa` and nine) and a release build returned a string still confusable, which folded again on a second call. The loop had had its cap since #434 (0.11.1). `c` + U+0327 and `i` + U+0309 cycle the same way. The same input made `canonicalize_strict` return `Ç` and then `C`, and `skeleton_key` return `ç` and then `c`: the presets and the pipeline run their own fold loops under the same cap. | Fixed: input still changing at the cap is finished span by span, and a pass that only shortens a run of one mark is applied as many times as it holds at once. All four loops do this, so the fold settles on any number of marks at the cost of a few passes, not one per mark. |
+| `canonicalize` | idempotent (#416, #835) | Found on 2026-09-26, by the `presets` target while the row above was being checked: `\u01e7` + U+0327 + U+0367 + three U+0327 + U+0303. The cap, three marks of one class on a base, runs before the confusable fold, and the fold turned `\u0123` (a cedilla, below) into `\u0121` (a dot, above), so the `g` carried four marks above and the next call cut one. Under `tr39` and `preserve` the pre-fold folds before the cap, so only `numeric` failed. | Fixed: the cap runs again after the fold, and touches only text it cuts. Its check returns early on text with no standalone mark, since no character decomposes to more than three, so `canonicalize` is cheaper than before. |
+| `slugify` with `allow_unicode` | no leading or trailing ZWJ/ZWNJ (#711) | Found on 2026-09-26 by the `slugify` target, in a pull request's smoke run: `"ab\u200d6"` with `separator="6"` gave `ab\u200d`. The edges were trimmed of joiners before the trailing separator came off, and a separator the caller makes of word characters can match the end of a word, so taking it off exposed the joiner before it. The stopword filter, which splits on the separator again, and a truncation could end the slug on the same kind of spot. | Fixed: the joiners are trimmed from both edges once the last step has run, and from the head `UniqueSlugifier` cuts again after its partial separator comes off. The shape properties (S2) stay stated for separators with no word character: such a separator still takes the word's own `6` with it. |
 
 **Coverage.** Rust, `cargo +nightly-2026-09-01 llvm-cov --no-default-features --branch`
 over the Tier-1 Rust suite (1,237 tests; doctests are not instrumented): **92.4% of lines

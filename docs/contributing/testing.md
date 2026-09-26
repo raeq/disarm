@@ -59,6 +59,30 @@ regenerated header. Source-level assertions would not have caught either defect.
 `gen_confusables.py` can silently *remove* rows, and a passing suite does not prove it
 did not — that is how an over-broad filter deleted `Ç → C` during #593.
 
+### The iai estimated-cycles gate
+
+`benchmarks/bench_iai.rs` runs each benchmark once under Valgrind's Callgrind and counts
+instructions and estimated cycles. The counts are deterministic, so the required
+`iai estimated-cycles gate` fails a pull request that costs more than 5% estimated cycles
+against its merge base. Run it the way CI does:
+
+```bash
+# needs valgrind and: cargo install iai-callgrind-runner --version 0.16.1 --locked
+git checkout --detach origin/main
+CARGO_PROFILE_BENCH_STRIP=false cargo bench --no-default-features --bench bench_iai -- --save-baseline=base
+git checkout -
+cargo bench --no-default-features --bench bench_iai -- \
+  --baseline=base --callgrind-limits="EstimatedCycles=5%" --save-summary=json
+python3 scripts/check_iai_nonzero.py target/iai
+```
+
+**A zero is not a measurement.** Callgrind counts only inside the benchmark function, which
+it finds by symbol, so a stripped binary measures 0. `[profile.release]` strips, and the
+benches inherited it, so from #893 the gate compared 0 against 0 and passed everything.
+`[profile.bench]` now keeps symbols, `CARGO_PROFILE_BENCH_STRIP=false` covers a merge base
+from before that, and `scripts/check_iai_nonzero.py` fails the gate on any zero, on
+either side of the comparison.
+
 ## Tier 2 — Hypothesis / property-based (opt-in)
 
 Property-based / fuzz tests across the Unicode input space. **587 tests, ~67s on a

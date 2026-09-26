@@ -111,7 +111,7 @@ fn encoding_fallible() {
 #[test]
 fn slugification() {
     assert_eq!(
-        api::slugify("Héllo Wörld", &api::SlugConfig::default()),
+        api::try_slugify("Héllo Wörld", &api::SlugConfig::default()).unwrap(),
         "hello-world"
     );
 }
@@ -125,12 +125,16 @@ fn transliteration() {
     let out = Transliterate::new()
         .scheme(Scheme::StrictIso9)
         .on_unknown(OnUnknown::Replace("?".into()))
-        .run("Москва");
+        .try_run("Москва")
+        .unwrap();
     assert!(out.is_ascii() && !out.is_empty());
     assert_eq!(api::strip_accents("café"), "cafe");
     assert!(api::is_ascii("hi") && !api::is_ascii("café"));
     assert!(api::list_langs().iter().any(|l| l == "ru"));
-    assert!(Transliterate::new().find_untranslatable("hi").is_empty());
+    assert!(Transliterate::new()
+        .try_find_untranslatable("hi")
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

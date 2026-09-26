@@ -15,7 +15,7 @@ Two kinds of check, mirroring exactly what the doc-test blocks did:
   ``requirements/bench.txt`` are installed — ``perf-gate.yml`` and a local
   ``pip install -e .[bench]`` — and ``skip`` cleanly otherwise, exactly as the
   old blocks did via ``pytest.skip`` on ``ImportError``). The asserted floors are
-  deliberately far looser than the published figures (~13–38×): a loose floor
+  deliberately far looser than the published figures (~2.4–116×): a loose floor
   proves *direction and order of magnitude* on unknown, possibly loaded CI
   hardware without flaking, while the precise numbers live on the page and the
   ``perf-results`` branch.
@@ -124,7 +124,7 @@ def test_short_string_faster_than_unidecode():
 
 @pytest.mark.slow
 def test_document_scale_faster_than_unidecode():
-    """Document scale (~3 KB). Published ~38× Latin / ~15× Cyrillic; floor 6×."""
+    """Document scale (~3 KB). Published 24–116× Latin / ~13× Cyrillic; floor 6×."""
     unidecode = pytest.importorskip(
         "unidecode", reason="Unidecode not installed; see requirements/bench.txt"
     ).unidecode
@@ -137,7 +137,7 @@ def test_document_scale_faster_than_unidecode():
 
 @pytest.mark.slow
 def test_slugify_faster_than_python_slugify():
-    """Published ~10–24× vs python-slugify; floor 3×."""
+    """Published ~6–11× vs python-slugify; floor 3×."""
     py_slugify = pytest.importorskip(
         "slugify", reason="python-slugify not installed; see requirements/bench.txt"
     ).slugify
@@ -148,7 +148,7 @@ def test_slugify_faster_than_python_slugify():
 
 @pytest.mark.slow
 def test_sanitize_filename_faster_than_pathvalidate():
-    """Published ~10–16× vs pathvalidate; floor 3×."""
+    """Published ~7–11× vs pathvalidate; floor 3×."""
     pv_sanitize = pytest.importorskip(
         "pathvalidate", reason="pathvalidate not installed; see requirements/bench.txt"
     ).sanitize_filename

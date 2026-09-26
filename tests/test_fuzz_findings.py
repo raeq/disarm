@@ -13,13 +13,19 @@ import pytest
 
 from disarm import (
     DisarmError,
+    canonicalize,
+    canonicalize_strict,
     catalog_key,
     find_confusables,
     find_unmapped_confusables,
     find_untranslatable,
+    is_confusable,
+    normalize_confusables,
     sanitize_filename,
     search_key,
+    skeleton_key,
     slugify,
+    strip_obfuscation,
     transliterate,
 )
 
@@ -153,3 +159,73 @@ def test_a_key_is_its_own_key_across_a_stripped_control(text: str, digit_policy:
         assert key(once, digit_policy=digit_policy) == once
         assert "\x00" not in once and "\x01" not in once
     assert catalog_key("\U00016d67\x00\U00016d67") == "\U00016d68"
+
+
+# -- 9. normalize_confusables: a fold cycle outlasted the pass cap ------------------------
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+@pytest.mark.parametrize(("base", "mark"), [("C", "\u0327"), ("c", "\u0327"), ("i", "\u0309")])
+@pytest.mark.parametrize("n", [9, 64, 10_000])
+def test_a_fold_cycle_takes_every_mark_however_many(
+    base: str, mark: str, n: int, digit_policy: str
+) -> None:
+    once = normalize_confusables(base + mark * n, digit_policy=digit_policy)
+    assert once == base
+    assert not is_confusable(once)
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "C" + "\u0327" * 9,
+        "c" + "\u0327" * 64,
+        "i" + "\u0309" * 2_000,
+        "A. \u03aa\u04aa\u0327\u032a\u0327\u0327\u0327\u0327\u032a\u0327\u0327\u0327\u032c",
+    ],
+)
+def test_every_preset_takes_every_mark_of_a_fold_cycle(text: str, digit_policy: str) -> None:
+    for preset in (
+        canonicalize,
+        canonicalize_strict,
+        strip_obfuscation,
+        catalog_key,
+        search_key,
+        skeleton_key,
+    ):
+        once = preset(text, digit_policy=digit_policy)
+        assert preset(once, digit_policy=digit_policy) == once, preset.__name__
+
+
+# -- 10. canonicalize: the fold moves a mark past the cap ---------------------------------
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+def test_canonicalize_caps_a_mark_the_fold_moved(digit_policy: str) -> None:
+    once = canonicalize("\u01e7\u0327\u0367\u0327\u0327\u0327\u0303", digit_policy=digit_policy)
+    assert once == "\u0121\u030c\u0367"
+    assert canonicalize(once, digit_policy=digit_policy) == once
+
+
+# -- 11. slugify: a separator of word characters exposed a joiner -------------------------
+
+
+@pytest.mark.parametrize("separator", ["6", "x", "66", "6x", "ab"])
+@pytest.mark.parametrize("stopwords", [(), ("",)])
+@pytest.mark.parametrize("joiner", ["\u200d", "\u200c"])
+def test_a_word_character_separator_leaves_no_joiner_at_the_edge(
+    separator: str, stopwords: tuple[str, ...], joiner: str
+) -> None:
+    for text in (f"ab{joiner}{separator}", f"a b{joiner}{separator} cd"):
+        for max_length in range(len(text.encode()) + 1):
+            out = slugify(
+                text,
+                separator=separator,
+                allow_unicode=True,
+                max_length=max_length,
+                word_boundary=True,
+                stopwords=stopwords,
+            )
+            assert not out.startswith(("\u200c", "\u200d")), out
+            assert not out.endswith(("\u200c", "\u200d")), out

@@ -64,7 +64,7 @@ _EMPTY_KEY_CENSUS = {
     "catalog_key": (139_867, 2_399),
     "sort_key": (138_404, 936),
     "skeleton_key": (137_955, 487),
-    "slugify": (243_401, 105_933),
+    "slugify": (243_370, 105_902),
     "sanitize_filename": (0, 0),
 }
 
@@ -133,8 +133,8 @@ def canonicalize(text: str, *, digit_policy: str = "numeric") -> str:
     Pipeline: resolve deletions → [digit-policy pre-fold] → NFKC → strip bidi/format →
     strip invisible classes (#413) → strip_control → strip_zero_width →
     collapse_whitespace → drop repeated marks → cap combining marks at 3 (anti-zalgo,
-    #429) → NFC → confusables and NFC to a fixed point → drop repeated marks (the
-    confusable fold is iterated with NFC so TR39 skeletoning is normalization-stable
+    #429) → NFC → confusables and NFC to a fixed point → drop repeated marks → cap
+    combining marks again (the confusable fold is iterated with NFC so TR39 skeletoning is normalization-stable
     and the preset is idempotent — #416/#434). `PRESETS` lists the steps exactly.
 
     Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
@@ -1174,6 +1174,9 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
         ("fixed_point", "confusables(latin) -> normalize(NFC)"),
         # Again: the fold can manufacture a repeated mark (U+1EF3 + acute).
         ("drop_repeated_marks", None),
+        # And the cap again: the fold can move a mark from below to above (U+0123 to
+        # U+0121), which can put one more mark on a stack the cap already counted.
+        ("strip_zalgo", None),
     ],
     "ml_normalize": [
         ("resolve_deletions", None),

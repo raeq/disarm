@@ -20,7 +20,7 @@ use std::hint::black_box;
 
 use disarm::api::fold_case;
 use disarm::api::strip_accents;
-use disarm::api::{slugify, OnUnknown, SlugConfig, Transliterate};
+use disarm::api::{try_slugify, OnUnknown, SlugConfig, Transliterate};
 
 #[path = "../benchmarks/persona_corpus.rs"]
 mod persona_corpus;
@@ -93,13 +93,14 @@ fn main() {
                 if let Some(l) = lang {
                     b = b.lang(l);
                 }
-                b.run(black_box(&doc)).len()
+                b.try_run(black_box(&doc)).unwrap().len()
             }
-            "slugify" => slugify(black_box(&doc), &config).len(),
+            "slugify" => try_slugify(black_box(&doc), &config).unwrap().len(),
             "fold_case" => fold_case(black_box(&doc)).len(),
             "strip_accents" => strip_accents(black_box(&doc)).len(),
             "strict_scan" => Transliterate::new()
-                .find_untranslatable(black_box(&doc))
+                .try_find_untranslatable(black_box(&doc))
+                .unwrap()
                 .len(),
             _ => usage(),
         };

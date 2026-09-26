@@ -500,17 +500,24 @@ pub use crate::slugify::SlugConfig;
 /// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// Infallible by design — and therefore **`config.lang` is not validated**: an
-/// unknown language code falls back to the default transliterator. Prefer
-/// [`try_slugify`], which rejects it the way Python's `slugify` and every other
-/// binding do.
+/// unknown language code falls back to the default transliterator. Deprecated since
+/// 0.17 for that reason: use [`try_slugify`], which rejects it the way Python's
+/// `slugify` and every other binding do; removed in 1.0.
+#[deprecated(
+    since = "0.17.0",
+    note = "use `try_slugify`, which rejects an unknown `config.lang`; removed in 1.0"
+)]
 #[must_use]
 pub fn slugify(text: &str, config: &SlugConfig) -> String {
     crate::slugify::slugify_impl(text, config)
 }
 
-/// [`slugify`], rejecting a `config.lang` that [`validate_lang`](crate::api::validate_lang)
-/// does not accept instead of falling back to the default tables. What every binding's
-/// `slugify` calls (`formal/bindings`, B2).
+/// Generate a URL-safe slug from `text` according to `config`, rejecting a
+/// `config.lang` that [`validate_lang`](crate::api::validate_lang) does not accept
+/// instead of falling back to the default tables. What every binding's `slugify` calls
+/// (`formal/bindings`, B2), and what replaces the deprecated [`slugify`].
+///
+/// Build a [`SlugConfig`] with [`SlugConfig::new`] and the `with_*` setters.
 ///
 /// # Errors
 ///
@@ -580,8 +587,9 @@ pub fn demojize_with(text: &str, strip_modifiers: bool, on_unknown: &OnUnknown) 
 /// `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
 /// which is wider than the emoji: `demojize("x™y")` is `"x trade mark y"`. This asks
 /// *is this an emoji by the UCD's properties?*, so its domain is the emoji-presentation
-/// set — `Emoji_Presentation=Yes`, an `Emoji` or `Extended_Pictographic` base carrying
-/// `U+FE0F`, and the ZWJ, modifier, keycap and flag sequences built on those. Nothing else moves.
+/// set — `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying `U+FE0F` (#992: not an
+/// `Extended_Pictographic` one, so `★` + `U+FE0F` stays), and the ZWJ, modifier, keycap and
+/// flag sequences built on those. Nothing else moves.
 ///
 /// `replacement` is inserted exactly as given, with no padding and no whitespace
 /// collapse, because the two useful values want opposite things and neither can be a

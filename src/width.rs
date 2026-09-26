@@ -149,7 +149,7 @@ pub(crate) fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize 
     // UTS #51 defines emoji presentation sequences for emoji bases alone, so `a` + `U+FE0F`
     // renders as `a`; honouring the stray selector made it 2 columns, while the symmetric
     // stray VS15 above was already ignored.
-    let vs16_applies = has_vs16 && crate::tables::is_emoji_property(base);
+    let vs16_applies = has_vs16 && crate::tables::is_emoji_yes(base);
     if vs16_applies || base_emoji || (has_keycap && is_keycap_base) {
         return 2;
     }

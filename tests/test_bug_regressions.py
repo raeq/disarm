@@ -237,6 +237,45 @@ class TestTransliterationTableQuality:
             assert result != char, f"U+{cp:04X} ({char}) has no mapping"
 
 
+class TestCasePairTransliteration:
+    """Both forms of a case pair transliterate alike, and search_key stays ASCII (#1052).
+
+    search_key folds case before it transliterates, so a lowercase form with no mapping
+    leaked into the key even when its capital had one. The full sweep over the core's
+    case-folding table is `tests/case_pair_transliteration.rs`; these are the issue's rows.
+    """
+
+    @pytest.mark.parametrize(
+        ("upper", "lower", "want_upper", "want_lower", "want_key"),
+        [
+            ("Ⱥ", "ⱥ", "A", "a", "a"),
+            ("Ⱦ", "ⱦ", "T", "t", "t"),
+            ("Ɫ", "ɫ", "L", "l", "l"),
+            ("Ɑ", "ɑ", "A", "a", "a"),
+            ("Ჱ", "ჱ", "He", "he", "he"),
+        ],
+    )
+    def test_issue_rows(self, upper, lower, want_upper, want_lower, want_key) -> None:
+        assert transliterate(upper) == want_upper
+        assert transliterate(lower) == want_lower
+        assert search_key(upper) == want_key
+        assert search_key(lower) == want_key
+
+    def test_search_key_meets_the_accented_capital(self) -> None:
+        assert search_key("ȺBC") == search_key("ÀBC") == "abc"
+
+    def test_reversed_e_agrees_with_its_lowercase(self) -> None:
+        # U+018E had copied the row above it (ƍ -> d).
+        assert transliterate("\u018e") == transliterate("\u01dd").upper() == "E"
+
+    def test_schwa_gives_a_in_both_forms(self) -> None:
+        """The Azerbaijani convention in English: Əliyev is Aliyev, Heydər is Heydar."""
+        assert transliterate("\u018f") == "A"
+        assert transliterate("\u0259") == "a"
+        assert transliterate("\u018fliyev") == "Aliyev"
+        assert search_key("Heyd\u0259r \u018fliyev") == "heydar aliyev"
+
+
 # ---------------------------------------------------------------------------
 # Pipeline integration edge cases
 # ---------------------------------------------------------------------------

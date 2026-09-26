@@ -437,9 +437,9 @@ export function demojize(text: string, options: { stripModifiers?: boolean } = {
  * The counterpart to {@link demojize}, and a different question of a different table.
  * `demojize` asks *what does CLDR call this?*, so its domain is the CLDR name table,
  * which is wider than the emoji: `demojize('x™y')` is `'x trade mark y'`. This asks *is
- * this an emoji by the UCD's properties?* — `Emoji_Presentation=Yes`, an `Emoji` or
- * `Extended_Pictographic` base carrying `U+FE0F`, and the ZWJ, modifier, keycap and flag
- * sequences on those. Nothing
+ * this an emoji by the UCD's properties?* — `Emoji_Presentation=Yes`, an `Emoji=Yes`
+ * base carrying `U+FE0F` (not an `Extended_Pictographic` one, so `★` + `U+FE0F` stays),
+ * and the ZWJ, modifier, keycap and flag sequences on those. Nothing
  * else moves.
  *
  * `replacement` is inserted exactly as given, with no padding and no whitespace collapse:
@@ -565,7 +565,7 @@ export function stripObfuscation(text: string, options: { digitPolicy?: DigitPol
  * strip bidi/format → strip invisible classes (#413) → strip control → strip
  * zero-width → collapse whitespace → drop repeated marks → cap combining marks
  * (anti-zalgo) → NFC → confusables and NFC to a fixed point → drop repeated marks
- * (the fold is iterated with NFC for idempotency).
+ * → cap combining marks again (the fold is iterated with NFC for idempotency).
  *
  * The name describes the mechanism (Unicode canonicalization for matching), not
  * a safety guarantee — this is not an output sanitizer; encode at the sink.

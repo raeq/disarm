@@ -6,7 +6,7 @@ set_option linter.unusedSimpArgs false
 # General theorems (proved by induction, for all inputs over all of `Char`)
 
 None of these proofs unfolds a table predicate (`isEmojiPresentation`,
-`isEmojiProperty`, …): they hold for any tables, so they hold for the full UCD/CLDR
+`isEmojiYes`, …): they hold for any tables, so they hold for the full UCD/CLDR
 tables and not only the alphabet projection.
 -/
 
@@ -27,7 +27,7 @@ theorem headLen_none_stable (w e : List Char) (hw : 3 ≤ w.length)
       · simp only [hRI, hK, Bool.false_eq_true, ite_false, ite_true] at h ⊢
         by_cases hb : b = VS16 <;> simp_all
       · simp only [hRI, hK, Bool.false_eq_true, ite_false] at h ⊢
-        by_cases hO : (opensEmojiPresentation a || (some b == some VS16 && Tables.isEmojiProperty a)) = true
+        by_cases hO : (opensEmojiPresentation a || (some b == some VS16 && Tables.isEmojiYes a)) = true
         · simp only [hO, Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_true, ite_false, reduceCtorEq, Option.some.injEq] at h
         · simp only [Bool.not_eq_true] at hO
           simp only [hO, Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_true, ite_false, reduceCtorEq, Option.some.injEq]
@@ -44,7 +44,7 @@ theorem headLen_some_stable (x e : List Char) (j : Nat) (h : headLen x = some j)
     · by_cases hK : isKeycapBase a
       · simp [hRI, hK] at h
       · simp only [hRI, hK, Bool.false_eq_true, ite_false] at h
-        by_cases hO : (opensEmojiPresentation a || (none == some VS16 && Tables.isEmojiProperty a)) = true
+        by_cases hO : (opensEmojiPresentation a || (none == some VS16 && Tables.isEmojiYes a)) = true
         · simp only [hO, Bool.not_true, Bool.false_eq_true, ite_false, Option.some.injEq] at h
           simp at h hj; omega
         · simp only [Bool.not_eq_true] at hO
@@ -64,7 +64,7 @@ theorem headLen_some_stable (x e : List Char) (j : Nat) (h : headLen x = some j)
         · have : (b == VS16) = false := by simp [hb]
           simp_all
       · simp only [hRI, hK, Bool.false_eq_true, ite_false] at h ⊢
-        by_cases hO : (opensEmojiPresentation a || (some b == some VS16 && Tables.isEmojiProperty a)) = false
+        by_cases hO : (opensEmojiPresentation a || (some b == some VS16 && Tables.isEmojiYes a)) = false
         · simp only [hO, Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_true, ite_false, reduceCtorEq, Option.some.injEq] at h
         · simp only [Bool.not_eq_false] at hO
           simp only [hO, Bool.not_true, Bool.false_eq_true, ite_false] at h ⊢
@@ -102,7 +102,7 @@ theorem headLen_pos (w : List Char) (l : Nat) (h : headLen w = some l) : 1 ≤ l
         obtain ⟨_, h2⟩ := h
         rw [← h2]; omega
       · simp only [hRI, hK, Bool.false_eq_true, ite_false] at h
-        by_cases hO : (opensEmojiPresentation a || (r.head? == some VS16 && Tables.isEmojiProperty a)) = true
+        by_cases hO : (opensEmojiPresentation a || (r.head? == some VS16 && Tables.isEmojiYes a)) = true
         · simp only [hO, Bool.not_true, Bool.false_eq_true, ite_false, Option.some.injEq] at h; omega
         · simp only [Bool.not_eq_true] at hO
           simp only [hO, Bool.not_true, Bool.not_false, Bool.false_eq_true, ite_true, ite_false, reduceCtorEq, Option.some.injEq] at h

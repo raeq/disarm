@@ -239,6 +239,12 @@ def zalgo (cap : Nat) (s : Str) : Str :=
   else if !exceedsRun cap s then nfc s
   else nfc ((nfd s).foldl (zalgoStep cap) {}).out.reverse
 
+/-- `Step::ZalgoIfOver` (#1072, after `595fbda`): the cap, on text it would cut; any other
+text unchanged, where `zalgo` would have renormalized it. The Rust also returns early from
+`exceeds_combining_run` on text with no standalone mark, which gives the same answer. -/
+def zalgoIfOver (cap : Nat) (s : Str) : Str :=
+  if exceedsRun cap s then zalgo cap s else s
+
 /-- `has_repeated_mark` (zalgo.rs L165). -/
 def hasRepeatedMark (s : Str) : Bool :=
   let r := (nfd s).foldl (fun (acc : Bool × Option Nat) ch =>

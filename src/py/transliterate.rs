@@ -4,13 +4,14 @@
 //! infallible pure-transform wrappers; the registration set, the Python
 //! fallback-callback machinery, and the batch/context entry points land here too.
 
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyUnicodeEncodeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{LazyLock, RwLock};
 
+use crate::py::boundary::{scrub_wtf8, Utf8Arg};
 use crate::ErrorMode;
 
 /// `strip_accents(text) -> str`
@@ -136,38 +137,45 @@ pub fn _set_transliterate_fallback(f: Bound<'_, PyAny>) -> PyResult<()> {
 /// signature source of truth.
 #[pyfunction]
 #[pyo3(
-    signature = (text, *, lang=None, target=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false, context=false),
+    signature = (text, *, lang=None, target=None, errors=Utf8Arg::literal("replace"), replace_with=Utf8Arg::literal("[?]"), strict_iso9=false, gost7034=false, tones=false, context=false),
     text_signature = "(text, *, lang=None, target=None, errors='replace', replace_with='[?]', strict_iso9=False, gost7034=False, tones=False, context=False)"
 )]
 #[allow(clippy::too_many_arguments)]
 pub fn _transliterate_entry<'py>(
     text: &Bound<'py, PyAny>,
-    lang: Option<&str>,
-    target: Option<&str>,
-    errors: &str,
-    replace_with: &str,
+    lang: Option<Utf8Arg<'_>>,
+    target: Option<Utf8Arg<'_>>,
+    errors: Utf8Arg<'_>,
+    replace_with: Utf8Arg<'_>,
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
     context: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let (lang, target) = (lang.as_deref(), target.as_deref());
+    let (errors, replace_with) = (&*errors, &*replace_with);
     // Fast path: exact `str` (subclasses keep their legacy general-path
     // handling), forward direction, no context engine. The conflict-matrix
     // validation is a provable no-op without `target`/`context` (#231); all
     // remaining validation (lang, errors, strict_iso9 × gost7034) runs inside
     // `_transliterate` itself (#130).
+    //
+    // This entry point is the one `_boundary.py` does not wrap in `SurrogateSafe`: the
+    // extra call layer cost as much as the call. It keeps the #469 contract itself: the
+    // string arguments are `Utf8Arg`s, and text holding surrogates is scrubbed and run
+    // again, exactly as the guard would.
     if target.is_none() && !context {
         if let Ok(s) = text.cast_exact::<PyString>() {
-            return Ok(_transliterate(
-                s,
-                lang,
-                errors,
-                replace_with,
-                strict_iso9,
-                gost7034,
-                tones,
-            )?
-            .into_any());
+            let run = |s: &Bound<'py, PyString>| {
+                _transliterate(s, lang, errors, replace_with, strict_iso9, gost7034, tones)
+            };
+            return match run(s) {
+                Err(err) if err.is_instance_of::<PyUnicodeEncodeError>(text.py()) => {
+                    run(&PyString::new(text.py(), &scrub_wtf8(s)?))
+                }
+                result => result,
+            }
+            .map(Bound::into_any);
         }
     }
     // Everything else: delegate to the Python dispatcher.
@@ -360,16 +368,16 @@ pub fn _transliterate_context(
 /// crossing. Wraps the Layer-1 engine `crate::transliterate::*` (#38).
 #[pyfunction]
 #[pyo3(signature = (texts, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]
-pub fn _transliterate_batch(
-    py: Python<'_>,
-    texts: &Bound<'_, PyList>,
+pub fn _transliterate_batch<'py>(
+    py: Python<'py>,
+    texts: &Bound<'py, PyList>,
     lang: Option<&str>,
     errors: &str,
     replace_with: &str,
     strict_iso9: bool,
     gost7034: bool,
     tones: bool,
-) -> PyResult<Vec<String>> {
+) -> PyResult<Bound<'py, PyList>> {
     // #130: Defence-in-depth — the PyO3 boundary check in each entry-point guards
     // direct Rust callers; Python callers are covered by the same check.
     if strict_iso9 && gost7034 {
@@ -403,46 +411,59 @@ pub fn _transliterate_batch(
     let lang = lang.map(str::to_owned);
     let replace_with = replace_with.to_owned();
 
-    // #239: extract Rust `String` copies from the snapshot and transliterate in
-    // chunks, so peak Rust-side string residency is one chunk rather than a full
-    // copy of every input up front (the former `Vec<String>` boundary held all N
-    // at once). Each chunk is extracted with the GIL held, then transliterated
-    // with the GIL released (#70) — the compute loop touches no Python objects,
-    // so other Python threads run during it. All-or-raise is preserved (the
-    // partial `out` is dropped on error); a non-str element raises TypeError
-    // (the public wrapper's `_validate_batch` already rejects those up front).
-    let mut out: Vec<String> = Vec::with_capacity(len);
+    // #239: transliterate in chunks, each read with the GIL held and computed with it
+    // released (#70), so other Python threads run during the compute loop. Each item's
+    // UTF-8 is borrowed, not copied: the snapshot tuple holds every string alive for the
+    // whole call, and `str` is immutable, so the borrow stays valid while the GIL is
+    // released. An item the engine leaves unchanged (a borrowed result, the same
+    // contract as the scalar path's) comes back as the original object; only a changed
+    // one allocates. The copy-in, copy-out form cost more per item than a loop of
+    // single calls, which return the original object the same way. All-or-raise is
+    // preserved; a non-str element raises TypeError (the public wrapper's
+    // `_validate_batch` already rejects those up front).
+    let mut out: Vec<Bound<'py, PyAny>> = Vec::with_capacity(len);
     let mut start = 0;
     while start < len {
         let end = (start + crate::BATCH_CHUNK_SIZE).min(len);
-        let mut chunk: Vec<String> = Vec::with_capacity(end - start);
-        for i in start..end {
-            chunk.push(texts.get_item(i)?.extract::<String>()?);
-        }
-        let processed: Vec<String> = py.detach(|| -> PyResult<Vec<String>> {
-            chunk
-                .iter()
-                .map(|text| -> PyResult<String> {
+        let items: Vec<Bound<'py, PyString>> = (start..end)
+            .map(|i| Ok(texts.get_item(i)?.cast_into::<PyString>()?))
+            .collect::<PyResult<_>>()?;
+        let utf8: Vec<&str> = items
+            .iter()
+            .map(|item| item.to_str())
+            .collect::<PyResult<_>>()?;
+        let changed: Vec<Option<String>> = py.detach(|| -> PyResult<Vec<Option<String>>> {
+            utf8.iter()
+                .map(|text| -> PyResult<Option<String>> {
                     // The scalar path's body per item: the registered replacements
                     // (no-op unless any are registered, output-bounded), then the
                     // engine. `lang` was validated once, above.
-                    Ok(crate::transliterate::transliterate_after_replacements(
-                        text,
-                        lang.as_deref(),
-                        on_unknown,
-                        &replace_with,
-                        strict_iso9,
-                        gost7034,
-                        tones,
-                    )?
-                    .into_owned())
+                    Ok(
+                        match crate::transliterate::transliterate_after_replacements(
+                            text,
+                            lang.as_deref(),
+                            on_unknown,
+                            &replace_with,
+                            strict_iso9,
+                            gost7034,
+                            tones,
+                        )? {
+                            Cow::Borrowed(_) => None,
+                            Cow::Owned(owned) => Some(owned),
+                        },
+                    )
                 })
                 .collect()
         })?;
-        out.extend(processed);
+        for (item, changed) in items.into_iter().zip(changed) {
+            out.push(match changed {
+                None => item.into_any(),
+                Some(owned) => PyString::new(py, &owned).into_any(),
+            });
+        }
         start = end;
     }
-    Ok(out)
+    PyList::new(py, out)
 }
 
 /// Batch accent stripping: process a list of strings in a single PyO3 boundary

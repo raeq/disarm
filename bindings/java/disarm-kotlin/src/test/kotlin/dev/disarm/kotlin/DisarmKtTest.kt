@@ -1,6 +1,7 @@
 package dev.disarm.kotlin
 
 import dev.disarm.DigitPolicy
+import dev.disarm.Disarm as JDisarm
 import dev.disarm.DisarmInvalidArgumentException
 import dev.disarm.Lexicon
 import dev.disarm.NormalizationForm
@@ -170,6 +171,11 @@ class DisarmKtTest {
         assertEquals(159, confusableCoverage("Greek").sources())
         assertEquals(0, confusableCoverage("Thaana").sources())
         assertFalse(listContextLangs().isEmpty())
+        // #981: the Kotlin functions are the Java facade's lists, which IntrospectionListsTest
+        // holds to the shared fixture.
+        assertEquals(JDisarm.listLangs(), listLangs())
+        assertEquals(JDisarm.listProfiles(), listProfiles())
+        assertEquals(JDisarm.reverseLangs(), reverseLangs())
     }
 
     @Test

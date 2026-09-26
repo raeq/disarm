@@ -106,6 +106,9 @@ COMMON_WITNESSES = [
     chr(0x1F240),
     "a" + ".*" * 9,
     chr(0xF51) + chr(0xFB7),
+    "C" + chr(0x327) * 9,
+    "ab" + chr(0x200D) + "6",
+    chr(0x1E7) + chr(0x327) + chr(0x367) + chr(0x327) * 3 + chr(0x303),
     # Sanitizers findings 1-15.
     "_.con",
     "*.con",

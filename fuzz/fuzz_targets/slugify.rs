@@ -30,7 +30,8 @@
 #![no_main]
 
 use arbitrary::Arbitrary;
-use disarm::api::{slugify, SlugConfig};
+use disarm::api::{try_slugify, SlugConfig};
+use disarm::ErrorKind;
 use disarm_fuzz::{nfc, nfd, text_and, Lang};
 use libfuzzer_sys::fuzz_target;
 
@@ -95,7 +96,20 @@ fuzz_target!(|data: &[u8]| {
     if let Some(l) = o.lang.code() {
         config = config.with_lang(l);
     }
-    let out = slugify(&s, &config);
+    // A raw `lang` the library does not know is refused (the deprecated infallible
+    // `slugify` fell back to the default tables): that is the whole check for such an
+    // input. Once `config` is accepted, no later call with it can fail.
+    let out = match try_slugify(&s, &config) {
+        Ok(out) => out,
+        Err(e) => {
+            assert!(
+                config.lang.is_some(),
+                "try_slugify failed with no lang: {e}"
+            );
+            assert_eq!(e.kind(), ErrorKind::InvalidArgument, "{e}");
+            return;
+        }
+    };
 
     // S3.
     if max_length > 0 {
@@ -131,8 +145,8 @@ fuzz_target!(|data: &[u8]| {
         // with `compose_str`, which also forms composition exclusions, so
         // `"\u{F51}\u{FB7}"` gives U+0F52, which is not NFC but is what `"\u{F52}"` gives.
         assert_eq!(
-            slugify(&nfc(&s), &config),
-            slugify(&nfd(&s), &config),
+            try_slugify(&nfc(&s), &config).expect("an accepted config"),
+            try_slugify(&nfd(&s), &config).expect("an accepted config"),
             "NFC and NFD spellings of {s:?} slugify differently"
         );
     } else {
@@ -175,7 +189,7 @@ fuzz_target!(|data: &[u8]| {
     let spells_entity = !o.no_entities && sep.contains('&');
     if stopwords.is_empty() && max_length == 0 && plain_sep && !spells_entity {
         assert_eq!(
-            slugify(&out, &config),
+            try_slugify(&out, &config).expect("an accepted config"),
             out,
             "slugify is not idempotent on {s:?}"
         );
@@ -183,9 +197,9 @@ fuzz_target!(|data: &[u8]| {
 
     // A valid slug is unchanged, under the default configuration.
     let default = SlugConfig::new();
-    let slug = slugify(&s, &default);
+    let slug = try_slugify(&s, &default).expect("an accepted config");
     assert_eq!(
-        slugify(&slug, &default),
+        try_slugify(&slug, &default).expect("an accepted config"),
         slug,
         "a slug is not its own slug: {s:?}"
     );

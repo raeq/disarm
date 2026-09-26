@@ -286,7 +286,7 @@ pub fn transliterate<'a>(
     if let Some(l) = lang {
         b = b.lang(l);
     }
-    b.run(text)
+    b.try_run(text).unwrap()
 }
 
 /// Positional `find_untranslatable` matching the pre-#352 signature.
@@ -303,7 +303,8 @@ pub fn find_untranslatable(
     if let Some(l) = lang {
         b = b.lang(l);
     }
-    b.find_untranslatable(text)
+    b.try_find_untranslatable(text)
+        .unwrap()
         .into_iter()
         .map(|u| (u.ch, u.offset))
         .collect()

@@ -197,8 +197,13 @@ fn match_emoji_at_reference(window: &[char]) -> Option<(&'static str, usize)> {
 /// collects the chain into a `Vec` and parks what it pulled but did not use in
 /// `pushback`, so allocation is bounded by the longest chain in the input.
 pub(crate) struct CharWindow<'a> {
-    buf: [char; MAX_WINDOW],
-    /// Number of valid chars currently in `buf` (always <= MAX_WINDOW).
+    /// Room for two windows, so advancing moves `head` and shifts the valid chars back to
+    /// the front only once `head` has passed a whole window: one shift per `MAX_WINDOW`
+    /// chars read, where shifting on every advance moved the window once per char.
+    buf: [char; 2 * MAX_WINDOW],
+    /// Index in `buf` of the window's first char.
+    head: usize,
+    /// Number of valid chars in the window, `buf[head..head + len]` (always <= MAX_WINDOW).
     len: usize,
     /// Chars pulled past the window while following a sequence longer than it, and not
     /// consumed by the match that pulled them. Refills take from here before `rest`, so
@@ -238,7 +243,7 @@ const _: () = assert!(
 impl<'a> CharWindow<'a> {
     /// Create a new window, pre-filling the buffer from `chars`.
     pub(crate) fn new(mut chars: std::str::Chars<'a>) -> Self {
-        let mut buf = ['\0'; MAX_WINDOW];
+        let mut buf = ['\0'; 2 * MAX_WINDOW];
         let mut len = 0;
         while len < MAX_WINDOW {
             match chars.next() {
@@ -251,6 +256,7 @@ impl<'a> CharWindow<'a> {
         }
         CharWindow {
             buf,
+            head: 0,
             len,
             pushback: std::collections::VecDeque::new(),
             rest: chars,
@@ -267,7 +273,7 @@ impl<'a> CharWindow<'a> {
     #[inline]
     pub(crate) fn current(&self) -> Option<char> {
         if self.len > 0 {
-            Some(self.buf[0])
+            Some(self.buf[self.head])
         } else {
             None
         }
@@ -276,18 +282,19 @@ impl<'a> CharWindow<'a> {
     /// A slice of all valid chars in the window (up to MAX_WINDOW chars).
     #[inline]
     pub(crate) fn as_slice(&self) -> &[char] {
-        &self.buf[..self.len]
+        &self.buf[self.head..self.head + self.len]
     }
 
     /// Advance the window by `n` chars.
     ///
-    /// Shifts `buf[n..]` to the front, then refills. `n` may exceed the buffer: a match
+    /// Drops the first `n` chars, then refills. `n` may exceed the buffer: a match
     /// found by [`CharWindow::presentation_len`] can be longer than the window, and the
     /// chars past it are then dropped a bufferful at a time rather than shifted.
     pub(crate) fn advance(&mut self, mut n: usize) {
         debug_assert!(n > 0);
         while n >= self.len && self.len > 0 {
             n -= self.len;
+            self.head = 0;
             self.len = 0;
             self.refill();
             if n == 0 {
@@ -297,18 +304,22 @@ impl<'a> CharWindow<'a> {
         if self.len == 0 {
             return;
         }
-        // Shift remaining buffered chars to the front, then top the buffer back up.
-        self.buf.copy_within(n..self.len, 0);
+        self.head += n;
         self.len -= n;
         self.refill();
     }
 
-    /// Fill `buf` from `self.len` up to `MAX_WINDOW`.
+    /// Top the window up to `MAX_WINDOW` chars, first moving it to the front of `buf`
+    /// when a full window no longer fits after `head`.
     fn refill(&mut self) {
+        if self.head > MAX_WINDOW {
+            self.buf.copy_within(self.head..self.head + self.len, 0);
+            self.head = 0;
+        }
         while self.len < MAX_WINDOW {
             match self.next_char() {
                 Some(c) => {
-                    self.buf[self.len] = c;
+                    self.buf[self.head + self.len] = c;
                     self.len += 1;
                 }
                 None => break,
@@ -351,7 +362,8 @@ impl<'a> CharWindow<'a> {
         // is final as soon as it had `HEAD_LOOKAHEAD` chars to look at. Treating every
         // joiner as unjudged instead cost a windowful of read-ahead per emoji on input
         // shaped like `emoji + ZWJ + text` — 20.5 ms against 7.9 ms for 100k of them.
-        if len < self.len && (self.buf[len] != ZWJ || self.len - (len + 1) >= HEAD_LOOKAHEAD) {
+        if len < self.len && (self.as_slice()[len] != ZWJ || self.len - (len + 1) >= HEAD_LOOKAHEAD)
+        {
             return Some(len);
         }
         // A full buffer cannot tell a finished sequence from one it merely ran out of
@@ -521,8 +533,8 @@ pub(crate) fn pad_emoji_replacement(result: &mut String, text: &str) {
 // `\u{00A9}` from ordinary prose, which is not what a caller removing emoji asked for.
 //
 // So replacement asks "is this an emoji by the UCD's own properties?" and its domain is
-// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji` or
-// `Extended_Pictographic` base carrying `U+FE0F`, and the sequences built on those. That question needs two range tables and
+// the emoji-presentation set: `Emoji_Presentation=Yes`, an `Emoji=Yes` base carrying
+// `U+FE0F` (#992), and the sequences built on those. That question needs two range tables and
 // no names, which is the second reason the paths are separate: a build that only
 // replaces links neither the CLDR name trie nor the 182 KB behind it (#695).
 
@@ -536,6 +548,31 @@ fn is_skin_tone(ch: char) -> bool {
 #[inline]
 fn is_tag(ch: char) -> bool {
     matches!(ch, '\u{E0020}'..='\u{E007F}')
+}
+
+// `EMOJI_CANDIDATE`: one bit per BMP code point (codegen/emoji_candidate.rs).
+include!(concat!(env!("OUT_DIR"), "/emoji_candidate.rs"));
+
+/// Whether a scanner may do anything at `ch` but copy it: a skipped selector or joiner,
+/// a name, the start of a named sequence, or an emoji presentation opener. Astral
+/// characters always answer yes, so only the BMP rule, [`may_act_at_lookup`], has to be
+/// right, and `candidate_bitmap_covers_the_scanners` holds the bitmap to it.
+#[inline]
+fn may_act_at(ch: char) -> bool {
+    let cp = u32::from(ch);
+    cp > 0xFFFF || EMOJI_CANDIDATE[(cp >> 6) as usize] >> (cp & 63) & 1 == 1
+}
+
+/// The rule [`may_act_at`] tabulates, stated as the tests the scanners make.
+#[cfg(test)]
+fn may_act_at_lookup(ch: char) -> bool {
+    ch == VS16
+        || ch == VS15
+        || ch == ZWJ
+        || tables::is_emoji_multi_starter(ch)
+        || tables::lookup_emoji_single(ch).is_some()
+        || opens_emoji_presentation(ch)
+        || is_tag(ch)
 }
 
 /// Regional indicators, which pair into a flag.
@@ -608,7 +645,7 @@ fn head_len_at(window: &[char]) -> Option<usize> {
     // Two ways to open: the code point renders as emoji on its own, or it *can* and the
     // next code point says to.
     let vs16_next = window.get(1) == Some(&VS16);
-    let opens = opens_emoji_presentation(first) || (vs16_next && tables::is_emoji_property(first));
+    let opens = opens_emoji_presentation(first) || (vs16_next && tables::is_emoji_yes(first));
     if !opens {
         return None;
     }
@@ -678,15 +715,15 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
 /// `ml_normalize` the real step is a change with a `KEY_SCHEMA_VERSION` cost of its own.
 ///
 /// Only a sequence whose head renders as emoji **without being asked** counts. A
-/// text-default base that `U+FE0F` opens — `\u{00A9}`, `\u{00AE}`, `\u{2605}` — is
-/// an emoji presentation sequence to [`presentation_len_at`], and `replace_emoji` is
-/// right to replace it. Here it is not an emoji *with no name*: it is a symbol with no
-/// name that was asked to render as emoji, and dropping it deletes an assigned character
-/// on the strength of a selector. Excluded, the scanners keep the base and drop the
+/// text-default `Emoji=Yes` base that `U+FE0F` opens — `\u{00A9}`, `\u{00AE}` — is an
+/// emoji presentation sequence to [`presentation_len_at`], and `replace_emoji` is right
+/// to replace it. Here it is not an emoji *with no name*: it is a symbol with no name
+/// that was asked to render as emoji, and dropping it deletes an assigned character on
+/// the strength of a selector. Excluded, the scanners keep the base and drop the
 /// selector, as they did before #990. Without this the branch took 2,141 such symbols —
-/// `emoji_property.tsv` is `Emoji` OR `Extended_Pictographic`, which reaches unassigned
-/// code points too — and a ZWJ chain opened by one, `\u{00A9}\u{FE0F}\u{200D}🔥`,
-/// took the named `🔥` down with it. The keycap bases open no sequence without a keycap
+/// the VS16 arm then read `Emoji` OR `Extended_Pictographic`, which reaches `\u{2605}`
+/// and unassigned code points too, until #992 narrowed it to `Emoji=Yes` — and a ZWJ
+/// chain opened by one, `\u{00A9}\u{FE0F}\u{200D}🔥`, took the named `🔥` down with it. The keycap bases open no sequence without a keycap
 /// after them, and every keycap has a CLDR name, so they need no exception.
 ///
 /// Both scanners call this, so the two cannot drift apart on what they rewrite.
@@ -935,6 +972,19 @@ pub(crate) fn demojize_rust_into_with(
     unnamed: Unnamed<'_>,
     result: &mut String,
 ) {
+    demojize_scan::<true>(text, strip_modifiers, policy, unnamed, result);
+}
+
+/// The body of [`demojize_rust_into_with`]. `FAST` copies a character that is not an
+/// [emoji candidate](may_act_at) without asking the tables; the test
+/// `the_fast_scan_is_the_full_scan` holds the two instantiations byte-equal.
+fn demojize_scan<const FAST: bool>(
+    text: &str,
+    strip_modifiers: bool,
+    policy: NamePolicy,
+    unnamed: Unnamed<'_>,
+    result: &mut String,
+) {
     result.clear();
     // Fast path: pure-ASCII text cannot contain emoji.
     if text.is_ascii() {
@@ -951,6 +1001,15 @@ pub(crate) fn demojize_rust_into_with(
     let mut last_was_raw = false;
 
     while let Some(ch) = win.current() {
+        // Every branch below but the last needs `ch` to be a candidate, and the last,
+        // with no emoji before it, writes `ch` and clears both flags (which `last_was_raw`
+        // only ever holds with `last_was_emoji`).
+        if FAST && !last_was_emoji && !may_act_at(ch) {
+            result.push(ch);
+            win.advance(1);
+            continue;
+        }
+
         if ch == VS16 || ch == VS15 || ch == ZWJ {
             win.advance(1);
             // Skipping is a removal, and what follows now meets what came before: a
@@ -1018,12 +1077,13 @@ pub(crate) fn demojize_rust_into_with(
             continue;
         }
 
-        let separate = if last_was_raw {
-            ch.is_alphanumeric()
-        } else {
-            needs_separator_after_a_name(ch)
-        };
-        if last_was_emoji && separate {
+        let separate = last_was_emoji
+            && if last_was_raw {
+                ch.is_alphanumeric()
+            } else {
+                needs_separator_after_a_name(ch)
+            };
+        if separate {
             result.push(' ');
         }
         result.push(ch);
@@ -1036,6 +1096,60 @@ pub(crate) fn demojize_rust_into_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn candidate_bitmap_covers_the_scanners() {
+        for c in (0u32..0x1_0000).filter_map(char::from_u32) {
+            assert_eq!(
+                may_act_at(c),
+                may_act_at_lookup(c),
+                "U+{:04X}",
+                u32::from(c)
+            );
+        }
+    }
+
+    /// Copying a non-candidate without asking the tables writes what asking them did,
+    /// for every BMP scalar, after a name, after a preserved emoji, and around the
+    /// sequences a character could join: keycaps, selectors, flags, skin tones, ZWJ.
+    #[test]
+    fn the_fast_scan_is_the_full_scan() {
+        let policies = [
+            NamePolicy::default(),
+            NamePolicy {
+                skip_tr39_claimed: true,
+                skip_non_emoji: false,
+            },
+            NamePolicy {
+                skip_tr39_claimed: false,
+                skip_non_emoji: true,
+            },
+            NamePolicy {
+                skip_tr39_claimed: true,
+                skip_non_emoji: true,
+            },
+        ];
+        let unnamed = [Unnamed::Drop, Unnamed::Replace("?"), Unnamed::Preserve];
+        let (mut fast, mut full) = (String::new(), String::new());
+        for (i, c) in (0u32..0x1_0000).filter_map(char::from_u32).enumerate() {
+            for text in [
+                format!("x{c}y"),
+                format!("\u{1F600}{c}\u{2122}{c}"),
+                format!("\u{1F1E6}{c}a\u{1F1FF}"),
+                format!("{c}\u{FE0F}\u{20E3}1{c}\u{20E3}"),
+                format!("\u{1F44D}{c}\u{1F3FD}\u{1F1E6}{c}"),
+                format!("\u{1F468}\u{200D}{c}\u{200D}\u{1F469}{c}\u{FE0F}"),
+            ] {
+                for policy in policies {
+                    let unnamed = unnamed[i % unnamed.len()];
+                    let strip = i % 2 == 0;
+                    demojize_scan::<true>(&text, strip, policy, unnamed, &mut fast);
+                    demojize_scan::<false>(&text, strip, policy, unnamed, &mut full);
+                    assert_eq!(fast, full, "{text:?} {policy:?}");
+                }
+            }
+        }
+    }
 
     /// The keycap CLDR keys without a selector, written the way people type it (#972).
     #[test]

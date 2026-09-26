@@ -13,7 +13,7 @@ use crate::Error;
 /// Pipeline: resolve deletions → NFKC → strip bidi/format → strip invisible classes
 /// (#413) → strip control → strip zero-width → collapse whitespace → drop repeated marks
 /// → cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed point
-/// → drop repeated marks. (The confusable fold is iterated with NFC so TR39
+/// → drop repeated marks → cap combining marks again. (The confusable fold is iterated with NFC so TR39
 /// skeletoning is normalization-stable and the preset is idempotent — #416/#434.) Fallible only through the confusables stage, whose target script is
 /// fixed internally, so in practice this never errors; the [`Result`] keeps the
 /// surface uniform with the other key/clean presets.

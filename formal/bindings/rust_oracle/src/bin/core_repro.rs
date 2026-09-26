@@ -1,6 +1,10 @@
 //! Core-API reproductions (README: B2, E1, E2). Each block prints what the public
 //! `disarm::api` does, for comparison with what the Python binding does for the same
 //! call (`../repro/python_core_repro.py`).
+//!
+//! B2 is the lenient `Transliterate::run`, deprecated since 0.17 in favour of `try_run`
+//! (removed in 1.0); reproducing the finding means calling it, hence the `allow`.
+#![allow(deprecated)]
 
 use disarm::api;
 use std::collections::HashMap;

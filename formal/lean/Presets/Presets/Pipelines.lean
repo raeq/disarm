@@ -30,6 +30,8 @@ inductive Base
   | stripZeroWidth
   | collapseWs
   | zalgo (cap : Nat)
+  /-- Not in the Rust at `595fbda`: the step #1072 added, for the fix `Fixes.lean` models. -/
+  | zalgoIfOver (cap : Nat)
   | dropRepeatedMarks
   | foldCase
   | stripAccents
@@ -62,6 +64,7 @@ def Base.apply (p : Pol) : Base -> Str -> Str
   | .stripZeroWidth, s => Presets.stripZeroWidth s
   | .collapseWs, s => Presets.collapseWs s
   | .zalgo cap, s => Presets.zalgo cap s
+  | .zalgoIfOver cap, s => Presets.zalgoIfOver cap s
   | .dropRepeatedMarks, s => Presets.dropRepeatedMarks s
   | .foldCase, s => Presets.foldCase s
   | .stripAccents, s => Presets.stripAccents s
@@ -109,7 +112,7 @@ def Mask.addBase (m : Mask) : Base -> Mask
   | .policyPreFold => m
   | .confusablesCtx | .confNfcFP | .confMarkFP => { m with confusables := true, marks := true }
   | .nfkc | .nfc | .nfcIfNonAscii => { m with nfkc := true, marks := true }
-  | .zalgo cap => { m with marks := true, zalgoCap := some cap }
+  | .zalgo cap | .zalgoIfOver cap => { m with marks := true, zalgoCap := some cap }
   | .dropRepeatedMarks => { m with marks := true }
   | .stripAccents => { m with marks := true, stripAccents := true }
   | .stripBidi => { m with bidi := true }

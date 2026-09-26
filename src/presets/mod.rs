@@ -46,9 +46,11 @@ const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
 /// `NFC → confusables → NFC` sandwich is not always a fixed point: a duplicate
 /// combining mark leaves a *spare* mark that the terminal NFC reattaches,
 /// re-creating a foldable composed character the next pass would consume (so the
-/// preset is non-idempotent). The loop converges in a couple of iterations —
-/// each folding pass removes at least one mark — and this bound is only a
-/// guard against an unexpected non-converging input.
+/// preset is non-idempotent). Most input converges in a couple of iterations,
+/// each folding pass removing at least one mark. A fold cycle removes only one a
+/// pass (`C` + U+0327 NFCs to `Ç`, which folds to `C`), so a loop that reaches
+/// this bound unsettled hands its text to `confusables::converge_slow`, which
+/// finishes it without one pass per mark.
 pub(crate) const CONFUSABLE_FIXED_POINT_ITERS: usize = 8;
 
 // disarm does not cap input size in the pipeline presets — bounding untrusted

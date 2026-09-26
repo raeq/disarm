@@ -1,0 +1,6 @@
+# The core's introspection lists, as every binding must return them (#981).
+# Written by tests/test_jvm_api_page.py from the Python binding; read by the JVM tests.
+# Regenerate: python tests/test_jvm_api_page.py
+list_langs	am,ar,as,ban,bax,bg,bn,bo,bug,ca,chr,cjm,cop,cs,cy,da,de,dv,el,es,et,fa,fi,fr,ga,gu,he,hi,hr,hu,hy,is,it,ja,ja-kunrei,jv,ka,khb,km,kn,ko,lis,lo,lt,lv,ml,mn,mni,mr,mt,my,ne,nl,no,nod,nqo,or,pa,pl,pt,ro,ru,sa,sat,si,sk,sl,sq,sr,su,sv,syr,ta,tdd,te,th,tl,tr,tzm,uk,vai,vi,zh
+list_profiles	code_context,library_catalog_key_eu,llm_guardrail,ml_corpus_normalize,normalize_web_input,rag_ingest,scholarly_cyrillic_iso9,search_index
+reverse_langs	el,ru,uk

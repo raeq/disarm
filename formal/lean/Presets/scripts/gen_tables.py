@@ -55,6 +55,7 @@ SEEDS = [
     (0x00, "NUL: a removed control that occupies a cell"),
     (0x301, "combining acute, ccc 230"),
     (0x308, "combining diaeresis, ccc 230"),
+    (0x303, "combining tilde, ccc 230: a third mark above, so a stack can reach the cap"),
     (0x338, "combining long solidus overlay, ccc 1: a negation overlay (#749)"),
     (0xE9, "e with acute, precomposed"),
     (0xFD, "y with acute, precomposed"),
@@ -68,6 +69,11 @@ SEEDS = [
     (0xA761, "Latin small vy: confusable w"),
     (0x1C1, "Latin letter lateral click: transliterates to two vertical bars"),
     (0x100, "A with macron: case-folds to U+0101, whose tr39 row is a with tilde"),
+    (
+        0x123,
+        "g with cedilla: folds to U+0121, g with dot above, which moves its mark from "
+        "below the letter (ccc 202) to above it (ccc 230), past a cap already counted (#1072)",
+    ),
     (0x200B, "ZWSP: zero-width, occupies no cell"),
     (0xAD, "soft hyphen: stripped by strip_bidi, occupies a cell"),
     (0x34F, "CGJ: a combining mark (ccc 0) that strip-invisible removes"),

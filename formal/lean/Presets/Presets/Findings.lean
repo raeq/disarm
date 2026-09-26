@@ -93,6 +93,25 @@ theorem web_pua : profileTargeted "normalize_web_input" .numeric [0x49, 0xE000, 
 theorem obf_fixed : stripObfuscationFixed .numeric [0x1100, 0x0, 0x1161] = [0xAC00] := by decide
 theorem web_fixed : profileFixed "normalize_web_input" .numeric [0x65, 0x8, 0x301] = [0xE9] := by decide
 
+/-! ## Finding 8: the fold moves a mark past `canonicalize`'s cap (#1072)
+
+The cap (three marks of one class on a base) runs before the fold. `ģ` keeps its cedilla
+below the letter (class 202) and the three marks above (class 230) are within the cap; the
+fold then turns `ģ` into `ġ`, whose dot is a fourth mark above, and the next call cuts
+one. Under `tr39` and `preserve` the pre-fold folds before the cap, so only `numeric`
+moves. Found in the library by the `presets` fuzz target, after the model: its alphabet
+had no fold that moves a mark, and this word needs one. -/
+
+theorem canon_gcedilla_once :
+    canonicalize .numeric [0x123, 0x301, 0x308, 0x303] = [0x121, 0x301, 0x308, 0x303] := by decide
+theorem canon_gcedilla_twice :
+    canonicalize .numeric [0x121, 0x301, 0x308, 0x303] = [0x121, 0x301, 0x308] := by decide
+theorem canon_gcedilla_tr39 :
+    canonicalize .tr39 [0x123, 0x301, 0x308, 0x303] = [0x121, 0x301, 0x308] := by decide
+
+theorem canon_fixed_gcedilla :
+    canonicalizeFixed .numeric [0x123, 0x301, 0x308, 0x303] = [0x121, 0x301, 0x308] := by decide
+
 /-! ## Which step moves the output
 
 `General.run_not_idem_of`: when a second pass differs, some step of the list moves the first
@@ -113,6 +132,9 @@ theorem search_moved_by_prefold :
 theorem guard_moved_by_mark_strip :
     PStep.apply .numeric (.stripZalgo 0) (profile "llm_guardrail" .numeric [0xA2, 0x338]) ≠
       profile "llm_guardrail" .numeric [0xA2, 0x338] := by decide
+theorem canon_moved_by_zalgo :
+    Base.apply .numeric (.zalgo 3) (canonicalize .numeric [0x123, 0x301, 0x308, 0x303]) ≠
+      canonicalize .numeric [0x123, 0x301, 0x308, 0x303] := by decide
 theorem obf_moved_by_nfkc :
     Base.apply .numeric .nfkc (stripObfuscation .numeric [0x1100, 0x0, 0x1161]) ≠
       stripObfuscation .numeric [0x1100, 0x0, 0x1161] := by decide

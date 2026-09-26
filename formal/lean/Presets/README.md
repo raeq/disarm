@@ -8,11 +8,14 @@ profiles. The model is validated against the built library by differential testi
 any proof or counterexample counts. Properties the code and docs claim are then proved, or
 refuted with a minimal counterexample that is reproduced on the library.
 
-> **Status.** All seven findings are fixed: Finding 1 (`skeleton_key`) in #1024, with the
-> confusable fold's own findings, and Findings 2 to 7 in #1029. What follows describes the
-> code at `595fbda`, before the fixes, and `scripts/difftest.py` still models that code,
-> so against a fixed build it is expected to disagree on the words the fixes move (it was
-> not re-run for the fix: no Lean toolchain was at hand). The library searches were: over
+> **Status.** All eight findings are fixed: Finding 1 (`skeleton_key`) in #1024, with the
+> confusable fold's own findings, Findings 2 to 7 in #1029, and Finding 8 in #1072.
+> Finding 8 was found by the `presets` fuzz target, not by this model: the model's
+> alphabet had no fold that moves a mark, so it was added afterwards. What follows
+> describes the code at `595fbda`, before the fixes, and `scripts/difftest.py` still models
+> that code, so against a fixed build it is expected to disagree on the words the fixes
+> move. With Finding 8's alphabet it was re-run against a `595fbda` build and agrees on
+> every comparison. The library searches were: over
 > `scalars`, `pairs`, `F1`, `F2` and `F3`, no string moves on a second pass on any of the
 > 37 surfaces in `search/idempotence.py`, where every non-zero cell of the table below
 > was one of Findings 1 to 4. Findings 2, 4 (the
@@ -40,7 +43,7 @@ numbers (`presets.rs` L2103) refer to that commit. Core Lean 4.34.0 only, no Mat
 | `Presets/Words.lean` | Word enumeration and the checkers. |
 | `Presets/Fixes.lean` | The proposed fixes, as model variants. |
 | `Presets/Findings.lean` | The findings as closed statements checked by the kernel (`decide`). |
-| `Presets/Bounded.lean` | Bounded exhaustive checks (`native_decide`), about 2 minutes. |
+| `Presets/Bounded.lean` | Bounded exhaustive checks (`native_decide`), about 3 minutes. |
 | `Presets/Axioms.lean` | `#print axioms` for the headline theorems (not in the default build). |
 | `Main.lean`, `scripts/difftest.py` | The differential test. |
 | `repro/*.py` | One reproduction per finding, on the library. |
@@ -48,7 +51,7 @@ numbers (`presets.rs` L2103) refer to that commit. Core Lean 4.34.0 only, no Mat
 
 ## The model
 
-Characters are code points (`Nat`). The **input alphabet** is 38 code points, one or two per
+Characters are code points (`Nat`). The **input alphabet** is 40 code points, one or two per
 class a step branches on:
 
 | Class | Code points |
@@ -57,7 +60,7 @@ class a step branches on:
 | the prototype sources | `I`, `1`, `\|` |
 | uppercase ASCII | `A` |
 | whitespace and controls | SPACE, TAB, LF, BS, NUL |
-| combining marks | U+0301 (ccc 230), U+0308 (ccc 230), U+0338 (ccc 1, a negation overlay) |
+| combining marks | U+0301 (ccc 230), U+0308 (ccc 230), U+0303 (ccc 230), U+0338 (ccc 1, a negation overlay) |
 | precomposed letters | U+00E9, U+00FD |
 | case fold to several code points | U+03B0 (to U+03C5 U+0308 U+0301) |
 | confusable and transliteration differ | U+03C5 (`u` / `y`), U+0440 (`p` / `r`), U+00A5 (`Y` / `JPY`) |
@@ -66,12 +69,13 @@ class a step branches on:
 | no row until case-folded | U+A760 (folds to U+A761, whose row is `w`) |
 | transliterates to a confusable source | U+01C1 (to `\|\|`) |
 | a `tr39`-only row after a case fold | U+0100 (folds to U+0101, whose `tr39` row is U+00E3) |
+| a fold that moves a mark to another class | U+0123 (folds to U+0121: the cedilla below, ccc 202, becomes a dot above, ccc 230) |
 | invisibles | U+200B, U+00AD, U+034F (CGJ), U+FE0F (VS16), U+E000 (PUA), U+202E (RLO) |
 | compatibility form | U+FF21 |
 | conjoining Hangul | U+1100 (L), U+1161 (V): L + V composes to U+AC00, two starters |
 
 The **domain** is the closure of the alphabet under every per-character map a step applies
-and under canonical composition: 104 code points. Every per-character map is read from the
+and under canonical composition: 126 code points. Every per-character map is read from the
 library by `scripts/gen_tables.py`, not written by hand:
 
 | Table | Source |
@@ -127,11 +131,11 @@ policies, `strip_format`, `ml_normalize` with and without the case fold, the eig
 `strip_control_chars`, `collapse_whitespace`, `strip_zalgo` x2, `strip_pua`,
 `normalize_confusables` x2, `TextPipeline(resolve_deletions=True)`, `transliterate` x2).
 
-* every word of length 3 or less over the 38-letter alphabet (56,355 words);
-* every word of length 4 over the 23-letter sub-alphabet the findings live in (279,841);
+* every word of length 3 or less over the 40-letter alphabet (65,641 words);
+* every word of length 4 over the 25-letter sub-alphabet the findings live in (390,625);
 * 100,000 random words of length 12 or less over the whole alphabet.
 
-**Result: 22,682,192 of 22,682,192 comparisons agree** (436,196 words x 52 surfaces). Code points are compared exactly.
+**Result: 28,925,832 of 28,925,832 comparisons agree** (556,266 words x 52 surfaces). Code points are compared exactly.
 
 The model was wrong three times on the way there, each time about something the library
 does that the docs do not state, and each is now in the model: compose-at-lookup emits the
@@ -162,25 +166,26 @@ No `native_decide`, no `sorry`. `Axioms.lean` shows at most `propext`, `Quot.sou
 ### On the model's words, by kernel evaluation (`Findings.lean`, `decide`)
 
 Every counterexample below is a closed statement checked by the kernel, about one word of 1
-to 3 code points, together with the step that moves the first output (`*_moved_by_*`) and
+to 4 code points, together with the step that moves the first output (`*_moved_by_*`) and
 the same word through the fixed variant.
 
-### Bounded, exhaustively (`Bounded.lean`, `native_decide`, about 2 minutes)
+### Bounded, exhaustively (`Bounded.lean`, `native_decide`, about 3 minutes)
 
-`W3` = every word of length at most 3 over the input alphabet (56,355); `S4` = every word of
-length 4 over the findings' sub-alphabet (279,841).
+`W3` = every word of length at most 3 over the input alphabet (65,641); `S4` = every word of
+length 4 over the findings' sub-alphabet (390,625).
 
 | Theorem | Result |
 |---|---|
-| `idem_W3`, `idem_S4` | **Holds.** `canonicalize`, `canonicalize_strict` and `catalog_key` under all three policies, `search_key` and `sort_key` under the default, `strip_format`, and `code_context`, `library_catalog_key_eu` (also `tr39`), `rag_ingest`, `scholarly_cyrillic_iso9`, `search_index` are fixed points. |
+| `idem_W3`, `idem_S4` | **Holds.** `canonicalize_strict` and `catalog_key` under all three policies, `canonicalize` under `tr39` and `preserve` (and under the default on `W3`), `search_key` and `sort_key` under the default, `strip_format`, and `code_context`, `library_catalog_key_eu` (also `tr39`), `rag_ingest`, `scholarly_cyrillic_iso9`, `search_index` are fixed points. |
 | `guard_sound_W3`, `guard_sound_S4` | **Holds.** The fast-path guard of `run_static` agrees with the full step list for all ten shipped step lists. |
-| `skeleton_key_failures` | **Fails** on 5,092 of `W3` (5,174 under `tr39`): Finding 1. |
-| `search_key_policy_failures`, `sort_key_policy_failures` | **Fail** on 8,206 each under `tr39` and `preserve`: Finding 2. |
-| `profile_failures` | **Fail**: `llm_guardrail` 331, `ml_corpus_normalize` 80, `normalize_web_input` 112: Findings 3 and 4. |
+| `canonicalize_failures` | **Fails** under the default on 12 of `S4`, `ģ` and three marks above: Finding 8. |
+| `skeleton_key_failures` | **Fails** on 5,811 of `W3` (5,897 under `tr39`): Finding 1. |
+| `search_key_policy_failures`, `sort_key_policy_failures` | **Fail** on 9,116 (`search_key`) and 9,123 (`sort_key`) under each of `tr39` and `preserve`: Finding 2. |
+| `profile_failures` | **Fail**: `llm_guardrail` 351, `ml_corpus_normalize` 85, `normalize_web_input` 152: Findings 3 and 4. |
 | `strip_obfuscation_failures`, `ml_normalize_failures` | **Fail** on 1 and 2 words (the jamo): Finding 4. |
 | `fixes_idem_W3`, `fixes_idem_S4` | **Holds** for every proposed fix, under every policy. |
 | `skeleton_fixed_nfc` | The fixed `skeleton_key` output is NFC on every word; the current one is not. |
-| `targeted_insufficient` | The targeted profile fix (one more mark strip, the strips ahead of `NORMALIZE`) still fails `normalize_web_input` on 28 words, which is why the proposal iterates instead. |
+| `targeted_insufficient` | The targeted profile fix (one more mark strip, the strips ahead of `NORMALIZE`) still fails `normalize_web_input` on 38 words, which is why the proposal iterates instead. |
 
 ## Large-scale searches on the library
 
@@ -260,8 +265,8 @@ just after `StripInvisible`, fold with `ConfusablesNfcFixedPointCtx` instead of
 `FixedPoint(&[FoldCase, ConfusablesCtx("latin"), Nfc])`. The prototype fold still sees
 cased text, so the #650 trade is untouched. Checked: `fixes_idem_*`, `skeleton_fixed_nfc`,
 `skeleton_fixed_pair` (the pair now collides). **Moves stored keys**: `skeleton_key`
-shipped in 0.16.0; the fix changes 78,706 of the difftest's 436,196 words (80,753 under `tr39`); 78,453 of them are words on
-which the current key is not a fixed point. The other 253 are the same defect seen from
+shipped in 0.16.0; the fix changes 94,928 of the difftest's 556,266 words (97,244 under `tr39`); 94,392 of them are words on
+which the current key is not a fixed point. The other 536 include the same defect seen from
 the other side: `I` NUL U+0308 keys to `l` U+0308 today while U+00CF keys to U+00EF, and
 the fix gives both U+00EF. A `KEY_SCHEMA_VERSION` event,
 absorbable by the unreleased 10.
@@ -297,7 +302,7 @@ Library sweeps: 62 (`search_key`) and 171/172 (`sort_key`) single scalars; 682 a
 fixed point in `run_static` (L950), bounded by `CONFUSABLE_FIXED_POINT_ITERS`; the default
 path, and every default key, is untouched. Checked: `fixes_idem_*`. **Moves stored keys**
 only for callers passing `tr39`/`preserve`, and only on words that were not fixed points
-(116,111 of the difftest's words for `search_key` and 115,996 for `sort_key`, every one
+(140,716 of the difftest's words for `search_key` and 140,617 for `sort_key`, every one
 of them a word that is not a fixed point today).
 
 ### Finding 3: `llm_guardrail` and `ml_corpus_normalize` keep a negation overlay, then orphan it
@@ -335,8 +340,8 @@ closes Finding 4 for the profiles. The targeted alternative -- one more mark str
 `STRIP_PUA` -- closes this finding (`profileStepsTargeted`) but not all of Finding 4
 (`targeted_insufficient`). Changing `survives_as_a_negation_base` instead would move
 `ml_normalize` and `search_key` keys too. Profiles are not in the key-stability fixture;
-on the difftest's words the iteration moves 7,256 (`llm_guardrail`), 2,321
-(`ml_corpus_normalize`) and 3,529 (`normalize_web_input`), every one non-idempotent today,
+on the difftest's words the iteration moves 8,149 (`llm_guardrail`), 2,641
+(`ml_corpus_normalize`) and 4,578 (`normalize_web_input`), every one non-idempotent today,
 and no word of the other five profiles.
 
 ### Finding 4: a character removed after the last normalization separates two that compose
@@ -375,7 +380,7 @@ passed. Library sweep `F3` (jamo): 3,990 for `strip_obfuscation`, 11,970 for `ml
 **Minimal fix.** `NfcIfNonAscii` at the end of `strip_obfuscation` and `ml_normalize` (as
 `sort_key` has, L1714); for the profiles, the iteration of Finding 3. Checked:
 `fixes_idem_*`. **Moves stored keys** for `strip_obfuscation` and `ml_normalize` only on
-words that were not fixed points (72 and 130 of the difftest's words, every one non-idempotent today).
+words that were not fixed points (77 and 137 of the difftest's words, every one non-idempotent today).
 
 ### Finding 5: `PRESETS` is not what the presets run
 
@@ -491,6 +496,39 @@ python3 repro/f7_doc_claims.py
   The Rust doc comments in `src/presets.rs` and `src/api/presets.rs` carry the same drift,
   and `docs/api/pipelines.md` repeats it.
 
+### Finding 8: the fold moves a mark past `canonicalize`'s cap
+
+**Class (a), code bug. Severity: low.** Found by the `presets` fuzz target and fixed in
+#1072; added to the model afterwards, as a check on why the model missed it.
+
+```bash
+python3 repro/f8_class_moving_fold.py
+# canonicalize[numeric] g-cedilla + 3 above    '\u0123\u0301\u0308\u0303' -> '\u0121\u0301\u0308\u0303' -> '\u0121\u0301\u0308'   NOT A FIXED POINT
+# canonicalize[tr39] g-cedilla + 3 above       '\u0123\u0301\u0308\u0303' -> '\u0121\u0301\u0308'   -> '\u0121\u0301\u0308'   fixed point
+# (preserve as tr39; canonicalize_strict is a fixed point under every policy)
+```
+
+Model: `canon_gcedilla_once`, `canon_gcedilla_twice`, `canon_gcedilla_tr39`,
+`canon_fixed_gcedilla`, `canon_moved_by_zalgo`; bounded, `canonicalize_failures`.
+
+**Root cause.** `canonicalize` caps the marks (three of one combining class on a base)
+before the confusable fold. `ģ` carries its cedilla below the letter (ccc 202), so three
+marks above (ccc 230) are within the cap; the fold turns `ģ` into `ġ`, whose dot is a
+fourth mark above, and the next call cuts one. Under `tr39` and `preserve` the pre-fold
+runs before the cap, so only the default moves. `canonicalize_strict` caps after its fold
+and is not affected.
+
+**Why the model missed it.** Its alphabet had no fold that moves a mark from one class to
+another, and no third mark above, so no word of `W3` or `S4` could reach the cap after a
+fold. The witness has four code points, within the `S4` bound: with U+0123 and U+0303 in
+the sub-alphabet, `idem_S4` fails on it, which is why `canonicalize` under the default now
+has its own census on `S4` (12 words) rather than a place in `holdIdem`. The length
+bound was not the gap; the alphabet was.
+
+**Minimal fix.** Cap again after the fold, on text the cap would cut (`ZalgoIfOver`,
+`canonicalizeFixed`), which is what #1072 does. Checked: `fixes_idem_*`. **Moves stored
+keys** only on words that were not fixed points (15 of the difftest's words, every one non-idempotent today).
+
 ## Not confirmed, or not reachable
 
 * **`Actionable::union` drops `prototype`** (presets.rs L646-L676: every field is ORed but
@@ -512,7 +550,7 @@ python3 repro/f7_doc_claims.py
 * Idempotence of `canonicalize`, `canonicalize_strict` and `catalog_key` under every policy,
   `search_key` and `sort_key` under the default, `strip_format`, `sanitize_filename`, and
   five profiles: every scalar, every `pairs`/`pairs2`/`F1`/`F2`/`F3` string, and `W3`/`S4`
-  in the model.
+  in the model -- except `canonicalize` under the default on `S4`, Finding 8.
 * The fast-path guard, on `W3` and `S4`, for all ten step lists.
 * Each profile against the `TextPipeline` transcribed from its `ProfileSpec`;
   `is_canonical` against its definition for every preset, alias and profile;
@@ -529,7 +567,7 @@ python3 repro/f7_doc_claims.py
 export PATH=/path/to/lean-4.34.0/bin:$PATH
 cd formal/lean/Presets
 python3 scripts/gen_tables.py                # only if the library's tables changed
-lake build                                   # every proof; Bounded.lean takes ~2 min
+lake build                                   # every proof; Bounded.lean takes ~3 min
 lake env lean Presets/Axioms.lean            # the axiom audit
 python3 scripts/difftest.py                  # needs an importable `disarm`
 python3 repro/f1_skeleton_key.py             # ... one per finding, run from repro/

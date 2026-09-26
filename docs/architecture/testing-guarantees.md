@@ -146,8 +146,10 @@ Every layer above had a reason it could not, and none of them was bad luck:
 A second finding the same day had the opposite cause (#1072). `canonicalize` caps
 stacked marks before the fold, and the fold can move a mark to another class: `ģ` (a
 cedilla, below) folds to `ġ` (a dot, above). `ģ` and three marks above is four
-characters, inside the Presets model's exhaustive bound, but that model's alphabet has
-no fold that moves a mark, so the bound never mattered.
+characters, inside the Presets model's exhaustive bound, but that model's alphabet had
+no fold that moves a mark, so the bound never mattered. With `ģ` and a third mark above
+added to the alphabet, the model's length-4 check fails on 12 words, every one `ģ` and
+three marks above.
 
 **What changed.** The loops no longer stop at a cap (#1071), `canonicalize` caps again
 after the fold (#1072), and `tests/mark_stacking.rs` tests run length on purpose, on
@@ -183,7 +185,8 @@ compiled out, from `C` and ten cedillas exactly), and the builders before #1072.
   model shares.
 * A model's alphabet needs a representative of every class the code branches on. "A
   fold that moves a mark to another combining class" was not one of the Presets
-  model's classes, and still is not: adding it is open.
+  model's classes. It is now (Finding 8 in `formal/lean/Presets/README.md`), with the
+  fix #1072 made as a model variant that the bounded checks show is a fixed point.
 
 ---
 

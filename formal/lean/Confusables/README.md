@@ -424,9 +424,11 @@ holds for another reason, the loop (`fixedFold_idem`).
   observable defect beyond the wording.
 * **Convergence in general.** Idempotence is proved from convergence, and convergence
   is only bounded (length <= 5 in the model, and every probe in the sweeps). The bound
-  was the gap: the nightly fuzz run found `C` + nine U+0327, ten characters, which ran
-  past the 8-pass cap. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each
-  pass takes one cedilla. Since then the Rust no longer stops at the cap: past it,
+  was the gap: `C` + U+0327 composes to `Ç`, which folds back to `C`, so each pass takes
+  one cedilla, and a stack needs one pass per mark. The nightly fuzz run found U+04AA +
+  eight U+0327, which used up the 8-pass cap. A wrong result needs U+04AA + nine or
+  `C` + ten, 10 or 11 characters, twice the bound. Every symbol of it is in the
+  alphabet: no bound of 5 could reach it, however long the check ran. Since then the Rust no longer stops at the cap: past it,
   `converge_slow` folds span by span and skips a cycle's repeats. `fixedLoop` and
   `maxPasses` model the loop as it was, and still hold on every string of length <= 5.
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.disarm"
-version = "0.17.1" // lockstep with the core (see RELEASING.md); a 7th version-bump site.
+version = "0.17.2" // lockstep with the core (see RELEASING.md); a 7th version-bump site.
 
 java {
     toolchain {

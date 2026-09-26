@@ -211,7 +211,7 @@ def test_canonicalize_caps_a_mark_the_fold_moved(digit_policy: str) -> None:
 # -- 11. slugify: a separator of word characters exposed a joiner -------------------------
 
 
-@pytest.mark.parametrize("separator", ["6", "x", "66"])
+@pytest.mark.parametrize("separator", ["6", "x", "66", "6x", "ab"])
 @pytest.mark.parametrize("stopwords", [(), ("",)])
 @pytest.mark.parametrize("joiner", ["\u200d", "\u200c"])
 def test_a_word_character_separator_leaves_no_joiner_at_the_edge(

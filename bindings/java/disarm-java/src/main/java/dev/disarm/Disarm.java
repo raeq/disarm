@@ -282,7 +282,8 @@ public final class Disarm {
      *
      * <p>The separator must be printable, non-space ASCII with no character illegal on the
      * platform and no path separator ({@code /}, {@code \}); anything else throws
-     * {@link DisarmInvalidArgumentException}. An empty separator is allowed.
+     * {@link DisarmInvalidArgumentException}. An empty separator is allowed, and so is a
+     * single space on its own.
      */
     public static String sanitizeFilename(String text, SanitizeFilenameOptions options) {
         req(text);

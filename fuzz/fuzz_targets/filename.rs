@@ -4,9 +4,9 @@
 //! Properties (the docstring in `src/api/safety.rs`, the P-properties of
 //! `formal/lean/Sanitizers`, and the #1026 fixes):
 //!
-//! - **Errors** only for what the docstring names: a separator holding a character other
-//!   than printable, non-space ASCII, one illegal on the platform, or a path separator; or
-//!   an unknown language. Both are `InvalidArgument`.
+//! - **Errors** only for what the docstring names: a separator other than `" "` holding a
+//!   character other than printable, non-space ASCII, one illegal on the platform, or a
+//!   path separator; or an unknown language. Both are `InvalidArgument`.
 //! - **P1** never empty; **P2** never `.` or `..`.
 //! - **P3/P4** no character illegal on the platform, no control, no whitespace other than
 //!   what the caller's separator brings (a valid separator carries none).
@@ -40,6 +40,7 @@ enum Sep {
     Empty,
     Dash,
     Dot,
+    Space,
     Raw(String),
 }
 
@@ -78,14 +79,17 @@ fuzz_target!(|data: &[u8]| {
         Sep::Empty => "",
         Sep::Dash => "-",
         Sep::Dot => ".",
+        Sep::Space => " ",
         Sep::Raw(r) => r.as_str(),
     };
     // Mostly small budgets, where truncation interacts with everything else; 0 = no limit.
     let max_length = usize::from(o.max_length % 300);
     let lang = o.lang.code();
-    let sep_valid = sep
-        .chars()
-        .all(|c| c.is_ascii_graphic() && c != '/' && c != '\\' && !illegal.contains(&c));
+    // A lone space is the one separator that is not printable, non-space ASCII (#1079).
+    let sep_valid = sep == " "
+        || sep
+            .chars()
+            .all(|c| c.is_ascii_graphic() && c != '/' && c != '\\' && !illegal.contains(&c));
 
     let out = match sanitize_filename(
         &s,

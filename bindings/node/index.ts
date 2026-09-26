@@ -608,7 +608,7 @@ export interface SanitizeFilenameOptions {
  *
  * `separator` must be printable, non-space ASCII with no character illegal on
  * `platform` and no path separator (`/`, `\`); anything else throws
- * {@link DisarmInvalidArgument}. `''` is allowed.
+ * {@link DisarmInvalidArgument}. `''` is allowed, and so is `' '` on its own.
  */
 export function sanitizeFilename(text: string, options: SanitizeFilenameOptions = {}): string {
   return call(() =>

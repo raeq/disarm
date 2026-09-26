@@ -495,8 +495,8 @@ pub(crate) enum ErrorRepr {
     /// separator is inserted after the illegal characters are removed, so an
     /// unvalidated one put `/`, NUL or a bidi control straight back into the name.
     #[error(
-        "separator must be printable, non-space ASCII with no character that is illegal \
-         in a filename and no path separator (found U+{codepoint:04X})"
+        "separator must be ' ' or printable, non-space ASCII with no character that is \
+         illegal in a filename and no path separator (found U+{codepoint:04X})"
     )]
     InvalidFilenameSeparator {
         /// The offending character's code point.

@@ -1007,7 +1007,8 @@ impl std::str::FromStr for Platform {
 /// an unknown language code, and a `separator` containing a character a filename must
 /// not carry — anything but printable, non-space ASCII, a character illegal on
 /// `platform`, or a path separator (`/`, `\`) — since the separator is inserted after
-/// the illegal characters are removed. The empty separator is allowed. `Platform` and
+/// the illegal characters are removed. The empty separator is allowed, and so is `" "`
+/// on its own (a space inside a longer separator is refused). `Platform` and
 /// the `usize` length make every other input infallible by construction.
 ///
 /// The result is a fixed point: sanitizing it again returns it unchanged, and on the

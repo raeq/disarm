@@ -191,7 +191,8 @@ def sanitize_filename(
             printable, non-space ASCII, contain no character illegal on
             *platform* and no path separator (``/`` or ``\\``); anything else
             raises `InvalidArgumentError`. ``""`` is allowed and drops
-            stripped characters outright.
+            stripped characters outright, and ``" "`` on its own is allowed
+            for readable names (a space inside a longer separator is not).
         max_length: Maximum filename length measured in **bytes** (UTF-8
             encoded), not characters. Default 255 matches the ext4/APFS/NTFS
             filesystem limit. Truncation always lands on a character boundary

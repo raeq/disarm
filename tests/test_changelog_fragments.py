@@ -237,7 +237,9 @@ def test_the_configured_order_is_the_latest_release_order() -> None:
 def test_changelog_has_the_marker_and_no_hand_written_unreleased_section() -> None:
     text = CHANGELOG.read_text(encoding="utf-8")
     assert text.count(MARKER) == 1, f"expected exactly one {MARKER!r}"
-    assert "## [Unreleased]" not in text, (
+    # A heading, not a mention: 0.17.0's entry for #993 quotes the heading it removed.
+    # Markdown still renders `##` as a heading after up to three spaces.
+    assert not re.search(r"^ {0,3}##[ \t]+\[Unreleased\]", text, flags=re.MULTILINE), (
         "`## [Unreleased]` is back in CHANGELOG.md. Unreleased content lives in "
         "changelog.d/ now; read it with `towncrier build --draft --version NEXT`."
     )

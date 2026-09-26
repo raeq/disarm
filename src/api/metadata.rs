@@ -227,8 +227,8 @@ pub fn unicode_version() -> &'static str {
 /// The branch itself is unchanged — what reaches it narrowed. An emoji CLDR cannot name is
 /// still dropped, and so is a lone Plane 14 tag, which is the only coverage of that block
 /// `ml_normalize` has (#914). As first merged it also *widened* for one class: a
-/// text-default symbol CLDR cannot name, followed by `U+FE0F` — `\u{00A9}\u{FE0F}`,
-/// `\u{00AE}\u{FE0F}`, `\u{2605}\u{FE0F}`, 2,141 in all — which 0.16.0 kept with the
+/// text-default symbol CLDR cannot name, followed by `U+FE0F` — `\u{00A9}\u{FE0F}` and
+/// `\u{00AE}\u{FE0F}` among 2,141 — which 0.16.0 kept with the
 /// selector dropped and which the branch then deleted, so `ml_normalize("Acme®\u{FE0F}")`
 /// became `"acme"`. A follow-up restored 0.16.0's output before any release carried the
 /// change, so version 10 does not move those keys.
@@ -238,7 +238,7 @@ pub fn unicode_version() -> &'static str {
 /// code point, `U+2764`, which CLDR names and which therefore never reached the branch.
 /// Rows covering the class were added with this.
 ///
-/// Also under 10, still unreleased: the deletion resolver ends a line at every break
+/// Also under 10, which 0.17.0 released: the deletion resolver ends a line at every break
 /// the detector knows, not only `LF`. A backspace after VT, FF or NEL erased the break
 /// and joined the lines, so `canonicalize("pay\u{85}\u{8}pal")` was `"paypal"` and is
 /// now `"pay pal"`, as the `LF` form always was; rows for all three were added to the
@@ -259,6 +259,9 @@ pub fn unicode_version() -> &'static str {
 /// runs only on non-Latin text, so these characters reach its `collapse_whitespace`
 /// step intact and become a space there. The fixture had no row with either; two were
 /// added.
+///
+/// Eight more changes moved a stored output under 10 before 0.17.0 shipped it. The
+/// release's *Upgrade notes* in `CHANGELOG.md` list all twelve with what each moves.
 ///
 /// And three fixes from the Lean model of the confusable fold, `formal/lean/Confusables`.
 /// `skeleton_key` moves where its key was not a fixed point. Full case folding left

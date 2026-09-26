@@ -18,6 +18,1518 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
 
 <!-- towncrier release notes start -->
 
+## [0.17.0] — 2026-09-26
+
+### Upgrade notes
+
+**`KEY_SCHEMA_VERSION` goes 9 → 10 in this release.** It moved once, in #991, and the eleven
+later changes that move a stored output were recorded under the same unreleased 10. Each
+has its own entry below; this is the one place they are listed together. If you persist
+any output named in the second column, recompute it once against 0.17.0;
+`disarm.KEY_SCHEMA_VERSION` reads `10`. Every row was checked by running its entry's own
+example through 0.16.0 and 0.17.0.
+
+| change | what moves, and what does not |
+|---|---|
+| `demojize` asks the UCD what an emoji is (#991) | `ml_normalize` stops emptying 1,312 assigned code points, `★` and `☆` among them, and `ml_corpus_normalize` with it; no other key builder demojizes |
+| the deletion resolver ends a line where the detector does (#1010) | `search_key`, `catalog_key`, `sort_key`, `skeleton_key`, `ml_normalize`, `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `llm_guardrail` and `rag_ingest` for a backspace after VT, FF or NEL: `pay\x85\x08pal` gives `pay pal`, as the `LF` form did |
+| four emoji-scanner defects (#1011) | `ml_normalize` for a fully qualified ZWJ sequence, and for an emoji dropped between two words |
+| line and paragraph separators separate words (#1017) | `search_key`, `catalog_key` and `slugify` for text containing U+2028 or U+2029; `sort_key` unchanged |
+| `skeleton_key` is a fixed point, and Kirat Rai composes (#1024) | `skeleton_key` wherever its key was not a fixed point; `canonicalize`, `canonicalize_strict`, `strip_obfuscation` and `normalize_confusables` for Kirat Rai in NFD |
+| the presets, key builders and profiles are fixed points (#1029) | `search_key` and `sort_key` under `digit_policy="tr39"` or `"preserve"`, where one pass was not a fixed point; the default is unchanged. `strip_obfuscation` and `ml_normalize` for a composing pair split by a removed character; `llm_guardrail`, `ml_corpus_normalize` and `normalize_web_input` |
+| a class-0 mark no longer resets the mark count (#1034) | `canonicalize`, `canonicalize_strict` and `sort_key` for a repeated mark on both sides of a class-0 mark: 6, 1 and 6 rows of the key-stability fixture |
+| `search_key` and `catalog_key` end with NFC (#1048) | both, for two characters that compose with a stripped control between them, where the key was not a fixed point; no fixture row |
+| one form of 37 case pairs had no transliteration (#1057) | `search_key` and `catalog_key` for the lowercase form (`ȺBC` keyed as `ⱥbc` in 0.16.0); `slugify` for the capitals that gave `[?]`, and for `Ǝ` and `Ə` |
+| the schwa transliterates to `a` (#1060) | `search_key`, `catalog_key` and `slugify` for text containing `ə` or `Ə`: `Heydər Əliyev` keys as `heydar aliyev`; `canonicalize` unchanged |
+| the confusable fold reaches its fixed point (#1071) | `normalize_confusables`, `canonicalize_strict`, `skeleton_key` and `normalize_web_input` for a letter carrying ten or more marks the fold eats one at a time (`C` and ten U+0327); `canonicalize` unchanged |
+| `canonicalize` caps marks again after the fold (#1072) | `canonicalize` for a letter the fold moves a mark on, carrying three marks of the class it moves into (`ģ` and three marks above) |
+
+**Under a digit policy, `search_key` and `sort_key` now iterate (#1029).** A stored key
+built with `digit_policy="tr39"` or `"preserve"` can move for input that no other row names,
+because the key of the key used to differ. Keys built with the default policy run once, as
+before.
+
+### Added
+
+- **`scripts/watch_pr.py --await-review`, for a repo that does not require conversation
+  resolution (#987).** On such a repo a green PR is mergeable before its reviewer has said
+  anything: on raeq/ibook2epub#11 CI finished three minutes before Copilot's review, and
+  the watcher would have squashed the PR in between. The flag holds the merge while a
+  review request is pending and until someone other than the author has submitted a
+  review — a `PENDING` or `DISMISSED` one does not count, and nor does a state the
+  script does not recognise, because for a merge gate the safe mistake is to wait.
+  Unresolved threads, failed checks and a needed rebase still come first. The default is
+  unchanged, because this repo's branch protection does the same job.
+
+- **`listLangs`, `listProfiles` and `reverseLangs` on the JVM (#1059).** `Disarm` and the
+  Kotlin functions return the lists every other binding returns, held equal to Python's
+  through `tests/fixtures/introspection_lists.tsv`. The JVM API page's "does not have"
+  table and coverage figure are now gated against the class and `generated/parity.yaml`:
+  the table had still listed `canonicalizeStrict` and `stripFormat`, both long shipped,
+  and the figure read 50 of 86 operations where the matrix says 65 of 112. Fixes #981.
+
+### Changed
+
+- **The meta-benchmark publishes no composite, and `bad-characters` is scored per
+  attack class (#1001).** The composite ranked `null-baseline`, which deletes all input, above
+  real libraries. Its weighting is the cause, not the run: an axis's weight is its
+  corrected item-total correlation, which goes negative for an axis that opposes the
+  rest, and the clamp at zero deletes it — so on a battery built from axes that trade
+  against each other, the opposed pole is what the weighting removes. It used to be
+  printed beneath its own blockers; the report now prints an *Axis weights* table in
+  its place, showing what the composite would have weighted and which axes it deleted.
+  Bradley-Terry fails the same control for a different reason, so the control check
+  now covers every aggregate. The Pareto frontier and the per-benchmark tables are
+  unchanged.
+
+  The rest of the harness work lands with it. `bad-characters` reports each of
+  Boucher's four classes — deletions, homoglyphs, invisibles, reorderings — taken from
+  the release's own experiment key, where one average had hidden a 100%-to-14% spread.
+  The deletion ceiling is measured with a cell-aware cursor rather than assumed; a
+  defused bidi attack must not emit the string the illusion was built of; the
+  reordering corpus scrambles code points rather than the rendering; an ASCII-for-ASCII
+  swap is no longer scored as an encoding question. The composed pipelines must now
+  name every `TextPipeline` step as taken or `DECLINED` with a reason, which is how
+  `resolve_deletions` stopped being missed the way `strip_pua` and `strip_plane14` were.
+
+- **Every stated platform floor is one upstream still supports and CI tests, and a gate
+  holds each one to its source (#1030).** The README said "Rust 1.81+" in two places, and
+  `docs/rust/getting-started.md` gave the MSRV as 1.81, long after #718 moved
+  `rust-version` to 1.88; CONTRIBUTING asked for 1.70. They now say 1.88, and so do the
+  Node, Ruby, C-ABI and JNI binding crates, which declared 1.81 and 1.85 while
+  depending on a core that cannot build below 1.88. `tests/test_msrv_claims.py` now
+  reads the README, `docs/`, the binding READMEs, CONTRIBUTING and the crate's rustdoc,
+  and fails on any Rust floor that differs from `Cargo.toml`.
+
+  **The Node.js floor is 22, up from 14, and the Ruby floor is 3.3, up from 3.1.**
+  `package.json` declared Node >= 14, which reached end of life in April 2023, and CI
+  tested 20 and 22; Node 20 reached end of life on 2026-04-30 too. `engines` is now
+  `>= 22`, CI tests 22, 24 and 26, and the release and dependency-audit jobs run on 22.
+  The gem declared Ruby >= 3.1; 3.1 reached end of life on 2025-03-26 and 3.2 on
+  2026-04-01. `required_ruby_version` is now >= 3.3, CI and the release workflow test
+  3.3, 3.4 and 4.0, and platform gems are built for those three ABIs only, so a Ruby 3.1
+  or 3.2 install resolves to an earlier release. Python stays at 3.10, which is
+  supported until 2026-10-01, and CI now installs and exercises the built wheel and
+  sdist on 3.10 rather than only on 3.12. Java stays at 21. `tests/test_toolchain_pins.py`
+  fails when a binding's manifest, the lowest version CI installs and the READMEs and
+  getting-started pages disagree, or when a floor is a version already known to be
+  retired.
+
+  **Action pin comments name one commit each.** #1027 pinned every action to a SHA, but
+  the comments beside the pins disagreed: one SHA read `# v7` in one file and `# v7.0.0`
+  in another, the spacing varied, and `# v1`, `# v2` and `# release/v1` named refs that
+  move. Every pin is now followed by two spaces and `# <exact tag>`, the most specific
+  tag pointing at that SHA; no SHA changed. `Swatinem/rust-cache`'s comment said `# v2`,
+  but its SHA is an untagged `master` commit and now says so. The SARIF upload snippet
+  in `docs/cli.md` used `github/codeql-action/upload-sarif@v3`; it is pinned to the
+  v4.38.1 commit the workflows use. `tests/test_workflow_baselines.py` fails on an
+  unpinned `uses:`, a pin without the comment, a moving ref in one, or a SHA with two
+  comments.
+
+- **`demojize` writes `[?]` for an emoji it cannot name, in every binding (`formal/bindings`
+  D1; #1046).** The Rust API, Node, Ruby, Java and the C ABI dropped a lone regional
+  indicator or Plane 14 tag character; Python, whose documented default is
+  `errors="replace", replace_with="[?]"`, wrote the sentinel, so the same call disagreed
+  on 3,105 inputs. The documented Python behaviour is kept and the others follow it:
+  `api::demojize("x\u{1F1E6}!", false)` is now `"x[?]!"`, where it was `"x!"`. The new
+  `api::demojize_with` takes the policy as an `OnUnknown`, the type `Transliterate`
+  already uses, and Python's `demojize` runs the same core code whenever no
+  `EmojiProvider` is in play. The pipeline and preset steps still drop such an emoji, as
+  they did.
+- **A registration after `seal_registrations()` is `ErrorKind::Unsupported` (E2; #1046).**
+  The Rust API documented `Unsupported` on all four mutators and `kind()` returned
+  `Other`; the code now agrees with the docs. In Python the exception moves from the base
+  `DisarmError` to its subclass `UnsupportedError`, so `except DisarmError` still catches
+  it.
+
+- **disarm builds its lookup tables with phf 0.14 (was 0.13; #1053).** `phf` and
+  `phf_codegen` move together, as they must: the codegen writes each table in the
+  layout the runtime reads back. 0.14 needs Rust 1.85, within the crate's MSRV of
+  1.88, so no consumer's toolchain floor moves; Dependabot's hold on the pair, set
+  when the MSRV was 1.81 (#509), is lifted. The generated tables' bytes change,
+  their content does not: a new test checks that every entry of all 43 tables looks
+  itself up and that each table's entries match a digest pinned on 0.13.1.
+
+- **`Transliterate::run`, `Transliterate::find_untranslatable`, `api::slugify` and
+  `DisarmStr::slugify` are deprecated in favour of their `try_` forms, and removed in
+  1.0 (#1056).** The infallible forms let a typo through: an unknown `lang` (`"UK"` for `"uk"`)
+  fell back to the default tables and gave quietly wrong output, and `run` skipped the
+  replacements registered with `register_replacements`. `try_run`,
+  `try_find_untranslatable` and `try_slugify` reject the code with
+  `ErrorKind::InvalidArgument`, and are what every binding already calls
+  (`formal/bindings`, B2). `DisarmStr` gains `try_slugify`. The deprecated forms behave
+  exactly as before until they go, which a test pins. `api::transliterate(text)` is not
+  deprecated: it takes no `lang` to get wrong. Rust only: the Python, Node, Ruby, Java
+  and C bindings already validate `lang`.
+
+- **The schwa transliterates to `a` in both forms (#1060).** `Ə` gives `A` and `ə` gives
+  `a`, the Azerbaijani convention in English (`Əliyev` to `Aliyev`), so
+  `search_key("Heydər Əliyev")` is `heydar aliyev`. `ə` gave `e` before, and #1057 had
+  briefly moved `Ə` to `E` to match it. IPA text is affected too: `ə` there now gives `a`,
+  not the phonetic `e`. The confusable fold is unchanged, and `canonicalize("ə")` is still
+  `e`.
+
+- **`slugify` is 2.8 times cheaper on ASCII text (#1062).** An ASCII value is tokenized a
+  byte at a time through a lookup table that also lowercases, instead of char by char
+  after a separate lowercasing copy. Estimated cycles on the 16 KiB benchmark document fall
+  64.8% for ASCII and 28.9% for diacritic-heavy Latin, whose transliteration is ASCII.
+  Output is unchanged.
+
+- **Normalization copies what is already normalized (#1064).** `normalize` and every
+  preset that normalizes now split the text at normalization boundaries and pass only
+  the segments that change to the normalizer, copying the rest. Output is unchanged,
+  checked against the full-string normalizer for every Unicode scalar. NFKC of Latin
+  text is 13.7 times cheaper; `canonicalize` and `canonicalize_strict` on mixed web
+  text are about a third cheaper, `skeleton_key` and `search_key` on Latin text over
+  40% cheaper.
+
+- **The presets and the confusable fold skip the work ordinary text does not need
+  (#1065).** The mark checks and rewrites behind `is_zalgo`, `strip_zalgo` and
+  `strip_accents` decompose only the runs of characters around a mark instead of the
+  whole text; `demojize` copies a character that cannot start an emoji without asking
+  its tables; and a confusable lookup answers a miss from a bitmap of the table's keys.
+  Output is unchanged, checked against the previous paths for every Unicode scalar. On
+  mixed web text `ml_normalize` and `strip_obfuscation` are about 70% cheaper and
+  `canonicalize` about 65%; `normalize_confusables` on ASCII is 6.3 times cheaper.
+
+- **Romanizing Hangul no longer builds a table on the first call, and case folding
+  answers an already-folded character without a hash (#1066).** The romanizations of
+  the 11,172 precomposed syllables are generated at build time from the same function
+  that computed them on the first call, which cost that call about three quarters of
+  transliterating a 16 KiB Hangul document. Base-and-mark clusters (nearly every
+  Devanagari syllable) probe the composition-exclusion table only where a key can
+  start, and `fold_case` answers a miss from a bitmap of its table's keys. Output is
+  unchanged. Transliterating Hangul is 4.2 times cheaper and Devanagari about a fifth;
+  `search_key` on Cyrillic is about 18% cheaper.
+
+- **Python calls no longer pay a Python frame for the surrogate guard (#1067).** Every
+  function the package re-exports from the extension was wrapped in a Python function
+  that retries with scrubbed strings when a `str` holding surrogates cannot become
+  UTF-8 (#469). That frame cost 70–84 ns on every call, valid input included — two to
+  four times the native cost of a short call. The guard is now native and enters Python
+  only on the failure path, and `transliterate` guards itself and is not wrapped at all.
+  The surrogate contract is unchanged. Short `transliterate` calls are 20–60% cheaper;
+  on Unidecode's own benchmark the ASCII-through-`expect_ascii` cell goes from 0.41× to
+  about 0.95×.
+
+- **`transliterate` on a list no longer copies every item in and out (#1069).** The
+  list form copied each input into Rust, allocated each result and built a new `str`
+  from it, even for items it left unchanged, where a single call returns the original
+  object. It now borrows the inputs and hands back unchanged items as themselves, so a
+  list of ASCII strings is about 1.8 times cheaper and 2.5 times faster than a loop of
+  single calls.
+
+### Fixed
+
+- **The Java binding's javadoc linked a method the binding does not have, and only a
+  release could find out.** The comment on `Pipeline#purpose` (#860) referred to
+  `Disarm#listProfiles`, which exists in Python and not in Java. `javadoc` rejects a broken
+  `{@link}`, and the task ran nowhere except inside `publishAllPublicationsToStagingRepository`,
+  so the v0.16.0 Java publisher failed at the Central Portal step with nothing uploaded while
+  the core, Node and Ruby artifacts shipped. The link now names `Disarm#getPipeline(String)`,
+  and CI's Java job runs `:disarm-java:javadoc` beside `check`, so a broken reference fails
+  the pull request that introduces it rather than the release that follows.
+
+- **Every ruff bump from Dependabot went red, because CI kept a second copy of the pin.**
+  `pyproject.toml`'s `dev` extra and `.github/workflows/ci.yml` each pinned ruff, and
+  `tests/test_toolchain_pins.py` failed whenever they differed. Dependabot bumps the first
+  and cannot see a version inside a workflow's `run:` line, so its bump to 0.16.6 (#985)
+  failed that check and would have stayed red until someone copied the number across. The
+  *Lint & format* job now reads the pin from the `dev` extra, and the test runs that job's
+  install step against a stand-in `pip`: it must install exactly the pinned ruff, and must
+  stop, rather than install an unpinned one, when the pin is missing.
+
+- **The `emoji-delimiter-segmentation` note named 14 code points for a count of 13
+  (#972).** `letter_substituted` is the row where NFKC turns a squared or circled CJK
+  emoji into a bare ideograph, closing the carrier back into one alphanumeric run. The
+  note wrote the set as `U+1F232..U+1F23A`, which is nine code points where eight belong:
+  U+1F237 sits inside that span and is `Emoji=Yes, Emoji_Presentation=No`, so it never
+  enters the suite's domain — the domain is the normative `Emoji_Presentation` set. The
+  span is now the two sub-ranges it always was, `U+1F232..U+1F236` and
+  `U+1F238..U+1F23A`, and the note says why U+1F201 belongs despite decomposing to two
+  katakana rather than an ideograph: `ココ` is alphanumeric, so `_runs` counts it as one
+  run like the rest.
+
+  An enumerated span in prose beside a count is the shape that rots without anyone
+  noticing, so it is now gated — against the set the suite would score over the bundled
+  UCD 15.1 table rather than against a second copy of the answer. The test parses the
+  note's own parenthetical and compares it to the set derived by running the suite's own
+  `_runs` predicate over the bundled `emoji_presentation.tsv`. Equality both ways is the
+  point: the count beside the list catches a code point too many, which is the defect
+  above, and only the derived set catches one too few — the direction a count can never
+  see, and the one a squared CJK emoji added by a later UCD would take once the bundled
+  table is regenerated. The suite itself reads the downloaded `UCD/latest` emoji data, so
+  an upstream bump reaches it before it reaches the gate. The gate names the offender
+  either way (`only in the note: ['U+1F237']`).
+
+- **`demojize` destroyed 777 non-emoji characters, and the pipeline step deleted them
+  silently (#990).** `demojize("rated 3 ★ of 5")` returned `rated 3 [?] of 5`, and
+  `TextPipeline(demojize=True)` on the same input returned `rated 3  of 5` — the star
+  gone, leaving a double space. `ml_corpus_normalize` reached the second of those.
+
+  The cause was that `demojize` decided "is this an emoji?" from block ranges rather than
+  from the UCD. `U+2600..27BF` is Miscellaneous Symbols and Dingbats, so `☆ WHITE STAR`,
+  `☓ SALTIRE` and 775 other characters carrying **no emoji property at all** arrived at
+  the unknown-emoji branch, along with 1,493 unassigned code points. The repo had already
+  recognised this class and fixed it for one block — the `U+1FB00..1FBFF` GAP comment
+  excludes Symbols for Legacy Computing as "box-drawing / teletext / segmented-display
+  graphics, not emoji" — and the same reasoning was owed to the other three ranges.
+
+  Both scanners now ask `unnamed_emoji_len_at`, one shared predicate, so the two cannot
+  drift apart again. It measures with `presentation_len_at` — the predicate
+  `replace_emoji` already used, which takes the whole ZWJ, modifier, keycap or flag
+  sequence, so the hand-rolled modifier-consuming loop in each scanner goes — but only for
+  a head that renders as emoji without being asked: `Emoji_Presentation=Yes` or a
+  regional indicator. A text-default symbol that `U+FE0F` opens is not an emoji *with no
+  name*; it is a symbol with no name, and it keeps its character with the selector
+  dropped, as in 0.16.0 — `demojize("a©\ufe0fb")` is `a©b` and
+  `ml_normalize("Acme®\ufe0f")` is `acme®`. The first cut of this fix sent all 2,141 of
+  those to the branch, and a follow-up restored them before release.
+
+  `is_emoji_codepoint` keeps its block shape and its sole remaining caller,
+  `presets::is_demojizable`, where a loose superset is correct: over-marking costs a
+  skipped optimisation there and under-marking would be unsound.
+
+  The pure-Rust pipeline path has no `ErrorMode` and still drops what it cannot name —
+  which is now only an emoji or a lone tag character, rather than any character in the
+  old block ranges.
+
+  **`errors` and `replace_with` now govern what they say.** They were documented as
+  handling "emoji not in the provider's data" while actually governing 777 non-emoji; the
+  set is now 122 single code points as bundled — the 26 regional indicators, which CLDR
+  names only in pairs, and the 96 Plane 14 tag characters standing alone — plus any
+  sequence a future UCD adds ahead of CLDR. Also written down: a provider returning
+  `None` falls through to the built-in table and **not** to `errors`, so a provider can
+  add and override names but cannot withhold one.
+
+  No emoji changes: `demojize("aa🔥bb")` is still `aa fire bb`, keycaps and ZWJ sequences
+  still name, and `replace_emoji` is untouched.
+
+  **Upgrade note — `KEY_SCHEMA_VERSION` goes 9 → 10.** `ml_normalize` is the one key
+  surface that still demojizes, and it stops emptying **1,312 assigned code points**
+  (4,047 → 2,735 at UCD 15.0.0; 3,996 → 2,693 at 14.0.0, the two deltas agreeing to the
+  15.0 additions). A stored key built from one of those characters moves from `""` to the
+  character itself. Reindex if you persist it. The `_EMPTY_KEY_CENSUS` table, the
+  `ml_normalize` docstring and the table in `docs/limitations.md` all move with it.
+
+  The key fixture was green through the change, for the **fifth** time in this cycle and
+  for the reason the four before it were: of the moved class its corpus held exactly one
+  code point, `U+2764`, which CLDR names and which therefore never reached the branch.
+  Thirteen rows covering the class were added with this — bare and in-word, spanning
+  no-emoji-property (`☆`, `☓`), Extended_Pictographic-but-text-presentation (`★`), and
+  the `⊕` case #757 suppresses inside presets.
+
+  This one is also a note about local gates: the census is pinned at UCD 15.0.0 and
+  `test_empty_key` refuses to measure on an older host, so on a 14.0.0 interpreter it
+  fails before it compares. A census-moving change is invisible to it there, and CI is
+  the only place the number is checked.
+
+- **`replace_emoji` cut emoji sequences at nine code points, leaving an invisible
+  character behind (#995).** The scanner matched inside a fixed window sized from
+  `max_emoji_seq_len()` — the longest run the CLDR *name* table holds. That bounds naming
+  correctly and replacing not at all: `presentation_len_at` follows a ZWJ chain, which
+  UTS #51 does not bound: the RGI kiss with skin tones is ten code points, and a family
+  of four with skin tones, a valid though non-RGI sequence, is eleven. Such a sequence
+  took two replacements where one was right, and — the half that
+  matters — the joiner at the seam was passed through as ordinary text, so
+  `replace_emoji("👨🏻‍👩🏻‍👧🏻‍👦🏻", "")` returned a bare `U+200D`: an invisible character surviving the
+  step whose purpose is removing emoji. The window now follows a sequence past its own
+  edge, growing until growing stops changing the answer, and hands back everything it
+  peeked at but did not consume.
+
+  A full window cannot tell a finished sequence from one it merely ran out of room for:
+  the recursion breaks on a joiner with nothing after it, and "nothing after it" is
+  exactly what the edge looks like. The eleven-code-point family reports 8 of 9 — one
+  short of the edge and still unfinished — so completeness cannot be read off a length,
+  which is what the first draft of this fix tried.
+
+  Following a chain past the window then made `presentation_len_at`'s per-link recursion
+  unbounded; the nine-code-point slice had been holding the depth down by accident, and a
+  long enough chain overflowed the stack — an abort no caller can catch, on input from
+  outside. The chain walk is a loop now, with the head split into `head_len_at` so that
+  nothing recurses. The window also grows by doubling and only when the match could
+  actually continue — reaching the edge, or stopping at a joiner — rather than whenever
+  the buffer happened to be full, which had sent every emoji in any input past nine
+  characters through a heap scan, and then only when the joiner it stopped at is close
+  enough to the edge that the rejection might have been the edge talking rather than the
+  text. 200,000 emoji: 4.91 ms against 4.71 ms before the change; 100,000 of
+  `emoji + ZWJ + letter`, where every joiner is already disproved, 6.01 ms against
+  20.53 ms for the version that treated them all as unjudged.
+
+- **A backspace after a carriage return deleted the rest of the line (#995).**
+  `resolve_deletions` erased with `line.truncate(col)`, which is `pop` only while the
+  cursor sits at the end of the line. That holds for every input without a `CR`, so the
+  two agreed until #937 added the `resolve_cr` flag that moves the cursor back. With both
+  set, `"abc\rX\u{8}"` returned `""`, discarding the `bc` a terminal still shows, and a
+  backspace at column 0 discarded the whole line. It now erases the one cell before the
+  cursor, which is #937's model — the erased cell is the attacker's inserted character —
+  so that input gives `"bc"`, and it does nothing at column 0. (A terminal's backspace
+  moves the cursor and erases nothing, so a terminal shows `Xbc`.) Losing text the reader can see is the
+  risk #934 declined to take.
+
+  The cell is blanked rather than removed, so every other cell keeps its column, which is
+  where a later character lands in a terminal; shifting is what a line editor does, and
+  the two disagree on input as short as `"aa\ra\u{8}a"`, where shifting eats a character
+  still on the screen.
+  Blanking is also O(1), where removing shifted every cell to its right and measured 4x
+  per doubling. 40,000 erases: 2.39 ms against 2.53 ms before the change.
+
+- **`demojize` ate a keycap that belonged to no emoji, then let what survived attach to
+  the name (#992, #996).** After naming an emoji the scanner swept trailing modifiers with
+  `is_emoji_modifier`, which includes `U+20E3 COMBINING ENCLOSING KEYCAP`. That character
+  makes a keycap sequence only after a digit, `#` or `*` — `head_len_at` has no keycap arm
+  and says why, ten lines from where the sweep ran — so the *naming* half of the scanner
+  did exactly what the *replacing* half refuses to, and `demojize("😀⃣")` returned
+  `'grinning face'` with an assigned character silently gone. The sweep is now one
+  function shared by all three call sites, covering what the match's own definition
+  covers, and the two halves agree.
+
+  A joiner stays swept, which #992 proposed dropping along with the keycap — though not
+  for the reason first given here. The scanner drops every joiner at the top of its loop
+  wherever it stands, so none reaches prose either way. What the sweep's joiner arm does is
+  carry on past the joiner to a modifier the match did not take: `demojize("👨\u200d🏻")`
+  is `man`, and without the arm it is `man light skin tone`.
+
+- **A combining mark after an emoji landed on the emoji's name.** Found while fixing the
+  above, and the same defect one class wider. `demojize("😀́")` returned `'grinning facé'`
+  — an accent the input put on an emoji, moved onto a word the input never contained. The
+  scanner already guarded the narrow version of this (`"woman's hat"` + `U+20AC` became
+  `"woman's hate"` once `confusables` folded the euro sign to `e`), but the guard sat at
+  one of the two places a character is emitted, and the mark arrived at the other. There
+  is now one `needs_separator_after_a_name`, asked by both, and by the pyo3 scanner as
+  well — which had a third copy of the narrow test, and is why `demojize` and
+  `TextPipeline(demojize=True)` could disagree.
+
+- **`scripts/watch_pr.py` could report "no unresolved threads" for threads it never
+  fetched (#1000).** The review-thread query asked GitHub for `pageInfo{hasPreviousPage}` and the
+  answer was never read, so `Snapshot.threads_truncated` stayed `False` for every pull
+  request and the guard in `decide()` that refuses to merge on a truncated listing could
+  not fire on real data. A PR with more than one page of threads read as having none
+  unresolved — the failure the script's own comment says it exists to prevent. The three
+  tests for that guard built the flag by hand, so they proved `decide()` handles it and
+  said nothing about whether `fetch()` ever raised it; `fetch()` is now tested for it in
+  both directions. Noted as out of scope when the `--await-review` work was first drafted,
+  and fixed here because this change touches the same function.
+
+- **`replace_emoji` no longer builds an emoji out of what a removal leaves behind, and a
+  zero-width character after a carriage return no longer overwrites visible text (#995,
+  #1005).** A keycap or presentation selector after an emoji is not part of it
+  (#996), so removing the emoji left it in place — and when the character before could
+  take it, the two became an emoji the input never had: `replace_emoji("1😀\u20e3", "")`
+  returned `1\u20e3`, a keycap, and a second pass removed it with the caller's digit. A
+  mark that would bind to the character before the seam is now dropped with the emoji, so
+  that input gives `1`; one that binds to nothing is still kept, so the `" "` replacement
+  gives `1 \u20e3` as before.
+
+  With `resolve_deletions=True, resolve_cr=True`, a character that occupies no cell — a
+  zero-width space, a combining mark — met at column 0 after a `CR` took cell 0 and moved
+  the cursor, so the next letter overwrote the `b` in `"abc\r\u200bY"` and gave
+  `"\u200bYc"`. It now takes no cell and moves nothing, and is kept ahead of the line:
+  `"\u200bYbc"`. No key builder resolves a `CR`, so no stored key moves.
+
+- **Three follow-ups to #996's trailing-mark fix, and the drop path's version of #995's
+  seam (#996, #1006).**
+
+  - **`errors="preserve"` pulled an emoji and its own mark apart.** #996 widened the
+    separator after a *name* from alphanumerics to marks, and the pyo3 scanner flags a
+    preserved emoji the same way, so `demojize("\U0001f1e6\u0301", errors="preserve")`
+    came back with a space the input never had between the emoji and its accent. A
+    preserved emoji is the emoji, not a word, and only an alphanumeric after it is
+    separated, as #200 asks.
+  - **A provider that names a keycap's base split the keycap.** A provider is asked before
+    the built-in table, and #996 stopped the sweep taking `U+20E3` on the ground that the
+    table matches a keycap whole; a provider claiming only the digit left the keycap as an
+    orphan mark (`x ONE \u20e3y`). A keycap base claimed on its own now takes the rest of
+    its keycap.
+  - **Dropping an emoji could leave one behind.** `errors="ignore"` and
+    `TextPipeline(demojize=True)` remove an emoji they cannot name, and a keycap after it
+    then bound to the digit before: `x9` + a lone tag + `\u20e3` became a keycap, which a
+    second pass named. The drop path now closes the seam the way `replace_emoji` does.
+
+  Two tests could not fail and are replaced: the joiner tests passed with the joiner arm
+  removed (see the #996 entry), and `not out.startswith("grinning facé")` compared against
+  a precomposed `é` that `demojize` never produces.
+
+- **`transliterate(..., context=True)` returned non-ASCII text for anything that was not
+  an Arabic or Hebrew word (#1008).** The context engine splits its input into Arabic/Hebrew
+  words and everything else, and appended everything else raw: `é` and `北京` came back
+  unchanged where the context-free path gives `e` and `bei jing`, a Persian ZWNJ and
+  Hebrew bidi marks reached the output, and `errors=` never applied to any of it. Those
+  spans now go through the same transliteration as a word, so `context=True` agrees
+  with the context-free path everywhere the dictionary has nothing to add. Found by the
+  Lean audit of the ASCII-output invariant I2 (`formal/lean/Transliterate`); the
+  context tests had never fed it non-abjad text, and skip without the dictionaries,
+  which is why a new test builds a minimal one itself.
+
+- **Replacing the emoji provider could hang the interpreter (#1009).** `set_emoji_provider`
+  stored the new provider with the write lock held, and storing it dropped the old one
+  there and then — running its `__del__`, which is arbitrary Python, inside the lock. If
+  that `__del__` called `set_emoji_provider` or `demojize`, the thread waited on its own
+  lock. With no re-entrancy at all, a `__del__` that gave up the GIL (closing a file or a
+  socket does) let another thread's `demojize` take the GIL and then block on the lock
+  while holding it, and neither thread could proceed. The internal transliterate
+  dispatcher had the same shape. The old object is now dropped after the lock is
+  released. Found by a TLA+ model of the binding's locks and the GIL
+  (`formal/tla/Concurrency`); each case is now a subprocess test with a timeout.
+
+- **The deletion resolver disagreed with the detector about line breaks, and a leading
+  zero-width character still took a cell (#1010).** Both found by a Lean model of
+  `resolve_deletions` (`formal/lean/Deletions`), which proves the resolver idempotent,
+  panic-free and never inventing text, and checks it against the library on 5.39 million
+  inputs. VT, FF, NEL, LS and PS start a line for `has_anomalies` but were ordinary cells
+  to the resolver: with `resolve_cr=True` a carriage return after one overwrote the line
+  above it while the detector reported nothing, and without it a backspace erased the
+  break and joined two lines, so `canonicalize("pay\x85\bpal")` gave `paypal` where the
+  `LF` form gives `pay pal`. They now end a line, as `LF` does. And #1005's rule that a
+  character taking no cell moves nothing held only with visible text to its right: on an
+  empty line a U+200B took cell 0, so every overwrite after a later carriage return landed
+  a column off, and `"\u200bZZZZZZ\rpaypal"` resolved to `paypalZ`. It now never takes a
+  cell; the consequence, as in a terminal, is that a backspace at column 0 has nothing to
+  erase and the zero-width character is kept for `strip_zero_width` to decide on.
+
+- **Four emoji-scanner defects found by a Lean model of the scanners
+  (`formal/lean/Emoji`, #1011).** The model mirrors `src/emoji.rs` and `src/py/emoji.rs` branch
+  by branch, agrees with the library on 680,172 differential inputs, and checks the
+  documented properties over every string up to length five.
+
+  - **A fully qualified ZWJ sequence was named piece by piece.** CLDR keys these
+    sequences without their presentation selectors, and people type them with:
+    `demojize("\u2764\ufe0f\u200d\U0001f525")` gave `red heart fire`, the rainbow
+    flag `white flag rainbow`; 306 of the 1,021 fully qualified sequences were misnamed.
+    A selector with no table edge is now consumed and the walk goes on, and the scanner
+    window holds the longest fully qualified form (ten code points).
+  - **Dropping an emoji glued the next word to the name before it.** An emoji with no
+    name dropped under `errors="ignore"`, `replace_with=""` or the pipeline reset the
+    separator flag, so `demojize("\U0001f600\U0001f1e6x", errors="ignore")` gave
+    `grinning facex`, and a combining mark landed on the name. Nothing written now means
+    nothing changed.
+  - **A removal could still build a keycap.** The seam check from #1005 looked back one
+    output character and a keycap is three: `replace_emoji("1\ufe0f\U0001f600\u20e3", "")`
+    built `1\ufe0f\u20e3`. It now looks back two.
+  - **Skipping a selector or joiner opened the same seam.** `demojize` drops a stray
+    VS15, VS16 or ZWJ, and the keycap after it then bound to the digit before:
+    `1\u200d\u20e3` came back as a keycap for the next pass to name. The skip now
+    closes the seam, and a text-style keycap, `1\ufe0e\u20e3`, is named as the keycap
+    it is.
+
+  `ml_normalize` output moves for the first two; `KEY_SCHEMA_VERSION` 10 is unreleased
+  and records it.
+
+- **`make_cached_transliterator` could keep serving a result from before a
+  registration (#1012).** Its docstring promises that once `register_lang`,
+  `register_replacements`, `remove_replacement` or `clear_replacements` returns, the
+  cache never serves results that predate the change. With several threads it did: a
+  call could read the old table, another call could clear the cache on seeing the new
+  generation, and the first would then store its old result into the fresh cache, where
+  it stayed. Reproduced in about half of all rounds of a three-thread stress test. The
+  registration generation a call starts under is now part of its cache key, so a result
+  computed against an old table is filed where no later call looks. Found by a TLA+ model
+  of the binding's shared state (`formal/tla/Concurrency`).
+
+- **Canonically equivalent input transliterated differently in two places (#1013).** Found by a
+  Lean audit of the argument for invariants I1 to I3 (`formal/lean/Transliterate`), then
+  swept over every code point with a canonical decomposition. GREEK DIALYTIKA AND OXIA
+  (U+1FEE) and GREEK OXIA (U+1FFD) had table rows reading `x`, where their canonical
+  equivalents U+0385 and U+00B4 give `"` and a space; they now agree. And with
+  `tones=True` the 156 CJK compatibility ideographs lost their tones, because the toned
+  pinyin table is keyed by the unified ideograph each one decomposes to:
+  `transliterate("\uf901", tones=True)` gave `geng` where U+66F4 gives `gēng`. The
+  lookup now goes through the canonical equivalent. Two more single characters therefore
+  reduce `slugify` to `""`, and the census in `docs/limitations.md` moves to 243,401.
+
+- **A registration could land after `seal_registrations()` returned, and past the
+  language cap (#1014).** Found by a TLA+ model of the registration paths
+  (`formal/tla/Concurrency`). In the public Rust API the seal check, the cap check and
+  the write each took and released their own lock, so a `register_lang` already past
+  the seal check still wrote its table after another thread's `seal_registrations()`
+  had returned, which is the one thing a seal is for, and sixteen threads racing for
+  the last of the 100 language slots took it 10 to 16 times. Every mutator, and the
+  seal, now go through one registration gate. Python was not exposed to either race,
+  since it holds the GIL across the call. It was exposed to a third: one
+  `UniqueSlugifier` shared between threads raised `RuntimeError: Already borrowed`
+  whenever a `check` callback doing I/O was running on another thread. Calls to one
+  instance are now serialised. The `register_lang` and `register_replacements`
+  docstrings now also say that a batch call already in progress can mix the old table
+  with the new.
+
+- **`demojize` named ill-formed sequences whole that `replace_emoji` treats as two
+  emoji (#1015).** #1011 let a U+FE0F with no table edge continue the trie walk, so that
+  fully qualified sequences are named whole. It applied anywhere, so
+  `demojize("\U0001f1e7\ufe0f\U0001f1e6")` named a flag that
+  `replace_emoji` counts as two emoji, and that the same letters with U+FE0E never
+  formed; `\u2764\u200d\ufe0f\U0001f525` became `heart on fire`. The
+  selector now continues the walk only straight after a pictograph, where the fully
+  qualified form puts it. Found by running the Emoji model's differential test
+  (`formal/lean/Emoji`) against #1011: on 219,724 inputs `replace_emoji` agrees with
+  the model everywhere, and every remaining `demojize` difference is a deliberate one.
+
+- **Line and paragraph separators joined the words either side (#1017).** `translit_default.tsv`
+  mapped LINE SEPARATOR and PARAGRAPH SEPARATOR to nothing, so
+  `transliterate("pay\u2028pal")` gave `paypal`, and so did `search_key`,
+  `catalog_key`, `slugify` and `unidecode`, where the `LF` form gives `pay pal`. NEXT LINE
+  had no row: `transliterate` gave `pay[?]pal`, and `slugify` and `unidecode` joined the
+  words. All three now give a space, as every other whitespace character already did,
+  as TR39's rows for them do, and as `collapse_whitespace` does. `search_key` and
+  `catalog_key` values move for input containing U+2028 or U+2029 (key schema 10, not yet
+  released); `sort_key` never transliterated them and does not move.
+
+- **`scripts/watch_pr.py` could merge with a thread open, merge a head it never looked at,
+  and retry a refused merge blind (#1018).** Found by a TLA+ model of the watcher and GitHub
+  (`formal/tla/WatchPR`), each counterexample replayed against the real script in
+  `tests/test_watch_pr_protocol.py`. A review-thread query that failed read as "no
+  threads", so under `--await-review` a green PR merged over an unresolved thread, and the
+  failed read still counted towards the stuck streak. `gh pr merge` named no head, so a
+  push landing after the last read was merged unseen; it now passes
+  `--match-head-commit`. A refused merge's reason was discarded and the merge retried
+  every poll until `--max-polls`; it is now printed, and two refusals stop the watcher
+  with exit `2`. Only the latest run of each check counts, as for branch protection. And
+  `--await-review` no longer merges while a reviewer's latest review requests changes.
+  The module docstring said the order of the two reads did not matter; it does, and it
+  now says so.
+
+- **The hostname screen missed 28 invisibles that UTS #46 deletes (#1019).** Found by the Lean
+  model of the detectors (`formal/lean/Detection`). `is_suspicious_hostname` reports an
+  invisible character in a label because UTS #46 maps it to nothing, so the label
+  resolves to one without it, but the screen checked a hand-written list:
+  `is_suspicious_hostname("ev\u00adil.com")` said clean while its canonical form was
+  `evil.com`, which is the blocklist bypass the screen exists to close. The soft hyphen,
+  U+034F, the Hangul fillers, the Mongolian free variation selectors, U+17B4-U+17B5,
+  U+206A-U+206F, the shorthand format controls, the musical-symbol formats and the
+  unassigned default-ignorables of the tag plane were all missed. `has_invisible` now
+  covers the whole `Default_Ignorable_Code_Point` property, bidi controls aside, which
+  `bidi_control` already reports.
+
+- **The C ABI read bytes that are not UTF-8 as if they were (#1020).** Found by the bindings harness
+  (`formal/bindings`). safer-ffi's `char_p::Ref::to_str` does not validate, so a C
+  caller passing Latin-1 or truncated input handed the core text that was not UTF-8,
+  which is undefined behaviour: `disarm_strip_bidi("caf\xE9")` crashed,
+  `disarm_fold_case` aborted with a panic that could not unwind, and
+  `disarm_canonicalize` returned bytes that were not UTF-8. Every argument is now
+  decoded at the boundary with each malformed sequence read as U+FFFD, the contract the
+  other bindings already follow, so the call proceeds. `disarm.h` gains the argument and
+  result contract in the `disarm_string_free` comment: pointer arguments other than the
+  nullable ones must be non-NULL, and returned strings are read-only until freed. No
+  signature changes.
+
+- **Script detection gave a script to 50 Common code points and never found Bopomofo, and
+  `decode_smuggled` misread a payload beside a carrier of its own scheme.** Found by the
+  Lean model of the detectors in `formal/lean/Detection` (Findings 5 and 6; #1023).
+  `detect_char_script` reads a table of block ranges, so the byte order mark was Arabic,
+  the dandas `U+0964`-`U+0965` Devanagari, the Arabic comma, question mark and tatweel
+  Arabic, `U+00D7` and `U+00F7` Latin: `is_mixed_script("\ufeffhello")` was `True`, a
+  Bengali or Tamil sentence ending in a danda was mixed, and
+  `inspect_anomalies("\u03b1\u00d7\u03b2")` reported `mixed_script`. The UCD calls all
+  50 `Script=Common`; they are now carved out by `script_common_carveouts.tsv`, generated
+  from the bundled `data/Scripts.txt` by `scripts/gen_script_common_carveouts.py`.
+  Transliteration still groups runs by block, so `sort_key`, `search_key` and
+  `catalog_key` do not move. Bopomofo (`U+3105`-`U+312F`, `U+31A0`-`U+31BF`, and the
+  two tone marks `U+02EA`-`U+02EB`) had no range at all, so `a\u3105` read as
+  single-script and the Han + Bopomofo augmented set was unreachable; it is now detected
+  and `Script.BOPOMOFO` names it. `Script_Extensions`, which UTS #39 section 5.1 actually
+  reads, is still not bundled: `docs/limitations.md` lists what that leaves.
+  In `decode_smuggled`, a variation-selector payload after a fully qualified emoji
+  (`\u2764\ufe0f`) decoded as `b'\x0fhi'` with no text, because the emoji's own `VS16`
+  was read as its first byte; that selector is now left out when the rest decodes as
+  text. After one stray `U+200B`, a zero-width payload spelling `hi` was reported as the
+  text `44`, a decode nobody encoded: when a run's bit count is not a multiple of 8,
+  both byte frames are tried and `text` is set only when exactly one is printable. When
+  both are printable and differ, `has_anomalies` still reports `smuggled`, with both
+  readings as the token (`44 | hi`), so a stray bit cannot hide a payload from the
+  detector.
+
+- **Two defects found by a Lean model of the confusable fold
+  (`formal/lean/Confusables`; #1024).** The model mirrors the fold, compose-at-lookup and
+  `skeleton_key` step by step, agrees with the library on 404,205 differential inputs,
+  and each of its counterexamples was reproduced on the library before anything changed.
+
+  - **`skeleton_key` was not a fixed point, so two spellings of one identity could key
+    apart.** Full case folding leaves `\u0390` as three code points and nothing
+    recomposed them, so its key was `i\u0308\u0301` and the key of that key was
+    `\u1e2f`. The confusable fold leaves a base beside a mark it composes with:
+    `\u00a5\u0300` keyed as `y\u0300`, which `is_confusable` flags, and the #522 pair
+    `\u04aa\u0327` keyed as `c\u0327` while `\u00e7` keyed as `c`. Controls and
+    zero-width characters were removed only after the last fold, so `a\x01\u0300` keyed
+    as `a\u0300`. Over every scalar value and every BMP base carrying a composing mark,
+    8 code points and 9,526 of 5,396,480 pairs failed, and 40,229 with a control
+    between. NFKC now runs inside the fixed point, and every strip step runs before NFKC
+    rather than after it. The second half also stops a removed character from moving the
+    key: an invisible between a base and its mark kept them from composing, so
+    `I\u200b\u0301` keyed as `l\u0301` where `I\u0301` keys as `\u00ed`, and 3,066 of
+    129,200 Latin, Greek and Cyrillic base-mark pairs moved that way for each invisible
+    tried. `tests/exhaustive_confusables.rs` now sweeps `skeleton_key` over every scalar
+    and the BMP crossed with every composing mark (tier 3).
+  - **The Unicode 16 Kirat Rai compositions were left decomposed.** U+16D67 is a
+    starter, not a mark, and composes with the character before it: U+16D67 U+16D67 is
+    the NFD of U+16D68. Compose-at-lookup ended a cluster at the first non-mark, so
+    `normalize_confusables` answered the two forms differently, against the normal-form
+    invariance it documents. The presets' fast-path guard tested NFKC one character at a
+    time, so `canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `skeleton_key`,
+    `security_clean`, `normalize_user_input` and `slugify_unicode` returned the NFD as
+    it came under the default policy, while `digit_policy="tr39"`, which bypasses the
+    guard, composed it. A cluster now takes in the starter, the guard declines it, and a
+    test walks every primary composition in Unicode so that a third class of
+    backward-composing starter fails a test before it reaches a key.
+
+  `skeleton_key` output moves for the first. `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation` and `normalize_confusables` move for Kirat Rai text in NFD, as
+  `skeleton_key` does. `KEY_SCHEMA_VERSION` 10 is unreleased and records both.
+
+- **The anomaly detector missed characters `canonicalize` deletes from a word, and a
+  doubled RTL mark hid a reordered number run (#1025).** Found by the Lean model of the detector
+  in `formal/lean/Detection` (Findings 1 and 2). The deprecated format controls
+  `U+206A`-`U+206F` and the interlinear annotation characters `U+FFF9`-`U+FFFB` were
+  defined only inside the bidi strip, so `strip_bidi`, `strip_format` and `canonicalize`
+  turned `pay\u206apal` into `paypal` while `has_anomalies` said `False`. The set now
+  lives in one predicate that both read, and the detector reports it as `invisible`, as
+  it does `U+200B`. The 66 noncharacters, which `canonicalize` also deletes, are
+  reported too, as an `invisible` run of one: nothing legitimate emits one, and the
+  hostname screen and the smuggled-payload decoder already treated them as invisible.
+  Separately, the #741 rule for an `RLM` or `ALM` in front of a number run tested only
+  the first mark in the token, so `Transfer \u200f\u200f100 200 300 to Bob`, which renders
+  `Transfer 300 200 100 to Bob` exactly as the single-mark form does, screened clean. Every
+  mark is tested now.
+- **Canonically equivalent text got different anomaly verdicts, and ordinary French
+  reported as a disguise (#1025).** Found by the same model (Findings 3 and 4). Four of the
+  detector's tests asked for an ASCII letter as spelled, so `\u00e9t\u00e9` followed by an
+  isolate was clean in NFC and `bidi` in NFD, and the NFC spelling, the common one, was
+  the unreported one; the model's sweep found 2,328,179 split verdicts. The detector now
+  classifies each token composed and reads a letter through its canonical decomposition,
+  so both spellings get one report, lexicon included; `tests/exhaustive_anomalies.rs`
+  checks it over every Unicode scalar. A character NFC replaces with a different one
+  rather than composing, such as a canonical singleton (KELVIN SIGN, GREEK QUESTION
+  MARK), is still judged as spelled and keeps reporting, so `\u212aey` is not read as
+  `Key`. And `confusable` no longer fires on a letter whose fold only drops its accent
+  (`Fran\u00e7ais`, `gar\u00e7on`, `ch\u1ec9`), which the guide already said was spared. The
+  letters the fold changes in shape (`\u00f8`, `\u0142`, `\u0111`) still report, and
+  `docs/user-guide/anomaly-detection.md` now says which Latin letters those are. The
+  folds themselves, and every stored key, are unchanged.
+- **Detector documentation the code contradicted (#1025).** `docs/api/predicates.md` said the
+  detector never fires on text `canonicalize` leaves alone; that holds per code point
+  only, and `a\u03bb` is canonical and `mixed_script`. The guide counted "eight
+  branches" where fifteen kinds exist, the `DuplicateMark` doc said a repeated mark
+  survives canonicalization (the key builders drop it since #835), and a comment claimed
+  `U+1C80` resolves as Cyrillic. Found by the same model (Finding 7).
+
+- **`sanitize_filename` could return a Windows device name when the stem sanitized to
+  nothing (Lean model, finding 1; #1026).** `sanitize_filename("*.con")` returned `con`, as did
+  `"_.con"`, `"/.aux"`, `"../.con"` and 185 single characters before `.con`, on the
+  universal and Windows platforms alike. Both reserved-name checks read the empty stem,
+  and `finalize_name` stripped the extension's dot after them. The check now reads the
+  name as it is returned, the part Windows matches (before the first dot, trailing
+  spaces ignored), so `"*.con"` gives `_con`, and `"nul.tar.gz"` is still caught.
+- **`sanitize_filename` validates `separator` (Lean model, finding 2; #1026).** It is inserted
+  after the illegal characters are removed and nothing checked it: `separator="/"` turned
+  `"../etc/passwd"` into `/etc/passwd`, `"\x00"` put NUL in the name, and `" "` let
+  `"con _"` truncate to a bare `con`. A separator must now be printable, non-space ASCII
+  with no character illegal on the platform and no `/` or `\`, or the call raises
+  `InvalidArgumentError` (Rust: `ErrorKind::InvalidArgument`, code
+  `invalid_filename_separator`) in every binding, the way `strip_log_injection` refuses
+  a bad `replacement`. `""` is still allowed. A non-ASCII separator is refused too: it
+  could carry a bidi control into the name, and the next call transliterated it anyway.
+- **`sanitize_filename` returns a fixed point (Lean model, finding 3; #1026).** #570 fixed one
+  way a second call changed the name; four more remained, such as `"_.x.*"` giving
+  `_.x` then `x`, `("ab_cd", max_length=3, preserve_extension=False)` giving `ab_` then
+  `ab`, and `("a.bcd.txt", max_length=6)` giving `a..txt`. The sanitizing pass now runs
+  again on its own output until it stops changing (at most eight passes; the model's
+  8.5-million-case grid needs at most four), so idempotence holds by construction rather
+  than case by case, and the passes after the first skip normalization and
+  transliteration, which are the identity on the ASCII they see. A stem made only of
+  separators now keeps one instead of vanishing, so `"_.x"` stays `_.x` (it gave `x`)
+  and `("PRN.txt", max_length=5)` stays `_.txt` rather than collapsing to `txt` on the
+  next call. Outputs change only where they were unsafe or not fixed points, plus that
+  all-separator stem.
+- **An explicit encoding is no longer overridden by a byte-order mark (Lean model,
+  finding 14; #1026).** `decode_to_utf8(b"\xfe\xff\x00A", "utf-8", strict=True)` returned
+  `("A", False)`: the WHATWG sniff decoded bytes that are not UTF-8 as UTF-16BE, and
+  `strict` had nothing to catch. With an explicit encoding only that encoding's own BOM
+  is removed now, and any other is data, so that call raises. A UTF-16 label that names
+  no byte order (`"utf-16"`, `"unicode"`, `"ucs-2"`) still takes it from a UTF-16 BOM,
+  as Python's `utf-16` codec does. Auto-detection keeps the sniff (#710).
+- **One typed `%` no longer lets a manufactured one through (Lean model, finding 15; #1026).**
+  #721 neutralized the `%` compatibility folding makes from fullwidth input only when
+  the input had no `%` at all, so `"%"` followed by fullwidth `%2E%2E%2F` still gave
+  `%%2E%2E%2Fetc.txt`. The rule is now per character: every `%` in the output is one the
+  input contained (or part of the separator). `docs/limitations.md` and the docstrings
+  say so.
+
+- **Slug defects found by a Lean model of the output sanitizers
+  (`formal/lean/Sanitizers`; #1028).** The model agreed with the library at `595fbda` on
+  2,539,440 `slugify` and 30,005 `UniqueSlugifier` differential inputs, and each
+  counterexample below was reproduced on the library before anything changed.
+
+  - **`allow_unicode` kept 130 symbols.** The letter test was `char::is_alphanumeric`,
+    whose `Alphabetic` half takes in the circled Latin letters U+24B6-U+24E9 and the
+    squared, negative circled and negative squared Latin capitals U+1F130-U+1F189 through
+    `Other_Alphabetic`, so `slugify("\u24b6dmin", allow_unicode=True)` returned
+    `'\u24d0dmin'`, which reads as `admin`. They are `So`, and now become the separator,
+    as the docs say symbols do.
+  - **A truncated `allow_unicode` slug could end in ZWJ or ZWNJ**, the defect #711 set
+    out to prevent. Grapheme rule GB9 attaches a joiner to the character before it, so the
+    cluster-boundary cut kept `a\u200d` of `a\u200db`. A cut now drops a trailing joiner,
+    with and without `word_boundary`.
+  - **`UniqueSlugifier` suffixes broke the slug's shape.** The base was cut on a code
+    point with nothing cleaned, and the suffix could stand alone: `max_length=5` gave
+    `ab-cd`, then `ab--1`; `max_length=2` gave `ab`, then `-1`; an empty slug gave `''`,
+    then `-1`; `allow_unicode` left a ZWJ before `-1`. The head is now cut the way a slug
+    is (a cluster boundary under `allow_unicode`, then a trailing joiner and a partial
+    separator removed), a suffixed slug keeps at least one character of the base, and
+    `InvalidArgumentError` is raised when the suffix leaves no room for one. The digits
+    are never cut, so distinct counters never alias. An empty slug is returned as it is,
+    every time, without being recorded or passed to `check`. The candidate builder moved
+    from the Python binding into the Rust core.
+  - **`allow_unicode` slugs were not NFC when lowercasing made a composable pair.**
+    Composition ran before lowercasing, so `T\u0308` gave `t\u0308`, while `\u1e97` gave
+    `\u1e97`, and slugifying the first result again changed it. Composition now runs
+    after lowercasing.
+  - **Plain truncation left half of a multi-character separator:**
+    `slugify("a b", separator="-_", max_length=2)` gave `'a-'`. It is stripped, as the
+    `word_boundary` branch already did.
+  - **`word_boundary` dropped a word it had room for:**
+    `slugify("very long title here", max_length=9, word_boundary=True)` gave `'very'`.
+    A cut that lands exactly at the end of a word now keeps it (`'very-long'`), as
+    python-slugify does.
+  - **Stopwords were not case-insensitive**, as `SlugConfig::stopwords` says they are:
+    `slugify("The Fox", stopwords=["The"])` gave `'the-fox'`. The stopwords are
+    lowercased, and so is each word when `lowercase=False`, on every entry point.
+  - **With an empty separator, stopwords were removed character by character:**
+    `slugify("abc", separator="", stopwords=["b"])` gave `'ac'`. With no separator the
+    slug has no words, and nothing is removed.
+
+  `slugify` output moves for the inputs above; slugs without these symbols, joiners,
+  composable pairs, stopwords or truncation are unchanged. `UniqueSlugifier` returns
+  `''` rather than `-1`, `-2`, ... for unsluggable input, and raises where it returned a
+  bare suffix. `UniqueSlugMaxLengthTooSmall` reports the length a candidate needs, one
+  character of the base included.
+
+- **Five defects found by a Lean model of the presets, key builders and profiles
+  (`formal/lean/Presets`; #1029).** The model transcribes every preset step list, the
+  fast-path guard and the eight profiles, agrees with the library on 22,682,192
+  differential comparisons, and each counterexample was reproduced on the library before
+  anything changed. Finding 1, `skeleton_key`, was fixed in #1024.
+
+  - **`search_key` and `sort_key` were not fixed points under `digit_policy="tr39"` or
+    `"preserve"`.** Their only confusable fold under those policies is the pre-fold on
+    the raw text, and their case fold, NFKC and transliteration then make sources it
+    never saw: U+A760 keyed as U+A761, whose key is `w`; U+01C1 transliterates to `||`,
+    whose key is `ll`; `qty-` U+00BD keyed as `qty-1` U+2044 `2`, whose key has `/`. The
+    library search found 62 and 171 single code points and 682 and 1,879 two-character
+    strings. Under a non-default policy the two builders now run to a fixed point; the
+    default runs once, as before, and no default key moves.
+  - **`llm_guardrail` and `ml_corpus_normalize` kept a negation overlay, then orphaned
+    it.** #749 keeps U+0338 or U+20D2 on a base that is not alphanumeric, and the mark
+    strip runs before the confusable fold and before `strip_pua`: U+00A2 U+0338 came back
+    as `c` U+0338 and then `c`, and a PUA code point with an overlay as a bare overlay
+    and then nothing. The named profiles now run to a fixed point. A `TextPipeline`
+    built from the same flags still runs its steps once, because a caller composing one
+    can give `demojize` a replacement that is itself two emoji, which a fixed point
+    would double eight times; the two agree wherever one pass is already a fixed point,
+    which includes every single code point.
+  - **A character removed after the last normalization kept two characters that compose
+    apart.** `strip_obfuscation` stripped controls, and `ml_normalize` controls and
+    zero-width characters, after their last composing step, so conjoining jamo U+1100 NUL
+    U+1161 came back as the two jamo, whose key is U+AC00. Both now end with an NFC
+    pass. The profiles had the same defect three ways (`normalize_web_input` returned
+    `c` U+0327 for `c` NUL U+0327, and `c` the next time), and the fixed point above
+    closes it for them.
+  - **`PRESETS` was not what the presets run.** It lacked `resolve_deletions`,
+    `strip_invisibles` in the three key builders, `drop_repeated_marks`, `sort_key`'s
+    cap, `catalog_key`'s fixed point and the whole of `skeleton_key`; it still listed the
+    `demojize` step #910 removed from `strip_obfuscation`, and put
+    `canonicalize_strict`'s cap before the fold. Executing its lists with the public
+    functions disagreed with the presets on 15 of the model's 48 probes. It is now one
+    tuple per Rust step, `test_preset_steps_exact` reads the expected lists from
+    `src/presets.rs` instead of from a second hand-written copy, and a new test executes
+    every list and compares it with its preset. `is_canonical` accepts `skeleton_key`,
+    since its `preset` is documented as any `PRESETS` name.
+  - **The preset output ceiling was neither a bound on output nor neutral to input
+    size.** It was an absolute size tested after NFKC alone, so `ml_normalize` turned
+    10.4 MB of U+1FAF0 into 106.6 MB with no error, while 11 MiB of `a` after one `"`
+    was refused as having "expanded" and the same 11 MiB without the quote was
+    accepted. The limit is now on growth: after every step, a preset refuses to leave
+    the text more than 10 MiB longer than its input, whichever step does the growing.
+    An input of any size that no step grows is accepted. The error code is unchanged,
+    and its message now names the input size as well as the output.
+
+  Stored keys move only where a key was not a fixed point, so no stable value moves:
+  `strip_obfuscation` and `ml_normalize` on a composing pair split by a removed
+  character, `search_key` and `sort_key` under a non-default `digit_policy`, and the
+  three profiles above. `KEY_SCHEMA_VERSION` stays at the unreleased 10, with the moves
+  recorded under it, and three rows for the separated-composition class were added to
+  the key-stability corpus, which had none.
+
+- **Six text-primitive defects found by a Lean model of the primitives
+  (`formal/lean/Text`, #1034).** The model covers case folding, the whitespace, control and
+  invisible strips, zalgo, display width, punctuation, contractions and edit distance, and
+  agreed with the library on 16,417,680 differential comparisons before any finding
+  counted.
+
+  - **A class-0 mark reset the zalgo count (Z1).** `is_zalgo`, `strip_zalgo`, the key
+    builders' repeat-dropper and the `duplicate_mark` detector counted the marks of one
+    class in a run, and a combining mark of class 0 ended the run. Canonical ordering
+    sorts marks only between starters, and a class-0 mark is one, so
+    `a` + three acutes + `U+034F` + three acutes was two runs of three: not zalgo, and
+    `strip_zalgo` kept all six. 1,493 of the 1,496 class-0 marks did it, including the
+    invisible `U+034F`, `U+180B`-`U+180F` and `U+17B4`/`U+17B5`, and
+    `canonicalize("a" + ("\u0301" + "\u180b") * 20)` kept twenty acutes on one letter.
+    The count is now per base and per class: a class-0 mark neither counts nor resets it,
+    and only a non-mark starts a new base. The predicate and the cap read one table.
+  - **`strip_zalgo`'s output could still be zalgo (Z2).** The cap keeps the first
+    negation overlay on a symbol beyond `max_marks` (#749), and `is_zalgo` counted it, so
+    `is_zalgo(strip_zalgo("=" + "\u0338" * 4))` was `True` and
+    `is_zalgo("\u2260", threshold=0)` was `True` too. The predicate now skips the same
+    overlay, and the output of `strip_zalgo(text, max_marks=k)` is never zalgo at `k`.
+  - **A zero-width `Prepend` character hid the one after it (W1).** UAX #29 attaches
+    `U+0600 ARABIC NUMBER SIGN` and the other twelve zero-width `Prepend` characters to
+    the character that follows, and `grapheme_width` took the cluster's first scalar as
+    its base, so `terminal_width(("\u0600" + "A") * 100)` was 0. The width now comes
+    from the character the prefix attaches to: 100.
+  - **A stray `U+FE0F` widened a character that is not an emoji (W2).**
+    `grapheme_width("a\ufe0f")` was 2. A VS16 now takes effect only on an emoji base, as
+    a stray VS15 already did, so it is 1; `\u263a\ufe0f` and the keycaps are still 2.
+  - **`fold_punctuation` left members of the classes it names (D3).** `U+1680 OGHAM
+    SPACE MARK`, the one space separator it skipped, now folds to a space; the
+    reversed-9 quotes `U+201B`/`U+201F` to `'`/`"`; the reversed primes `U+2035`/`U+2036`
+    like `U+2032`/`U+2033`; and the triple primes `U+2034`/`U+2037` to `'''`.
+
+  `canonicalize`, `canonicalize_strict` and `sort_key` move for a repeated or stacked
+  mark across a class-0 mark (Z1): 6, 1 and 6 rows of the key-stability fixture, all
+  six the #862 rows that put `U+0489` between two copies of one diaeresis.
+  `KEY_SCHEMA_VERSION` 10 is unreleased and records it. No other function tracked by the
+  fixture moves.
+
+- **A lone surrogate from Java became three U+FFFD and broke every emoji beside it
+  (`formal/bindings` J1; #1046).** The JNI shim read each `String` with jni's modified-UTF-8
+  conversion, which falls back to a lossy decode of the whole buffer when any part of it
+  fails: `transliterate("a\ud800b")` gave `"a[?][?][?]b"`, and a well-formed emoji in the
+  same string became six U+FFFD, so `replaceEmoji("x\u{1F600}y\ud800", "")` removed nothing.
+  Arguments are now decoded back to their UTF-16 code units, a surrogate pair is its
+  astral character and each lone surrogate is one U+FFFD, the contract the other
+  bindings keep (#469).
+- **Ruby read a String's bytes as UTF-8 whatever its encoding said (R1; #1046).** An
+  ISO-8859-1 `"caf\xE9"` transliterated to `"caf[?]"` and a Windows-1251 word to a row of
+  `[?]`. A text argument is now read by its declared encoding: UTF-8 and US-ASCII as they
+  are (a US-ASCII byte above `0x7F` is one U+FFFD), ASCII-8BIT as UTF-8, the way the C
+  ABI reads bytes, and anything else transcoded with `String#encode`, each invalid or
+  unmappable sequence becoming one U+FFFD. An encoding Ruby cannot convert from raises
+  `Disarm::InvalidArgument`. `docs/ruby/api.md` has the table.
+- **`strip_zalgo` defaulted to a cap of 2 in Node and Ruby (B1; #1046).** #788 raised the
+  core's to 3, `is_zalgo`'s threshold, so the transform never removes a mark from text
+  the predicate declines to flag; Python followed and the two bindings kept a literal 2.
+  Every binding now reads its default from the core: the new
+  `api::DEFAULT_ZALGO_MAX_MARKS` and `api::DEFAULT_ZALGO_THRESHOLD`, `Disarm::DEFAULT_*`
+  in Ruby, and the Python signature defaults.
+- **An unknown `lang` was silently ignored outside Python (B2; #1046).** `transliterate`,
+  `find_untranslatable` and `slugify` in Node, Ruby, Java and the C ABI fell back to the
+  default tables for a code such as `"UK"`, giving `"Kiyiv"` for `"Kyiv"`, while Python
+  and every binding's `search_key` rejected it (#68). The rule now lives in the core:
+  `api::validate_lang`, the fallible `Transliterate::try_run` and
+  `Transliterate::try_find_untranslatable`, and `api::try_slugify`, which every binding
+  calls. An unknown code is the binding's invalid-argument error; in the C ABI it is the
+  `error` half of `disarm_transliterate_opts`'s result, with no signature change. The
+  infallible `run`, `find_untranslatable` and `slugify` stay lenient and say so.
+- **`strip_accents` of a singleton decomposition depended on the rest of the string
+  (S1; #1046).** Its borrowing fast path returned the input whenever the NFD form carried no
+  combining mark, so `U+037E` stayed `U+037E` alone and became `;` beside any accent, and
+  the Rust API, Node, Ruby, Java and C disagreed with Python on 1,401 inputs. The fast
+  path now also requires the text to be NFC.
+- **`api::register_replacements` had no effect on the Rust API (E1; #1046).** It was
+  documented as "applied before the tables" and only the PyO3 glue applied it.
+  `Transliterate::try_run` and `try_find_untranslatable` apply it now, and Python's
+  `transliterate` and `find_untranslatable` call the same core body rather than a copy of
+  it.
+- **Node coerced size options (N1; #1046).** `NaN`, fractions and `2 ** 64` reached napi,
+  which made integers of them, so `stripZalgo('café', { maxMarks: NaN })` stripped the
+  accent. `maxMarks`, `threshold`, `maxGraphemes`, `maxLength` and `maxDistance` must now
+  be non-negative safe integers, or the call throws `DisarmInvalidArgument`.
+- **Not everything Node and Ruby threw was a disarm error (N2; #1046).** The Node docs say
+  everything disarm throws is a `DisarmError`; the infallible functions, the `Lexicon`
+  constructor and the `Pipeline` methods threw a plain `Error` on an argument of the wrong
+  type. Every entry point now throws a `DisarmError`, `DisarmInvalidArgument` for a wrong
+  type. In Ruby, `bidi_control?`, `strip_format` and `nearest_match` raised bare
+  `TypeError` or `NoMethodError`; they raise `Disarm::InvalidArgument` now, as every other
+  method does.
+- **Java, Kotlin and Node's types could not name the `arabic` and `hebrew` confusable
+  targets (J2; #1046).** The core and every other binding accept them (#792).
+  `TargetScript` gains `ARABIC` and `HEBREW`, and Node's `TargetScript` type the two
+  members its runtime already accepted.
+
+- **`slugify` dropped the text after a numeric entity it could not decode (fuzz finding
+  1 of #1040; #1048).** A failed entity was skipped together with up to 14 bytes of the ASCII
+  after it, so `slugify("Q&#A session")` gave `q`, `"Tom &#and Jerry"` gave `tom` and
+  `"issue &#12 fixed"` gave `issue`. `&#` with no digit after it is now text, as it is
+  in HTML (`q-a-session`), and an entity naming a control character, a surrogate or no
+  character at all is dropped without what follows it (`issue-fixed`). The skip also
+  stopped at a composed letter but not at its decomposition, so the two spellings of
+  `"&#a\u0301"` slugified differently; a hex letter that carries a combining mark is no
+  longer read as a digit, and both spellings give one slug. The digit run is no longer
+  capped at ten, so leading zeros decode (`&#000000000065;` is `A`).
+- **The confusable and transliteration locators report the input's character at its own
+  offset (fuzz finding 2 of #1040; #1048).** `find_unmapped_confusables`, `find_confusables` and
+  `find_untranslatable` look characters up on the composed form, so that a decomposed
+  homoglyph is found, and reported every character of a composed cluster at the
+  cluster's start: `find_untranslatable("x\ufe0f")` put U+FE0F at offset 0, where `x`
+  is, and `find_unmapped_confusables("\u04aa\u0327")` put U+0327 at 0. They also
+  reported the composed character itself, which the input need not contain:
+  `find_confusables("\u0456\u0308")` reported U+0457, and a shin with a dagesh came back
+  as U+FB49, a composition exclusion no normal form produces. Each character is now
+  located at the input character it came from, and what is reported is the input's
+  character there: a mark that composes with nothing at its own offset (`("\ufe0f", 1)`),
+  and a decomposed homoglyph as its base, as written, with the fold of the composed
+  character as `target` (`[("\u0456", 1, "i")]` for `"a\u0456\u0308"`). The same
+  change reaches every binding, and `errors="strict"` names the same character.
+- **`find_untranslatable` reports a compatibility character its NFKC form recovers only in
+  part (fuzz finding 3 of #1040; #1048).** `transliterate("\U0001F240")` is `[?]ben[?]`: the
+  character is NFKC `\u3014\u672c\u3015`, whose ideograph romanizes and whose brackets
+  do not. `find_untranslatable` counted it as recovered and reported nothing, against
+  "exactly the set `transliterate` would replace, drop, or preserve", and
+  `errors="strict"` let it through. The recovery pass now collects what it cannot map,
+  and a character whose recovery left anything unmapped is reported, and raises under
+  `errors="strict"`. A compatibility character recovered whole (`\ufb01`, `\u337f`) is
+  still not reported.
+- **`sanitize_filename` returns a fixed point however many layers of empty extensions the
+  input carries (fuzz finding 4 of #1040; #1048).** Each pass stripped trailing separators and
+  then trailing dots once each, so a stem ending in both by turns lost one layer per
+  pass, and the pass loop stops at eight (`MAX_PASSES`, #1026):
+  `sanitize_filename("a" + ".*" * 9, preserve_extension=False)` returned `a._`, which
+  sanitizes to `a`. A pass now repeats its strips until none removes anything, so that
+  input gives `a` in one call, and a debug build asserts that the pass bound is never
+  reached. Names a single round already settled are unchanged.
+- **An `allow_unicode` slug with an empty separator is its own slug (fuzz finding 5 of
+  #1040; #1048).** Joining the words with nothing can put two characters that compose side by
+  side after the composing step has run: `slugify("\u1100 \u1161", allow_unicode=True,
+  separator="")` returned the two conjoining jamo, which render as `\uac00` and which a
+  second call composed to it, and Kirat Rai U+16D67 did the same with itself. The joined
+  slug is now composed again, so the first call returns `\uac00`. A separator keeps the
+  words apart, as before.
+- **`search_key` and `catalog_key` are fixed points across a stripped control (fuzz
+  finding 7 of #1040; #1048).** Both strip controls after the last step that composes, so a
+  control between two characters that compose left them apart until the next call:
+  Kirat Rai U+16D67 + U+0016 + U+16D67 keyed as the two vowel signs, and the key of
+  that key was U+16D68. Kirat Rai composes with no mark involved and nothing romanizes
+  it, so neither the accent strip nor transliteration hid it, as they hide conjoining
+  jamo. Both builders now end with an NFC pass, as `sort_key` and `ml_normalize` already
+  did, under every digit policy. A key moves only where it was not a fixed point, and no
+  row of the key-stability fixture moved; `KEY_SCHEMA_VERSION` 10 is unreleased and
+  records it, and three rows for the class were added to the fixture.
+
+- **One form of 37 case pairs had no transliteration, and `search_key` leaked it (#1057).**
+  `search_key` folds case before it transliterates, so a lowercase letter with no table
+  row reached the key even when its capital had one: `search_key("ȺBC")` gave `ⱥbc` and
+  never met `search_key("ÀBC")`. The other way round, `transliterate` gave `[?]` for
+  capitals whose lowercase maps, among them the Georgian Mtavruli letters U+1CB1 to
+  U+1CBF and the Latin Extended-C and -D capitals of IPA letters (`Ɫ`, `Ɑ`, `Ɦ`, `Ʞ`).
+  Each missing form now maps as its partner does, re-cased, and
+  `tests/case_pair_transliteration.rs` checks every uppercase row of the case-folding
+  table. Two existing capitals changed to agree with their lowercase:
+  `Ǝ` gave `D` (a copy of the row above it) and `Ə` gave `A`; both now give `E`, as
+  `ǝ` and `ə` give `e`. `slugify` reduces 31 fewer single characters to `""`, and the
+  census in `docs/limitations.md` moves to 243,370.
+
+- **`replace_emoji` deleted a black star, and 1,022 unassigned code points, when a
+  `U+FE0F` followed (#1058).** UTS #51 defines the emoji presentation sequence for an
+  `Emoji=Yes` base, and the selector arm asked `Emoji` OR `Extended_Pictographic`,
+  which reserves whole blocks. `replace_emoji("a★\u{FE0F}b")` now returns its input, as
+  `replace_emoji("a☆\u{FE0F}b")` always did, and `terminal_width` gives the pair the
+  star's own width instead of two columns. An `Emoji=Yes` base with a selector is
+  unchanged: `replace_emoji("x©\u{FE0F}y")` is still `xy`. `demojize` already dropped
+  a stray selector wherever it sat, so its output does not move, and no stored key
+  does. The new `emoji_yes.tsv` is generated from the pinned UCD 15.1.0 like the other
+  emoji tables. Closes the part of #992 that #996 left open.
+
+- **The confusable fold reaches its fixed point however many marks a cycle eats
+  (#1071).** `C` + U+0327 composes to `Ç`, which folds back to `C`, so each pass took
+  one cedilla and the loop stopped at eight passes. `C` and nine cedillas tripped its
+  debug assertion, a panic in a debug build; with ten, `normalize_confusables` returned
+  a string that was still confusable and folded again on a second call. `canonicalize_strict`, `skeleton_key` and the pipeline profiles run the
+  fold in loops of their own and failed the same way. Input still changing at the cap
+  is now finished span by span, and a pass that only shortens a run of one mark is
+  applied as many times as it holds at once, so a long stack costs a few passes, not
+  one per mark. Found by the nightly fuzz run.
+
+- **`canonicalize` is a fixed point when the confusable fold moves a mark (#1072).**
+  The mark cap runs before the fold, and the fold can move a mark from below the
+  letter to above it: `ģ` folds to `ġ`. `ģ` with three marks above kept
+  all three, then the fold made a fourth, which the next call cut. The cap now runs
+  again after the fold, and only touches text it cuts. The check that decides this
+  returns early on text with no standalone combining mark, so `canonicalize` is 1-9%
+  cheaper than before. Found by the `presets` fuzz target.
+
+- **`slugify(allow_unicode=True)` leaves no joiner at the edge under a separator of word
+  characters (#1076).** `slugify("ab\u200d6", separator="6", allow_unicode=True)`
+  returned `ab` followed by a zero-width joiner: the edges were trimmed of joiners
+  before the trailing separator came off, and a separator made of word characters can
+  match the end of a word. The stopword filter and a truncation could leave one the same
+  way, and so could the head `UniqueSlugifier` cuts to fit its counter. Joiners are now
+  trimmed from both edges once the last step has run, and from a cut head again after
+  its partial separator comes off. Found by the `slugify` fuzz target.
+
+### Documentation
+
+- **The stated invariants now claim what was proved (#1016).** A Lean audit of the
+  argument behind I1-I3 (`formal/lean/Transliterate`) found that
+  `docs/formal-verification.md` justified I2 by lifting the per-character exhaustion
+  to strings, which needs `transliterate` to be a character-wise map; it is not one,
+  and 1,755,178 pairs showed it. I2 now rests on what the engine appends, every piece
+  of which is ASCII, and I3 follows from I1 and I2; both are checked in Lean. The
+  invariants are scoped to `tones=False` and no runtime registrations, which is
+  where they hold. I6 said inputs over 10 MiB raise, which #80 made false: there is
+  no input cap. I7's bound `4 × bytes + chars` failed on one code point, U+337F
+  SQUARE CORPORATION (`zhu shi hui she`, 15 characters from 3 bytes); it is now
+  `5 × bytes + chars`, checked over every Unicode scalar, with U+337F pinned in
+  `tests/test_formal_invariants.py`. `docs/architecture/testing-guarantees.md` says
+  the same.
+
+- **Documentation corrections from the Lean model of the confusable fold
+  (`formal/lean/Confusables`; #1024).**
+
+  - The fold's output is never itself confusable only under `digit_policy="numeric"` and
+    `"tr39"`. `"preserve"` keeps the digit rows, and `is_confusable`, which takes no
+    policy, still flags them; the guide and the rustdoc now say so, with an example.
+  - The `tr39` policy differs from `numeric` on 47 rows, not 45: the override table has
+    47 rows, and the two policies fold exactly 47 code points differently. All 22
+    statements of the count, across the guide, the Node, Ruby and Rust pages, the
+    docstrings and the Node, Ruby, Java and C binding docs, now say 47, and
+    `tests/test_doc_table_counts.py` gates every one.
+  - The `normalize_confusables` docstring and `src/pipeline.rs` said 68 code points (8
+    for the Cyrillic target) answer differently after NFKC, split 44/15/9. Measured
+    again for this change, it is 65 (5), split 43/15/7, as the guide already said.
+    `tests/test_fold_order_divergence.py` now pins both places.
+  - The `is_confusable` docstring said only `"latin"` is accepted, and the Layer-1
+    rustdoc said `"latin"` or `"cyrillic"`. All four targets are.
+  - The guide said the presets have no `digit_policy` and always fold numerically. Since
+    #896 all seven take one.
+  - The `Text.normalize_confusables` stub had no `digit_policy`, and `Text.ml_normalize`
+    had no `fold_case`, so a type-checked caller could pass neither.
+    `tests/test_text_stub_signatures.py` now holds `_text.pyi` against `Text`.
+  - The `normalize_confusables` rustdoc said it borrows when the input is already NFC
+    and nothing folds. That fails both ways: `"x\u0301"` is NFC and comes back owned,
+    and `"\u2126"` is not and comes back borrowed. What decides it is whether anything
+    could compose. A proptest comment credited idempotence to every fold target being
+    ASCII, which 35 Latin rows are not; it comes from the fixed point.
+
+- **The `allow_unicode` mark cap, word-boundary truncation and stopwords are described
+  as they behave (`formal/lean/Sanitizers`; #1028).** The docs said combining marks are
+  "capped at two per base character"; the cap counts the base's own marks over its
+  decomposition, so a precomposed character that already carries three, such as
+  polytonic Greek U+1F82, is kept whole. The Rust, Python and user-guide descriptions now
+  say so. `docs/migration/from-python-slugify.md` records two places disarm differs from
+  python-slugify: stopwords match case-insensitively with `lowercase=False` too, and
+  `word_boundary` stops at the first word that does not fit rather than packing in later,
+  shorter ones.
+
+- **Documented properties of the presets that did not hold, found by the Lean model in
+  `formal/lean/Presets` (#1029).**
+
+  - The empty-key census said every string built from the characters that key to `""`
+    keys to `""` too. That is false for `ml_normalize`: each regional indicator keys to
+    `""` alone, and a pair names a flag (259 such pairs). The docstring and
+    `docs/limitations.md` now say so; the claim holds for the other seven builders.
+  - `catalog_key`, `search_key` and `sort_key` said private-use characters survive into
+    the key. All three have stripped them since #805.
+  - `docs/api/pipelines.md` listed `ml_corpus_normalize`'s output as ASCII. It has no
+    transliteration step, so a script without accents keeps its letters.
+    `docs/policy-templates.md` said the same.
+  - `digit_policy` was described as folding digit variants. On `catalog_key`,
+    `search_key` and `sort_key`, `"tr39"` and `"preserve"` run the whole confusable
+    table on the raw text, so a Cyrillic spelling of `paypal` keys as `paypal` rather
+    than `raural`, and `search_key` and `sort_key` rewrite `|`, `"` and the backtick,
+    which `docs/limitations.md` said they never do.
+  - The step lists in the preset docstrings, the Rust doc comments, the binding docs for
+    `ml_normalize` and `canonicalize`, and `docs/api/pipelines.md` predated
+    `resolve_deletions`, `drop_repeated_marks`, the fixed points and #910's removal of
+    `demojize` from `strip_obfuscation`, and a comment gave the zalgo cap as 2 where it
+    is 3. The profile table in `docs/api/pipelines.md` now lists what each profile's
+    `steps` reports, `list_profiles()` includes `code_context`, and `TextPipeline`'s
+    execution order in `docs/api/classes.md` is the one it runs.
+
+- **Text-primitive documentation the code contradicted (#1034).** Found by the Lean model
+  in `formal/lean/Text` (Z3, C1, C2, D1, D2). `is_zalgo` and `strip_zalgo` said they
+  count marks "per base character"; since #842 the cap is per combining class on one
+  base, and the docstrings, `docs/limitations.md` and the Node, Ruby and Java doc comments
+  now say so. `is_case_fold_stable` was documented as `fold_case(text) == text.lower()`
+  and `fold_case` as `str.casefold()`; both compare with what is compiled into disarm
+  (the Unicode 16.0 fold table and the building toolchain's `to_lowercase`), not the
+  host's `str`, and the docstrings name the letters where that differs. `docs/provenance.md`
+  and the `is_case_fold_stable` rustdoc called the toolchain dependence (#718) latent; on
+  a Unicode 17 toolchain the 28 cased letters Unicode 17 added read unstable, and on
+  rustc 1.88 they read stable, so it is live. `strip_zero_width_chars` listed "exactly"
+  10 code points and removes 22, and `docs/user-guide/text-cleaning.md` listed five.
+  `docs/limitations.md` said `canonicalize` keeps 18 Default_Ignorable code points,
+  listing ones #813 removes; it keeps 6. It also said a separator always starts a fresh
+  grapheme cluster, which a `Prepend` character before it refutes.
+
+- **Shorter entry points: `CHANGELOG.md`, `CONTRIBUTING.md` and the `pyproject.toml`
+  comments (#1035).** `CHANGELOG.md` keeps the 0.16.x and 0.15.x releases, and 0.14.1 back to
+  0.1.0 move verbatim to one page per minor series under `docs/changelog/`, in the docs
+  site's nav. The cut is 0.15.0 because that release introduced `KEY_SCHEMA_VERSION`, so
+  every upgrade note about stored keys stays on the main page. `CONTRIBUTING.md` goes
+  from 44 KB to 8 KB: setup, the everyday and pre-push commands, sign-off, the pull
+  request steps, changelog fragments and a table of contents. Test architecture, linting
+  and binding gates, documentation and doc-tests, key stability, conventions, AI
+  attribution and `scripts/watch_pr.py` move to `docs/contributing/`. The decision log
+  in `pyproject.toml`'s comments moves to `docs/contributing/packaging.md`, one section
+  per setting, with a one- or two-line pointer left beside each setting; no setting
+  changes. Moved text is not reworded, and every link, anchor and test that read the old
+  locations reads the new ones.
+
+- **`disarm_is_canonical` documents what `-1` means (`formal/bindings` E3; #1046).** The header
+  said `-1` was an unknown preset; a resource limit on a valid preset returns it too, for
+  example 600,000 x `U+FDFA`, whose NFKC form passes the output cap (#768). `disarm.h`
+  now says `-1` is "could not be answered" and names both causes. A separate code for the
+  limit was not added: a caller testing `r == -1` and reading any other non-zero value
+  as "canonical" would have taken a new `-2` for a yes. Python's `slugify` docstring said
+  an unknown `lang` does not raise; it has raised `InvalidArgumentError` since #257, and
+  the docstring says so now.
+
+- **The doc-test coverage gate now counts `python` blocks indented inside tabs and
+  admonitions (#1047).** `tests/test_doc_recipe_coverage.py` matched only fences at column 0, so a
+  page whose examples all sat in a `===` tab or a `!!!` admonition was never required to
+  run. Sybil already executes those blocks, dedented and reported at their real line, and
+  the gate now checks that against the installed Sybil instead of assuming it. A fence
+  quoted inside a longer fence is still content, not a recipe, at any indentation. The
+  one page the wider scan found, `docs/upgrading.md`, is now executed: its
+  `is_suspicious_hostname` example runs against a spoofed host and asserts that only the
+  mechanically renamed branch lets it through.
+
+- **Invariant I7 is stated for `tones=False`, as I1-I3 are (fuzz finding 6 of #1040; #1048).**
+  `docs/formal-verification.md` stated the output bound, at most five bytes per input
+  byte plus one per character, for every option. With `tones=True`, U+337F gives
+  `zhu sh\u00ec hu\u00ec sh\u00e8`, 18 bytes for 3: a toned vowel is two bytes. I7 bounds
+  the ASCII normalizer, whose worst case the per-code-point exhaustion measures, and the
+  toned table is a display form outside I2 and I3 already; bounding it would take a
+  looser constant for every mode or shorter toned output. The scope now says so, counts
+  the output in bytes, and notes that a long registered replacement is outside it too.
+  The formal tier pins the tones case.
+
+- **The published performance figures are current again, losses included (#1070).**
+  `docs/performance.md`, the README and the architecture page were refreshed from a run
+  on one recorded machine after this release's performance work: 24–116× Unidecode on
+  Latin-script text, ~13× on Cyrillic, Greek, Arabic, Persian and Hebrew, 2.4–4.8× on Indic
+  scripts, ~6–11× python-slugify. The claim that disarm wins every cell of Unidecode's
+  own benchmark was false: it wins three and is about 7% slower on pure ASCII through
+  `unidecode_expect_ascii`, and the page now says so.
+
+### Internal
+
+- **Every pair of concurrent pull requests conflicted on `CHANGELOG.md`, because both
+  prepended to the same anchor (#993).** Nothing about the content collided — it was
+  positional. Each entry went to the top of `## [Unreleased]` → `### Fixed`, so merging
+  the first guaranteed a conflict in the second, whatever the two said. #989 and #991 hit
+  it on the same afternoon; the pull request that removes it hit it while being written.
+  Entries here are essays — the four that seeded `changelog.d/` average 23 lines — so
+  resolving one was never a two-line merge, and it landed at exactly the moment a pull
+  request was otherwise ready.
+
+  Unreleased entries are now one file per change in `changelog.d/`, assembled by
+  `towncrier` at release time. Two fragments are two different files, and git only
+  conflicts on the same region of the same file, so the class is gone rather than
+  reduced. There is no `## [Unreleased]` section on `main` any more: read it with
+  `towncrier build --draft --version NEXT`, or from the *Changelog fragment* job summary
+  on any pull request. The 7,600 lines of shipped history are untouched — towncrier
+  inserts each release directly below a marker and changes nothing already there.
+
+  **A fragment is named for the pull request, not the issue.** towncrier's default is the
+  issue number, which would have rebuilt the conflict on day one: #972 alone produced
+  #973, #975, #976 and #989 — four fragments, one filename. Several pull requests per
+  issue is the norm here, not the exception.
+
+  **A fragment is the entry, byte for byte.** Leading bullet, bold lead-in, two-space
+  continuation indent; assembly concatenates and never reformats. That matters more than
+  it sounds: a fragment is written in one release cycle and rendered in another, and
+  nobody re-reads it in between, so the render has to hold no surprises. Three are on
+  offer — a `- ` prefixed to an entry that already opens with one, which the stock
+  towncrier markdown template adds whatever `all_bullets` says; a re-wrap at 79 columns;
+  and a `(#123)` appended where the prose has already placed the numbers.
+  `changelog.d/_template.md` stops the first and the last, `wrap = false` the second,
+  and `tests/test_changelog_fragments.py` compares the assembled file whole rather than
+  trusting the configuration that is supposed to produce it: against the stock template
+  it fails.
+
+  `merge=union` in `.gitattributes` was the five-minute alternative and is not what
+  shipped. It resolves **silently**, and can interleave two entries into nonsense without
+  saying so — the wrong shape for a repository whose method is to assert a thing rather
+  than describe it.
+
+- **The test suite took 93 seconds locally and most of CI's test job was coverage, not
+  tests (#997).** Bare `pytest` now runs `-n auto --dist loadfile`: **93.4s → 35.1s** on four
+  cores. `pytest-xdist` was already a dependency and already documented, but the note
+  telling contributors not to use it measured a *six-second* suite — serial 6.1s against
+  `-n auto` 5.4s, from which it concluded that worker startup dominates and CI should
+  stay serial. It did, and the suite grew, and nobody re-measured. `-n 0` turns it off
+  for a debugger, and for one small file, where worker startup (~0.6s) is most of the
+  run.
+
+  `--dist loadgroup`, pinning only the modules that touch process-global state so the
+  rest distribute per test, is the obvious next step and is worse on both counts: 45.0s,
+  and it fails `test_docs_index_drift`, whose tests depend on sharing a worker. Measured
+  rather than assumed, and written down so the next person does not spend the afternoon
+  on it.
+
+  CI's test job sets `COVERAGE_CORE=sysmon`, putting coverage.py on CPython 3.12's
+  `sys.monitoring` instead of its `settrace` hook: locally **120.4s → 34.6s** with the
+  same measurement to the statement — 1,284 statements, 58 missed, 95% either way.
+
+  On CI, where the runner is slower and shared, the two changes together take the
+  *Run tests* step from **240s to 62s** and the whole job from 380s to 187s; the rest of
+  that job is the release build the wheel needs, which none of this touches. The local
+  figures above are from a quiet four-core box and are the larger of the two — quote the
+  CI ones when the question is what a pull request costs.
+
+- **A virtual environment not named `.venv` put site-packages into three tree-walking
+  gates (#997).** They skipped build output by name, and the name they knew was `.venv`, so
+  `venv/`, `env/`, `.tox/` or `.venv312/` swept every installed dependency into the
+  corpus — 1,516 files of 2,123 in one of them. Slow, and worse than slow: those gates
+  fail on a literal bidi control found anywhere in the corpus, so the first dependency
+  shipping one in a fixture would fail this repository's own gate on a contributor's
+  machine, at a path nobody recognises. `conftest.in_skipped_dir` now finds them by
+  `pyvenv.cfg` — what actually makes a directory a virtual environment — and
+  `tests/test_corpus_excludes_virtualenvs.py` holds every corpus to it.
+
+- **The three literal-character gates scanned the tree three times** to answer three
+  questions about one scan. They share it now.
+
+- **The GIL-release tests counted the machine's cores rather than the ones they could
+  have.** They assert that two threads finish two batches faster than one thread could,
+  which needs a core free; under four xdist workers on four cores there is not one, and
+  the test measured 0.96x and failed. That is the machine being full, not the GIL being
+  held, so the guard is now a `serial` test: deselected from the parallel run, and run
+  by CI in a step of its own with `-n 0`.
+
+- **The changelog gate from #993 had holes, and the test guarding its template never ran
+  in CI (#994, #1004).** A re-review of #994 found each of these, and each is now fixed:
+
+  - **The assembly test skipped on every pull request.** towncrier was only in the `dev`
+    extra and CI's test job installs `.[test]`. It is in `test` now, `dev` inherits it,
+    and on CI a missing towncrier fails the test instead of skipping it.
+  - **The "verbatim" test passed against the stock towncrier template.** It searched the
+    output for the fragment, and the stock template's doubled bullet is `- ` followed by
+    the fragment, so the search matched. It now compares the whole assembled file, and
+    fails with the `template =` line removed or with `wrap = true`.
+  - **A binding-only change owed no fragment.** The gate keyed on `.py`, `.rs`, `.toml`
+    and `.tsv`, so a Java, Kotlin, Ruby, TypeScript or C change got through. Anything
+    under `bindings/` now owes one too. Docs-only pull requests still owe none, but now
+    get the rendered draft.
+  - **A hand edit to `CHANGELOG.md` passed.** `towncrier check` counts any edit to that
+    file as the pull request's news. The job now fails a `CHANGELOG.md` change unless
+    the same pull request deletes fragments, which is what a release does.
+  - ***Upgrade notes* would have come last.** `0.16.0`, `0.15.0` and `0.14.0` all put
+    it first; the type order now does too, and a test pins that order to the latest
+    release.
+  - **The weekly scheduled run would have failed the job.** It has no `base_ref`, so
+    the check compared against `origin/`. The job now runs on pull requests only. The
+    #832 `base_ref` gate covered `push` but not `schedule`, which is how this got past
+    it; it covers both now.
+  - **The `no changelog` label could not be applied after the fact.** A label change
+    starts no run, and a re-run replays the original event with its original labels.
+    The job now reads the labels from the API when it runs, so adding the label and
+    re-running the job works. `labeled` was not added as a trigger: it would restart
+    the whole matrix for every label anyone applies.
+  - **Non-`.md` fragments slipped past the naming test.** towncrier consumes
+    `1003.fixed` and `1004.fixed.txt`; the test now checks every file it would consume.
+  - **The docs said the release is written above the marker.** towncrier inserts it
+    directly below. `changelog.d/README.md` and `RELEASING.md` are corrected.
+
+- **#70's GIL-release guard ran nowhere after #997 made `-n auto` the default (#1007).** It
+  skipped itself whenever the cores divided by the xdist workers came to fewer than two,
+  and under `-n auto` they always come to one — so CI reported `2 skipped` on every run
+  and never measured it. It is now marked `serial`: `addopts` and CI's parallel step
+  deselect it, and a new step in the test job runs `pytest -m serial -n 0`.
+  `tests/test_serial_tier.py` fails if the marker, the deselection or the step goes
+  missing. The guard also counted the host's cores rather than the process's affinity
+  mask, so under `taskset -c 0` it ran on one core and failed at ~1.0x instead of
+  skipping.
+
+- **`scripts/run_doc_tests.py` started a full set of xdist workers for every doc page
+  (#997 review).** It already runs pages several at a time, one pytest process each, and
+  each of those inherited `-n auto` from `addopts`. Passing `-n 0` takes the run from
+  **34.8s to 5.8s** on four cores. Not `-p no:xdist`, which leaves `addopts`' `-n auto`
+  unrecognised.
+
+- **The virtualenv exclusion from #997 matched names where it needed paths.** It
+  returned the bare names of the directories holding `pyvenv.cfg` and the walkers matched
+  them against every component of every path, so a tox environment at `.tox/docs` took
+  the real `docs/` tree out of the corpus with it. Skip names were also matched against
+  the absolute path, so a checkout under any directory called `build`, `tmp` or `pkg` —
+  every pytest `tmp_path` included — had an empty corpus. `conftest.in_skipped_dir` now
+  skips a file only when a detected environment contains it, looks only at the path
+  inside the repository, and still skips `.venv` by name for environments with no
+  `pyvenv.cfg`. `tests/test_corpus_excludes_virtualenvs.py` used to skip whenever the
+  checkout held no virtualenv, which is every CI run; it now runs each walker over
+  synthetic trees and checks all of this on every run.
+
+- **The nightly Hypothesis run replayed the same examples every night (#997
+  review).** `--hypothesis-seed=random` seeds with the string `"random"`, not a random number. And on
+  GitHub Actions Hypothesis loads its own `ci` profile, whose `derandomize=True` ignores
+  any seed: under `CI=true`, seeds `1`, `2` and `random` drew identical examples. The
+  workflow now generates a seed, logs it, quotes it in the failure issue, and runs under
+  a `nightly` profile in `tests/conftest.py` that is `ci` without `derandomize`.
+
+- **The formal models are in the repository, with CI (#1016).** Three Lean 4 models
+  (`formal/lean/Transliterate`, `Deletions`, `Emoji`) and a TLA+ model of the
+  bindings' locking (`formal/tla/Concurrency`), each validated against the library
+  by differential testing, found the defects fixed in #1008 to #1015.
+  `formal/README.md` indexes them. `.github/workflows/formal.yml` re-checks every
+  Lean proof and every TLC configuration when `formal/` changes, with both
+  toolchains pinned; `run_tlc.sh` compares each verdict with `expected.tsv`, and
+  the configurations that model the code as it was must keep failing. The
+  invisible-character gate now covers `.lean`, `.tla` and `.cfg`, and both tree
+  walkers skip `.claude` and `.lake`.
+
+- **Formal models of the whole library (#1021).** Six more models join `formal/`, each
+  validated against the library by differential testing before a proof or a
+  counterexample counted: the confusable fold (`formal/lean/Confusables`), the
+  detectors (`formal/lean/Detection`), the presets and pipeline profiles
+  (`formal/lean/Presets`), the output sanitizers (`formal/lean/Sanitizers`), the text
+  primitives (`formal/lean/Text`), and a differential harness over all five bindings
+  with a TLA+ model of the C ABI (`formal/bindings`, `formal/tla/CABI`).
+  `.github/workflows/formal.yml` builds every new Lean project and model-checks the C
+  ABI against its expected verdicts. `formal/README.md` and
+  `docs/formal-verification.md` index what each model found and where it was fixed.
+
+- **The release pipeline keeps third-party code away from publish credentials (#1027).** A
+  review against the September 2026 sckit worm, which stole npm and PyPI tokens out of
+  MemTensor's own release jobs, found the same exposure here in smaller form.
+  `cargo publish` built the crate, running every dependency's build script, in the step
+  holding the crates.io token; the npm publish job ran dependency install hooks while it
+  could mint an OIDC publish credential; the translit-rs shim publisher built in its
+  publish job; and the SBOM and perf-results jobs held `contents: write` while compiling
+  third-party code. Each is now split so the job holding the credential builds nothing.
+  `publish-crate` also tries crates.io trusted publishing first and falls back to the
+  token until it is configured. Every action is pinned to a commit SHA, no checkout
+  persists its token, event data reaches scripts through `env:`, the crates.io, SBOM
+  and npm release jobs restore no cache, and the Gradle wrapper jar is validated
+  before it runs. A new
+  `workflow-lint` job (actionlint and zizmor, both pinned) is part of *All checks
+  passed*. Dependabot now also watches the Java and C-ABI crates and the Gradle build.
+  `docs/security/supply-chain.md` records the review and the registry and repository
+  settings only the owner can change.
+
+- **Dependabot's configuration parses again (#1036).** The `github-actions` entry in
+  `.github/dependabot.yml` set per-semver cooldowns, which Dependabot does not support
+  for that ecosystem, and it now rejects the file for them. Actions keep the flat
+  7-day soak window; every other ecosystem keeps its per-semver windows.
+
+- **Fuzzing, coverage and mutation testing, all report-only (#1040).** A cargo-fuzz crate in
+  `fuzz/` (outside the root package, so `cargo test` and `cargo package` are unchanged)
+  holds ten targets: raw bytes through `decode_to_utf8` and `detect_encoding`, and text
+  through the presets and key builders, `transliterate`, the confusable fold, the anomaly
+  detector and `decode_smuggled`, `sanitize_filename`, `slugify`, the hostname screen,
+  the text primitives and the emoji scanners. Each asserts documented properties rather
+  than only the absence of a panic, and uses the formal models' proved properties as
+  oracles where they apply. Seeds come from the key-stability corpus and the formal
+  findings' witnesses. `fuzz.yml` runs every target for 60 s on pull requests that touch
+  the core and for 15 minutes nightly, on a pinned nightly and cargo-fuzz; `coverage.yml`
+  measures line, branch and function coverage of the Rust suite with cargo-llvm-cov,
+  the `ci.yml` test job now writes its Python coverage total to the job summary, and
+  `mutants.yml` runs cargo-mutants weekly over six security-critical modules. None of
+  them is part of *All checks passed*. The first fuzz runs found six documented
+  properties that do not hold, left unfixed here and fixed or scoped by #1048 (see
+  *Fixed*): `slugify` drops up to 14 bytes of text after a numeric entity it cannot
+  decode (`"Q&#A session"` gives `q`); the confusable
+  and transliteration locators report a character at its cluster's offset;
+  `find_untranslatable` misses compatibility characters; `sanitize_filename` is not a
+  fixed point once its pass bound is reached; an `allow_unicode` slug with an empty
+  separator can compose on a second pass; and invariant I7 fails with `tones=True`.
+  cargo-mutants found the hostname screen's invisible and compatibility-form checks
+  asserted by the Python suite alone, which #1048 asserts from Rust.
+  `docs/architecture/testing-guarantees.md` has the reproductions and the baselines.
+
+- **The fuzz targets assert their full properties again (#1040's findings; #1048).** Each of the
+  eight findings the #1040 fuzz runs reported is reproduced through the public API in
+  `tests/fuzz_findings.rs` (and `tests/test_fuzz_findings.py` where the binding reaches
+  it), and the weakening each target carried for it is gone: the locators are checked
+  against `s[offset..].starts_with(ch)`, `find_untranslatable` against the three
+  `on_unknown` policies on every input, `sanitize_filename` for a fixed point on every
+  input, and `slugify` for NFC/NFD invariance with numeric entities and for idempotence
+  with an empty separator. Invariant I7 stays checked with `tones=False` only, the scope
+  it is now stated in. One finding was the target's own: the `slugify` target read a
+  U+24B6 that the caller's separator put in the slug as one the text kept, and now
+  checks the words. Its idempotence check also assumes, with entities decoded, a
+  separator without `&`, since one ending in `&#` before a word of digits spells an
+  entity the next call decodes. `docs/architecture/testing-guarantees.md` lists the
+  findings and how each was resolved.
+- **The hostname screen and the invisible-class helpers are asserted from Rust (#1040's
+  mutation baseline; #1048).** cargo-mutants left 20 of `src/hostname.rs`'s 52 mutants and 5 of
+  `src/invisibles.rs`'s 69 alive: the hostname screen's invisible-class,
+  compatibility-form and IPv6-literal checks, `strip_variation_selectors`, the
+  default-ignorable formats and the subdivision-flag length were asserted only by the
+  Python suite, which the Node, Ruby, Java and C bindings never run.
+  `tests/hostname_and_invisibles.rs` asserts them through the public API, and the misses
+  are down to two in `src/hostname.rs`, both equivalent mutants: the default-ignorable
+  clause of `is_invisible_in_hostname` subsumes the zero-width, tag and
+  variation-selector classes whose `||` they turn into `&&`, which a unit test now pins.
+
+- **`src/presets.rs` is a module directory now (#1049).** The 5,101-line file is split by concern
+  into `src/presets/`: the `Step` vocabulary and its dispatch (`steps.rs`), the fast-path
+  guard (`guard.rs`), the runners and output ceiling (`runner.rs`), `strip_bidi`
+  (`bidi.rs`), the text presets (`text.rs`), the key builders (`keys.rs`), `is_canonical`
+  (`verify.rs`), and the two test modules. Every item moved verbatim apart from its
+  visibility, and every `crate::presets::` path the rest of the crate uses is re-exported
+  from `mod.rs`, so no caller changed and no output did either. The tests and
+  `tests/conftest.py`, which read the step lists from the source, read the new files.
+
+- **`python/disarm/_api.py` is split by concern (#1050).** The 3,958-line module keeps the four
+  functions declared with `@overload` stubs (`transliterate`'s dispatcher, `slugify`,
+  `normalize` and `strip_accents`), because `typing.get_overloads` finds overloads by
+  the module that declared them, and the stateful surface (`Slugifier`,
+  `UniqueSlugifier`, `TextPipeline`, the registration functions and the caches that
+  watch them). The stateless function families move into private modules beside it:
+  `_api_text.py`, `_api_confusables.py`, `_api_translit.py`, `_api_scripts.py`,
+  `_api_security.py`, `_api_encoding.py`, `_api_emoji.py`, `_api_graphemes.py` and
+  `_api_common.py`. Every function moved verbatim. `disarm._api` re-exports each one
+  under its old name and still reports itself as their module, so
+  `from disarm._api import ...`, `help()`, pickling, `typing.get_overloads` and the
+  package root are unchanged. The one test that patched a name there, `_detect_scripts`,
+  patches it in `disarm._api_scripts`, the module that now reads it.
+
+- **The build script's helpers live in `codegen/` now (#1051).** `build.rs` kept its 694-line
+  `main()`, which says what is generated and asserts what the data must satisfy, and its
+  1,718 lines drop to 751. The readers and emitters it calls moved verbatim into five
+  modules it includes by path: the TSV readers (`codegen/readers.rs`), the
+  confusable-table checks (`codegen/confusables.rs`), the PHF emitters
+  (`codegen/phf_tables.rs`), the dense arrays and tries (`codegen/arrays.rs`) and the
+  sorted range tables (`codegen/ranges.rs`). Every file the script writes to `OUT_DIR` is
+  byte-identical. The crate's `include` list ships the new files, and the CI path
+  filters that named `build.rs` name `codegen/` too.
+
+- **The iai estimated-cycles gate measures again, and fails on a zero (#1061).** From #893
+  the benchmarks inherited release's `strip = true`, Callgrind could not find the
+  benchmark functions by symbol, and every metric was 0: the required gate compared 0
+  against 0 and passed every pull request. `[profile.bench]` keeps symbols, the gate
+  sets `CARGO_PROFILE_BENCH_STRIP=false` for older merge bases, and
+  `scripts/check_iai_nonzero.py` fails the gate on a zero on either side.
+
+- **The iai gate measures the main entry points (#1063).** `bench_iai` gains 31 benchmarks:
+  `transliterate` on five more scripts and a short call, the normalization presets
+  (`canonicalize`, `canonicalize_strict`, `strip_obfuscation`, `ml_normalize`, `search_key`,
+  NFKC) and the confusable fold (`normalize_confusables`, `find_confusables`,
+  `is_confusable`, `skeleton_key`), so a regression in any of them fails the gate.
+
+- **A fuzz finding is readable from its annotation (#1068).** `fuzz/run.sh` wrote only
+  "the input is under `fuzz/artifacts/<target>/`" when a target failed, while the panic
+  sat tens of thousands of lines into the job log and the input in a downloadable
+  artifact, so two findings in one day could not be read at all. The annotation now
+  carries the kind of finding, the panic or sanitizer message, and the input in Base64.
+
+- **The confusable fold's slow path no longer decomposes combining marks (#1073).**
+  Deciding where a span may start, it decomposed every character before asking whether
+  the character could start one, which a mark never can.
+
+- **Run length is tested on purpose (#1075).** `tests/mark_stacking.rs` stacks every
+  mark that composes with a base the confusable tables reach, 1 to 33 deep and once
+  20,000 deep, through the fold, every builder and every profile. The cases come from
+  the tables, so a new cycle is covered when its row lands. The fold's pass cap had
+  survived because no test varied run length; `docs/architecture/testing-guarantees.md`
+  now says why each layer missed it.
+
+- **The Presets Lean model now has a fold that moves a mark to another combining class
+  (#1077).** It missed #1072 although its length-4 bound reached the witness: its
+  alphabet had no such fold. With `ģ` and a third mark above added, the bounded check
+  finds all 12 words of that shape, and the fix #1072 made, modelled as a variant, is
+  a fixed point on every word. The model still agrees with the library it was written
+  against on every one of 28,925,832 comparisons. `formal/lean/Presets/README.md` has
+  it as Finding 8.
+
 ## [0.16.0] — 2026-09-06
 
 ### Upgrade notes

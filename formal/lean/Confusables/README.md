@@ -423,9 +423,12 @@ holds for another reason, the loop (`fixedFold_idem`).
   printable-ASCII NFC image that detection skips, which is intended (#957). There is no
   observable defect beyond the wording.
 * **Convergence in general.** Idempotence is proved from convergence, and convergence
-  is only bounded (length <= 5 in the model, and every probe in the sweeps). A table
-  change could in principle create a fold/compose cycle longer than 8 passes, and the
-  `debug_assert!` would catch it only in debug builds.
+  is only bounded (length <= 5 in the model, and every probe in the sweeps). The bound
+  was the gap: the nightly fuzz run found `C` + nine U+0327, ten characters, which ran
+  past the 8-pass cap. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each
+  pass takes one cedilla. Since then the Rust no longer stops at the cap: past it,
+  `converge_slow` folds span by span and skips a cycle's repeats. `fixedLoop` and
+  `maxPasses` model the loop as it was, and still hold on every string of length <= 5.
 
 ## Re-running
 

@@ -98,13 +98,14 @@ fn transliterate_keeping_typed_percent(text: &str, lang: Option<&str>, separator
 /// The separator is inserted *after* the illegal characters are removed, so it is the
 /// one string that reaches the output without passing the filter — and before this check
 /// nothing looked at it: `separator="/"` turned `"../etc/passwd"` into `"/etc/passwd"`,
-/// `"\0"` put NUL in the name, and `" "` let `"con _"` truncate to a bare `"con"`. So it is
-/// held to what the stem keeps, and a little more:
+/// and `"\0"` put NUL in the name. So it is held to what the stem keeps, and a little
+/// more:
 ///
 /// - **Printable, non-space ASCII.** Rules out controls, every kind of whitespace, and
 ///   invisible or bidi characters (`U+202E` would be a filename-spoofing primitive). It is
 ///   also what keeps the output a fixed point: the output is otherwise ASCII, and a
 ///   non-ASCII separator would be transliterated by the next call, giving another name.
+///   [`validate_separator`] admits one exception, the separator `" "` on its own.
 /// - **Not illegal on the platform** — the same set the stem loop removes.
 /// - **Not a path separator on any platform**: `\` is legal in a POSIX filename, but a
 ///   separator of `\` still builds a path on Windows, which is where these names end up.
@@ -116,7 +117,18 @@ fn is_separator_char(c: char, illegal_chars: &[char]) -> bool {
 
 /// Reject a separator carrying a character [`is_separator_char`] refuses — the same
 /// shape as `validate_log_replacement` for `strip_log_injection`.
+///
+/// The separator `" "` on its own is accepted (#1079). It is what readable names use, and
+/// 0.16.0 accepted it. #1026 refused it because `"con _"` truncated to a bare `"con"`, but
+/// the reserved check now reads the stem Windows reads (`windows_device_stem` drops
+/// trailing spaces), and a pass that replaces whitespace with a space leaves a space as it
+/// is, so the output is still a fixed point. A space *inside* a longer separator is still
+/// refused: `"_ "` and `" _"` are not fixed points (`"c c"` comes back as `"c________ c"`,
+/// one `_` per pass), because the space the separator brings is replaced again.
 fn validate_separator(separator: &str, illegal_chars: &[char]) -> Result<(), crate::ErrorRepr> {
+    if separator == " " {
+        return Ok(());
+    }
     if let Some(c) = separator
         .chars()
         .find(|&c| !is_separator_char(c, illegal_chars))
@@ -1059,12 +1071,14 @@ mod tests {
             };
             for platform in PLATFORMS {
                 for sep in [
-                    "/", "\\", "\0", " ", "\t", "\n", "\u{7F}", "-\u{1B}", "\u{A0}", "\u{3000}",
+                    "/", "\\", "\0", "\t", "\n", "\u{7F}", "-\u{1B}", "\u{A0}", "\u{3000}",
                     "\u{202E}", "\u{200B}", "\u{E9}",
+                    // A space is accepted only as the whole separator (#1079).
+                    "_ ", " _", "  ", " - ",
                 ] {
                     assert!(rejects(sep, platform), "{sep:?} accepted on {platform}");
                 }
-                for sep in ["", "_", "-", ".", "--", "~", "+"] {
+                for sep in ["", "_", "-", ".", "--", "~", "+", " "] {
                     assert!(!rejects(sep, platform), "{sep:?} rejected on {platform}");
                 }
             }
@@ -1085,13 +1099,85 @@ mod tests {
             );
         }
 
-        /// Finding 2's reproductions, which now fail instead of returning these.
+        /// Finding 2's reproductions. The path separator and NUL now fail; the two with a
+        /// space separator are safe names, because the reserved check reads the stem
+        /// Windows reads (#1079).
         #[test]
-        fn the_reproductions_are_refused() {
+        fn the_reproductions_are_refused_or_safe() {
             assert!(sanitize_filename("../etc/passwd", "/", 255, "universal", None, true).is_err());
             assert!(sanitize_filename("a b", "\0", 255, "universal", None, true).is_err());
-            assert!(sanitize_filename("con _", " ", 4, "universal", None, false).is_err());
-            assert!(sanitize_filename("AUX .txt", " ", 255, "universal", None, false).is_err());
+            assert_eq!(sf("con _", " ", 4, "universal", false), "_con");
+            assert_eq!(sf("AUX .txt", " ", 255, "universal", false), "_AUX .txt");
+            assert_eq!(sf("con _.txt", " ", 8, "universal", true), "_con.txt");
+            assert_eq!(sf("con _.txt", " ", 4, "universal", true), "_con");
+            // What 0.16.0 returned, and 0.17.0 refused.
+            assert_eq!(
+                sf("Dune: Part One", " ", 255, "universal", true),
+                "Dune Part One"
+            );
+        }
+
+        /// #1079: with the separator `" "`, no output is empty, a device name, or changed by
+        /// a second call, and none starts or ends with a space. Every word of length 1-4
+        /// over the characters that reach those checks, on every platform, truncated and
+        /// not, with and without the extension kept.
+        #[test]
+        fn a_space_separator_keeps_every_property() {
+            let alphabet = ['c', 'o', 'n', 'a', 'u', 'x', ' ', '*', '_', '.'];
+            let mut words: Vec<String> = vec![String::new()];
+            let mut all = Vec::new();
+            for _ in 0..4 {
+                words = words
+                    .iter()
+                    .flat_map(|w| alphabet.iter().map(move |&c| format!("{w}{c}")))
+                    .collect();
+                all.extend(words.iter().cloned());
+            }
+            all.extend(
+                [
+                    "con _",
+                    "AUX .txt",
+                    "con _.txt",
+                    "nul  .tar.gz",
+                    "com1 ?",
+                    "*.con",
+                    "con *.x",
+                ]
+                .map(String::from),
+            );
+            let mut checked = 0usize;
+            for platform in PLATFORMS {
+                for max_length in [255, 3, 4, 5, 6, 8] {
+                    for keep_ext in [true, false] {
+                        for input in &all {
+                            let out = sf(input, " ", max_length, platform, keep_ext);
+                            let ctx = || {
+                                format!("{input:?} {platform} {max_length} {keep_ext} -> {out:?}")
+                            };
+                            assert!(!out.is_empty(), "empty: {}", ctx());
+                            assert!(
+                                !out.starts_with(' ') && !out.ends_with(' '),
+                                "edge: {}",
+                                ctx()
+                            );
+                            assert!(
+                                platform == "posix" || !is_device_name(&out),
+                                "device: {}",
+                                ctx()
+                            );
+                            assert_eq!(
+                                sf(&out, " ", max_length, platform, keep_ext),
+                                out,
+                                "not a fixed point: {}",
+                                ctx()
+                            );
+                            checked += 1;
+                        }
+                    }
+                }
+            }
+            // 11,110 words and 7 named inputs, 36 configurations.
+            assert_eq!(checked, 11_117 * 36);
         }
 
         /// Finding 3: outputs that a second call changed.

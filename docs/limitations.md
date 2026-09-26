@@ -943,6 +943,7 @@ The honest precondition for additivity is that the separator genuinely splits th
 - The `separator` is held to the same rules as the name, because it is inserted after the
   filter runs: it must be printable, non-space ASCII with no character illegal on the
   platform and no path separator (`/`, `\`), or the call raises `InvalidArgumentError`.
+  The one exception is the separator `" "` on its own (#1079).
   `\` is refused on POSIX too, where it is legal in a name, because it is not legal on
   Windows
 

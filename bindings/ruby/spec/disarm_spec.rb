@@ -480,11 +480,13 @@ RSpec.describe Disarm do
     end
 
     it "raises Disarm::InvalidArgument on a separator a filename cannot carry" do
-      ["/", "\\", " ", "\u0000", "\u202e", ":"].each do |separator|
+      ["/", "\\", "_ ", "\u0000", "\u202e", ":"].each do |separator|
         expect { Disarm.sanitize_filename("../etc/passwd", separator: separator) }
           .to raise_error(Disarm::InvalidArgument)
       end
       expect(Disarm.sanitize_filename("a:b", separator: "")).to eq("ab")
+      # A space on its own is allowed (#1079).
+      expect(Disarm.sanitize_filename("Dune: Part One", separator: " ")).to eq("Dune Part One")
     end
 
     it "does not leave a device name when the stem sanitizes away" do

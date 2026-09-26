@@ -91,7 +91,10 @@ The separator is inserted *after* the illegal characters are removed, so it is h
 the same rules: printable, non-space ASCII, no character illegal on the platform, and no
 path separator (`/` or `\`, on every platform). Anything else raises
 `InvalidArgumentError` rather than putting a `/`, a NUL or a bidi control back into the
-name. The empty separator is allowed and simply drops what it would have replaced.
+name. The empty separator is allowed and simply drops what it would have replaced, and
+`" "` on its own is allowed for readable names (`"Dune: Part One"` gives
+`"Dune Part One"`). A space inside a longer separator is refused: `"_ "` would make the
+name grow on every call.
 
 ```python
 from disarm import InvalidArgumentError

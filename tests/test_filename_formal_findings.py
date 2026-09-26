@@ -75,7 +75,8 @@ def test_no_character_before_a_device_extension_exposes_it(platform: str) -> Non
 
 # -- Finding 2 ----------------------------------------------------------------------------
 
-REJECTED_EVERYWHERE = ["/", "\\", " ", "\t", "\n", "\x00", "\x1b", "\x7f", "-\x00"]
+# A space is refused inside a longer separator only; `" "` on its own is allowed (#1079).
+REJECTED_EVERYWHERE = ["/", "\\", "_ ", " _", "\t", "\n", "\x00", "\x1b", "\x7f", "-\x00"]
 REJECTED_EVERYWHERE += [NBSP, RLO, ZWSP, E_ACUTE, chr(0x3000)]
 
 
@@ -110,10 +111,27 @@ def test_finding_2_reproductions_are_refused() -> None:
         sanitize_filename("../etc/passwd", separator="/")  # was '/etc/passwd'
     with pytest.raises(InvalidArgumentError):
         sanitize_filename("a b", separator="\x00")  # was 'a\x00b'
+
+
+def test_a_space_separator_is_accepted_and_safe() -> None:
+    """#1079: 0.17.0 refused `" "`, which 0.16.0 accepted and #1026 did not need to ban.
+
+    The reserved check reads the stem Windows reads, so the two space reproductions of
+    finding 2 are now safe names rather than errors.
+    """
+    assert sanitize_filename("Dune: Part One", separator=" ") == "Dune Part One"
+    assert (
+        sanitize_filename("con _", separator=" ", max_length=4, preserve_extension=False) == "_con"
+    )
+    assert sanitize_filename("AUX .txt", separator=" ", preserve_extension=False) == "_AUX .txt"
+    assert sanitize_filename("a b", replacement_text=" ") == "a b"
+
+
+@pytest.mark.parametrize("separator", ["_ ", " _", "  ", " - ", "\t", "\u00a0", "\u3000"])
+def test_a_space_inside_a_longer_separator_is_refused(separator: str) -> None:
+    """`"_ "` and `" _"` are not fixed points: the space they bring is replaced again."""
     with pytest.raises(InvalidArgumentError):
-        sanitize_filename("con _", separator=" ", max_length=4, preserve_extension=False)
-    with pytest.raises(InvalidArgumentError):
-        sanitize_filename("AUX .txt", separator=" ", preserve_extension=False)
+        sanitize_filename("c c", separator=separator)
 
 
 # -- Finding 3 ----------------------------------------------------------------------------

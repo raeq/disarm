@@ -445,7 +445,8 @@ module Disarm
     # extension when truncating to `max_length:`. Raises Disarm::InvalidArgument
     # on an unknown platform, or on a `separator:` that is not printable, non-space
     # ASCII, contains a character illegal on the platform, or contains a path
-    # separator ("/" or "\\"). An empty separator is allowed.
+    # separator ("/" or "\\"). An empty separator is allowed, and so is " " on its
+    # own.
     #
     # A safe *filename*, not a safe URL path segment. "%" is legal in a filename, so one
     # the caller typed is kept — sanitize_filename("..%2Fetc") returns "%2Fetc" — and a

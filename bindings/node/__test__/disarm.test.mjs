@@ -280,10 +280,12 @@ describe('filenames', () => {
     expect(() => disarm.sanitizeFilename('x', { platform: 'amiga' })).toThrow(DisarmInvalidArgument)
   })
   test('throws on a separator a filename cannot carry', () => {
-    for (const separator of ['/', '\\', ' ', '\x00', '\u202e', ':']) {
+    for (const separator of ['/', '\\', '_ ', '\x00', '\u202e', ':']) {
       expect(() => disarm.sanitizeFilename('../etc/passwd', { separator })).toThrow(DisarmInvalidArgument)
     }
     expect(disarm.sanitizeFilename('a:b', { separator: '' })).toBe('ab')
+    // A space on its own is allowed (#1079).
+    expect(disarm.sanitizeFilename('Dune: Part One', { separator: ' ' })).toBe('Dune Part One')
   })
   test('a stem that sanitizes away does not leave a device name', () => {
     expect(disarm.sanitizeFilename('*.con')).toBe('_con')

@@ -260,13 +260,18 @@ mod tests {
     #[test]
     fn sanitize_filename_bad_separator_is_invalid_argument() {
         // Finding 2 of the Lean model: the separator reaches the output unfiltered, so
-        // one carrying a path separator (or NUL, whitespace, non-ASCII) is refused.
-        for sep in ["/", "\\", "\0", " ", "\u{202E}"] {
+        // one carrying a path separator (or NUL, whitespace, non-ASCII) is refused. A
+        // space is accepted only as the whole separator (#1079).
+        for sep in ["/", "\\", "\0", "_ ", "\u{202E}"] {
             let err = sanitize_filename("../etc/passwd", sep, 255, Platform::Posix, None, true)
                 .unwrap_err();
             assert_eq!(err.kind(), crate::ErrorKind::InvalidArgument, "{sep:?}");
             assert_eq!(err.code(), "invalid_filename_separator");
         }
+        assert_eq!(
+            sanitize_filename("a: b", " ", 255, Platform::Universal, None, true).unwrap(),
+            "a b"
+        );
         assert_eq!(
             sanitize_filename("a:b", "", 255, Platform::Universal, None, true).unwrap(),
             "ab"

@@ -390,7 +390,7 @@ class DisarmCoverageTest {
 
     @Test
     void sanitizeFilenameRejectsASeparatorAFilenameCannotCarry() {
-        for (String separator : new String[] {"/", "\\", " ", "\u0000", "\u202e", ":"}) {
+        for (String separator : new String[] {"/", "\\", "_ ", "\u0000", "\u202e", ":"}) {
             assertThrows(
                     DisarmInvalidArgumentException.class,
                     () -> Disarm.sanitizeFilename(
@@ -400,6 +400,9 @@ class DisarmCoverageTest {
         }
         SanitizeFilenameOptions empty = SanitizeFilenameOptions.builder().separator("").build();
         assertEquals("ab", Disarm.sanitizeFilename("a:b", empty));
+        // A space on its own is allowed (#1079).
+        SanitizeFilenameOptions space = SanitizeFilenameOptions.builder().separator(" ").build();
+        assertEquals("Dune Part One", Disarm.sanitizeFilename("Dune: Part One", space));
     }
 
     @Test

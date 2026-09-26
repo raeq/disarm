@@ -515,7 +515,7 @@ pub fn canonicalize(text: String, digit_policy: String) -> Result<String, NapiEr
 ///
 /// `separator` must be printable, non-space ASCII with no character illegal on
 /// `platform` and no path separator (`/`, `\`); anything else throws
-/// `DisarmInvalidArgument`. `""` is allowed.
+/// `DisarmInvalidArgument`. `""` is allowed, and so is `" "` on its own.
 #[napi]
 pub fn sanitize_filename(
     text: String,

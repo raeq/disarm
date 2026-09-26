@@ -565,7 +565,7 @@ export function stripObfuscation(text: string, options: { digitPolicy?: DigitPol
  * strip bidi/format → strip invisible classes (#413) → strip control → strip
  * zero-width → collapse whitespace → drop repeated marks → cap combining marks
  * (anti-zalgo) → NFC → confusables and NFC to a fixed point → drop repeated marks
- * (the fold is iterated with NFC for idempotency).
+ * → cap combining marks again (the fold is iterated with NFC for idempotency).
  *
  * The name describes the mechanism (Unicode canonicalization for matching), not
  * a safety guarantee — this is not an output sanitizer; encode at the sink.

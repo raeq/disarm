@@ -1184,6 +1184,64 @@ fn a_fold_that_creates_a_repeated_mark_is_still_a_fixed_point() {
     }
 }
 
+/// A confusable fold can MOVE a mark, after the cap that counted it: `ģ` (a cedilla,
+/// below) folds to `ġ` (a dot, above). `ǧ` + U+0327 + three marks above: the cedilla
+/// composed into `ģ`, the cap kept the three marks above, and the fold made a fourth,
+/// which the next call cut. Found by the `presets` fuzz target.
+///
+/// The sweep crosses every Latin fold whose source or target carries a mark with three
+/// marks from above and below, which is the shape a moved mark needs.
+#[test]
+fn a_fold_that_moves_a_mark_is_still_a_fixed_point() {
+    use unicode_normalization::UnicodeNormalization;
+    let found = "\u{1E7}\u{327}\u{367}\u{327}\u{327}\u{327}\u{303}";
+    let once = canonicalize(found).unwrap().into_owned();
+    assert_eq!(once, "\u{121}\u{30C}\u{367}");
+    assert_eq!(canonicalize(&once).unwrap(), once);
+
+    let marked = |s: &str| s.nfd().any(unicode_normalization::char::is_combining_mark);
+    let map = crate::tables::resolve_confusable_map("latin").unwrap();
+    let bases: Vec<char> = map
+        .entries()
+        .filter(|&(&key, &value)| marked(&key.to_string()) || marked(value))
+        .map(|(&key, _)| key)
+        .collect();
+    assert!(bases.len() > 20, "{} bases", bases.len());
+    let marks = [
+        '\u{300}', '\u{301}', '\u{303}', '\u{304}', '\u{307}', '\u{308}', '\u{30C}', '\u{367}',
+        '\u{323}', '\u{327}', '\u{328}',
+    ];
+    let builders: [(&str, fn(&str) -> String); 3] = [
+        ("canonicalize", |t| canonicalize(t).unwrap().into_owned()),
+        ("canonicalize_strict", |t| {
+            canonicalize_strict(t).unwrap().into_owned()
+        }),
+        ("sort_key", |t| sort_key(t, None).unwrap().into_owned()),
+    ];
+    let mut failures = Vec::new();
+    for &base in &bases {
+        for &a in &marks {
+            for &b in &marks {
+                for &c in &marks {
+                    let input: String = [base, a, b, c].into_iter().collect();
+                    for (name, f) in builders {
+                        let once = f(&input);
+                        if f(&once) != once {
+                            failures.push(format!("{name} {input:?}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} not fixed points: {:?}",
+        failures.len(),
+        &failures[..failures.len().min(10)]
+    );
+}
+
 /// Every step that can delete a character sitting between two combining marks.
 ///
 /// A mark cap counts *runs*, so anything that removes a character between two of

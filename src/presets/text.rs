@@ -17,7 +17,7 @@ use super::{COMPARISON_STRIP, RENDERING_STRIP};
 /// Pipeline: resolve deletions → [policy pre-fold] → NFKC → strip bidi/format → strip
 /// invisibles → strip_control → strip_zero_width → collapse_whitespace → drop repeated
 /// marks → cap marks at 3 (zalgo) → NFC → fixed point(confusables → NFC) → drop repeated
-/// marks
+/// marks → cap marks at 3
 ///
 /// Collapses fullwidth bypasses, neutralizes homoglyph spoofing, strips
 /// zero-width injections and control chars, removes dangerous bidi overrides and
@@ -119,6 +119,16 @@ pub(crate) fn canonicalize_with(
             // `DropRepeatedMarks` is downstream of it. Measured, not assumed — both are
             // clean over every (base, mark) pair.
             Step::DropRepeatedMarks,
+            // And the cap AGAIN, for the same reason. The cap counts marks by where they
+            // stack, and the fold can move one: `ģ` (a cedilla, below) folds to `ġ` (a
+            // dot, above). `ǧ` + U+0327 + three marks above kept all three beside the
+            // cedilla, then the fold put a fourth above the `g`, and the next call cut it
+            // (found by the `presets` fuzz target). The cap only drops the last marks of
+            // a stack, so it unblocks no composition and gives the fold nothing new.
+            // `ZalgoIfOver`: text it would not cut stays exactly as the step before left
+            // it, which is the output `canonicalize` always had. The plain cap also
+            // renormalized all of it, which cost 9% of the preset.
+            Step::ZalgoIfOver(crate::zalgo::DEFAULT_MAX_MARKS),
         ]
     }
     // #431: no path-separator neutralization. Mapping a synthesised '/' (e.g. a

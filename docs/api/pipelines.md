@@ -273,6 +273,7 @@ assert PRESETS["canonicalize"] == [
     ("normalize", "NFC"),
     ("fixed_point", "confusables(latin) -> normalize(NFC)"),
     ("drop_repeated_marks", None),
+    ("strip_zalgo", None),
 ]
 assert PRESETS["canonicalize_strict"] == [
     ("resolve_deletions", None),

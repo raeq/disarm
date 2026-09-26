@@ -12,7 +12,8 @@ use pyo3::prelude::*;
 /// Pipeline: resolve deletions → NFKC → strip bidi/format → strip invisible classes
 /// (#413) → strip_control → strip_zero_width → collapse_whitespace → drop repeated marks →
 /// cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed point →
-/// drop repeated marks (the fold is iterated with NFC for idempotency, #416/#434).
+/// drop repeated marks → cap combining marks again (the fold is iterated with NFC for
+/// idempotency, #416/#434).
 #[pyfunction]
 #[pyo3(signature = (text, *, digit_policy="numeric"))]
 pub fn _canonicalize(text: &str, digit_policy: &str) -> PyResult<String> {

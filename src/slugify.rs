@@ -825,6 +825,18 @@ pub(crate) fn slugify_impl_with_stopset(
         }
     }
 
+    // #711 holds whatever the steps above did. A joiner is written only between two kept
+    // characters, but a separator the caller makes of word characters can match inside a
+    // word, so taking one off the end (step 6), splitting on one (the stopword filter)
+    // or cutting at one (step 8) could each leave a joiner at an edge: `"ab\u{200D}6"`
+    // with `separator = "6"` gave `ab\u{200D}` (found by the `slugify` fuzz target).
+    if config.allow_unicode {
+        let trimmed = slug.trim_matches(SLUG_JOINERS);
+        if trimmed.len() != slug.len() {
+            slug = trimmed.to_owned();
+        }
+    }
+
     slug
 }
 
@@ -1073,15 +1085,14 @@ fn is_stopword(word: &str, stopset: &HashSet<String>, fold: bool) -> bool {
 /// (Finding 13 of `formal/lean/Sanitizers`). Then a trailing separator, whole or partial:
 /// a cut inside a multi-character separator left its first half (Finding 5).
 ///
-/// The order is safe: a joiner is only ever emitted between two kept characters, and a
-/// separator only after one, so neither trim can expose the other.
+/// Then the joiners again. A separator made of word characters can match the end of a
+/// word, so taking it off can expose the joiner before it.
 fn trim_cut_tail<'a>(s: &'a str, separator: &str, allow_unicode: bool) -> &'a str {
-    let s = if allow_unicode {
-        s.trim_end_matches(SLUG_JOINERS)
-    } else {
-        s
-    };
-    strip_trailing_separator_prefix(s, separator)
+    if !allow_unicode {
+        return strip_trailing_separator_prefix(s, separator);
+    }
+    strip_trailing_separator_prefix(s.trim_end_matches(SLUG_JOINERS), separator)
+        .trim_end_matches(SLUG_JOINERS)
 }
 
 /// The byte length a cut to `max` keeps of `s`: a cluster boundary under `allow_unicode`
@@ -1246,9 +1257,10 @@ fn truncate_at_boundary(
 /// Strip the longest suffix of `s` that is a non-empty prefix of `separator`.
 ///
 /// Used to clean a trailing *partial* separator left by a mid-separator
-/// truncation. Safe for the slug domain: the separator characters are never
-/// allowed content characters, so a trailing run matching a separator prefix can
-/// only be a cut separator, not content.
+/// truncation. For a separator with no word character in it, a trailing run matching
+/// a separator prefix can only be a cut separator, not content. A separator the caller
+/// makes of word characters can also match content, which is then taken with it; the
+/// slug's shape properties are stated for the first kind only.
 fn strip_trailing_separator_prefix<'a>(s: &'a str, separator: &str) -> &'a str {
     if separator.is_empty() {
         return s;
@@ -1960,6 +1972,24 @@ mod tests {
 
         fn cand(base: &str, counter: u64, config: &SlugConfig) -> Result<String, usize> {
             unique_slug_candidate(base, counter, config).map_err(|e| e.min_unique_len)
+        }
+
+        /// A head cut to make room for the suffix is a slug in its own right, so it ends
+        /// in no joiner. With a separator made of word characters, taking a partial one
+        /// off the cut could expose the joiner before it: `ab\u{200D}6cd` with
+        /// `separator = "6"` and room for six bytes of head gave `ab\u{200D}61`.
+        #[test]
+        fn a_cut_head_ends_in_no_joiner_under_a_word_character_separator() {
+            assert_eq!(
+                cand("ab\u{200D}6cd", 1, &cfg("6", 8, true)),
+                Ok("ab61".to_owned())
+            );
+            for max in 3..=12 {
+                if let Ok(candidate) = cand("ab\u{200D}6cd", 1, &cfg("6", max, true)) {
+                    let head = candidate.strip_suffix("61").unwrap();
+                    assert!(!head.ends_with(SLUG_JOINERS), "{candidate:?} at {max}");
+                }
+            }
         }
 
         #[test]

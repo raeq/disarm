@@ -504,3 +504,75 @@ fn canonicalize_caps_a_mark_the_fold_moved() {
         assert_eq!(canonicalize_with(&once, policy).unwrap(), once, "{policy}");
     }
 }
+
+// -- 11. slugify: a separator of word characters exposed a joiner ---------------------
+
+/// Found on 2026-09-26 by the `slugify` target. Under `allow_unicode` a joiner is kept
+/// only between two kept characters (#711), and the edges are trimmed of one, but only
+/// before the trailing separator is taken off. A separator the caller makes of word
+/// characters can match the end of a word, so taking it off exposed the joiner before
+/// it: `"ab\u{200D}6"` with `separator = "6"` gave `ab\u{200D}`. The stopword filter,
+/// which splits on the separator again, and a truncation could each end the slug on the
+/// same kind of spot, inside a word, just after a joiner.
+#[test]
+fn a_word_character_separator_leaves_no_joiner_at_the_edge() {
+    let joined =
+        |s: &str| s.starts_with(['\u{200C}', '\u{200D}']) || s.ends_with(['\u{200C}', '\u{200D}']);
+    let found = "\u{101D}\u{102D}1\u{200D}\u{20E3}B66\u{FFFD}1\u{200D}66\u{0}6666666666";
+    let mut checked = 0;
+    for sep in ["6", "x", "66", "6x", "ab"] {
+        for joiner in ['\u{200D}', '\u{200C}'] {
+            let inputs = [
+                format!("ab{joiner}{sep}"),
+                format!("ab{joiner}{sep}cd"),
+                format!("a b{joiner}{sep} cd"),
+                format!("ab{joiner}{sep}{joiner}{sep}"),
+                found.to_owned(),
+            ];
+            for input in &inputs {
+                for max_length in 0..=input.len() {
+                    for word_boundary in [false, true] {
+                        // The stopword filter splits on the separator again, and the
+                        // empty word matches an empty piece.
+                        for stopwords in [&[][..], &[""][..]] {
+                            let config = SlugConfig::new()
+                                .with_separator(sep)
+                                .with_allow_unicode(true)
+                                .with_max_length(max_length)
+                                .with_word_boundary(word_boundary)
+                                .with_stopwords(stopwords.iter().copied());
+                            let out = slugify(input, &config);
+                            checked += 1;
+                            assert!(
+                                !joined(&out),
+                                "{out:?} from {input:?}, separator {sep:?}, max_length \
+                                 {max_length}, word_boundary {word_boundary}, stopwords \
+                                 {stopwords:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(checked > 1_000, "{checked}");
+    // The reported configuration exactly.
+    let config = SlugConfig::new()
+        .with_separator("6666")
+        .with_lowercase(false)
+        .with_max_length(63)
+        .with_word_boundary(true)
+        .with_save_order(true)
+        .with_stopwords(["", "", ""])
+        .with_allow_unicode(true);
+    assert!(!joined(&slugify(found, &config)));
+    assert_eq!(
+        slugify(
+            "ab\u{200D}6",
+            &SlugConfig::new()
+                .with_separator("6")
+                .with_allow_unicode(true)
+        ),
+        "ab"
+    );
+}

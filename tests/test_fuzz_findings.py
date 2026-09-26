@@ -206,3 +206,26 @@ def test_canonicalize_caps_a_mark_the_fold_moved(digit_policy: str) -> None:
     once = canonicalize("\u01e7\u0327\u0367\u0327\u0327\u0327\u0303", digit_policy=digit_policy)
     assert once == "\u0121\u030c\u0367"
     assert canonicalize(once, digit_policy=digit_policy) == once
+
+
+# -- 11. slugify: a separator of word characters exposed a joiner -------------------------
+
+
+@pytest.mark.parametrize("separator", ["6", "x", "66"])
+@pytest.mark.parametrize("stopwords", [(), ("",)])
+@pytest.mark.parametrize("joiner", ["\u200d", "\u200c"])
+def test_a_word_character_separator_leaves_no_joiner_at_the_edge(
+    separator: str, stopwords: tuple[str, ...], joiner: str
+) -> None:
+    for text in (f"ab{joiner}{separator}", f"a b{joiner}{separator} cd"):
+        for max_length in range(len(text.encode()) + 1):
+            out = slugify(
+                text,
+                separator=separator,
+                allow_unicode=True,
+                max_length=max_length,
+                word_boundary=True,
+                stopwords=stopwords,
+            )
+            assert not out.startswith(("\u200c", "\u200d")), out
+            assert not out.endswith(("\u200c", "\u200d")), out

@@ -196,3 +196,13 @@ def test_every_preset_takes_every_mark_of_a_fold_cycle(text: str, digit_policy: 
     ):
         once = preset(text, digit_policy=digit_policy)
         assert preset(once, digit_policy=digit_policy) == once, preset.__name__
+
+
+# -- 10. canonicalize: the fold moves a mark past the cap ---------------------------------
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+def test_canonicalize_caps_a_mark_the_fold_moved(digit_policy: str) -> None:
+    once = canonicalize("\u01e7\u0327\u0367\u0327\u0327\u0327\u0303", digit_policy=digit_policy)
+    assert once == "\u0121\u030c\u0367"
+    assert canonicalize(once, digit_policy=digit_policy) == once

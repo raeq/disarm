@@ -175,13 +175,22 @@ fn rewrite_mark_runs(
     out
 }
 
+/// The most combining marks one character's NFD holds: `ᾂ` U+1F82 is `α` and three.
+const MAX_MARKS_IN_ONE_CHAR: usize = 3;
+
 /// Streaming check: does any base carry **more than** `threshold` marks of one combining
 /// class, counted in NFD up to the next non-mark? [`MarkTally`] says what counts.
 ///
 /// Returns the instant the first position exceeds `threshold`, so a short zalgo burst
 /// at the front of a long benign tail settles in `O(burst)`, not `O(len)` — no
 /// full NFD walk once the verdict is decided (review H-P2/H-P3).
-fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
+pub(crate) fn exceeds_combining_run(text: &str, threshold: usize) -> bool {
+    // No character decomposes to more than `MAX_MARKS_IN_ONE_CHAR` marks, so past that
+    // a stack needs a standalone mark, and text with none is settled by one cheap scan
+    // instead of an NFD of every run.
+    if threshold >= MAX_MARKS_IN_ONE_CHAR && !crate::compose::needs_composition(text) {
+        return false;
+    }
     any_mark_run(text, |base, run| {
         let mut tally = MarkTally::new();
         base.into_iter()
@@ -418,6 +427,37 @@ pub(crate) fn strip_cross_script_marks_into(text: &str, out: &mut String) {
 
 #[cfg(test)]
 mod tests {
+
+    /// The bound `exceeds_combining_run` skips its scan on, and that the skip only
+    /// ever skips a `false`: every character alone, and followed by a letter.
+    #[test]
+    fn no_character_decomposes_past_the_skip_bound() {
+        use unicode_normalization::char::is_combining_mark;
+        let mut most = 0;
+        for c in (0u32..=0x10_FFFF).filter_map(char::from_u32) {
+            let marks = std::iter::once(c)
+                .nfd()
+                .filter(|&m| is_combining_mark(m))
+                .count();
+            most = most.max(marks);
+            if !crate::compose::needs_composition(&c.to_string()) {
+                for threshold in MAX_MARKS_IN_ONE_CHAR..=MAX_MARKS_IN_ONE_CHAR + 1 {
+                    let alone = c.to_string();
+                    let before = format!("{c}x");
+                    let slow = |t: &str| {
+                        any_mark_run(t, |base, run| {
+                            let mut tally = MarkTally::new();
+                            base.into_iter()
+                                .chain(run.nfd())
+                                .any(|ch| !tally.admit(ch, threshold))
+                        })
+                    };
+                    assert!(!slow(&alone) && !slow(&before), "U+{:04X}", c as u32);
+                }
+            }
+        }
+        assert_eq!(most, MAX_MARKS_IN_ONE_CHAR);
+    }
     /// The run walks see what the whole-text NFD walks they replaced saw.
     mod run_walk {
         use super::super::*;

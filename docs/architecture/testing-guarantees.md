@@ -183,10 +183,9 @@ managed about 360 inputs a second, `decode_bytes` calls the decoder thirteen tim
 input at about 720, and `slugify` about 4,000.
 
 The runs found documented properties that did not hold: six in the first runs, two more
-on 2026-09-24, and one in the nightly run of 2026-09-26. Each is reproduced through the
-public API in `tests/fuzz_findings.rs` (and `tests/test_fuzz_findings.py` where the
-binding reaches it), and each target asserts the full property once its finding is
-resolved:
+on 2026-09-24, and two on 2026-09-26. Each is reproduced through the public API in
+`tests/fuzz_findings.rs` (and `tests/test_fuzz_findings.py` where the binding reaches
+it), and each target asserts the full property once its finding is resolved:
 
 | Surface | Documented | Reproduction | Resolution |
 |---|---|---|---|
@@ -199,6 +198,7 @@ resolved:
 | `catalog_key_with`, `search_key_with` | idempotent under every digit policy (the Presets model, #1024, #1029) | Found on 2026-09-24: `"\ufffd\ufffd\U00016d67\x16\U00016d67"` keys as the two Kirat Rai vowel signs, and the key of that is U+16D68. The control is stripped after the last step that composes. | Fixed: both builders end with an NFC pass, as `sort_key` and `ml_normalize` do. No fixture row moved; three were added. |
 | `slugify` with `allow_unicode` | none of the circled and squared Latin symbols in the slug (#1028) | Found on 2026-09-24: a slug kept U+24B6 under a separator of NULs, `/`, U+24B6 and `d`. The U+24B6 was the separator's, inserted as given between two words. | Not a library defect: the target checked the whole slug where the property is about the words. It now checks the words, and `SlugConfig::separator` says a separator is inserted as given. |
 | `normalize_confusables` | idempotent, and complete: `is_confusable` is false on the output (#522) | Found on 2026-09-26: `"C"` followed by nine U+0327. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each pass takes one cedilla, and the loop stopped at eight passes (`MAX_CONFUSABLE_PASSES`) with one left. `c` + U+0327 and `i` + U+0309 cycle the same way. The same input made `canonicalize_strict` return `Ç` and then `C`, and `skeleton_key` return `ç` and then `c`: the presets and the pipeline run their own fold loops under the same cap. | Fixed: input still changing at the cap is finished span by span, and a pass that only shortens a run of one mark is applied as many times as it holds at once. All four loops do this, so the fold settles on any number of marks at the cost of a few passes, not one per mark. |
+| `canonicalize` | idempotent (#416, #835) | Found on 2026-09-26, by the `presets` target while the row above was being checked: `\u01e7` + U+0327 + U+0367 + three U+0327 + U+0303. The cap, three marks of one class on a base, runs before the confusable fold, and the fold turned `\u0123` (a cedilla, below) into `\u0121` (a dot, above), so the `g` carried four marks above and the next call cut one. Under `tr39` and `preserve` the pre-fold folds before the cap, so only `numeric` failed. | Fixed: the cap runs again after the fold, and touches only text it cuts. Its check returns early on text with no standalone mark, since no character decomposes to more than three, so `canonicalize` is cheaper than before. |
 
 **Coverage.** Rust, `cargo +nightly-2026-09-01 llvm-cov --no-default-features --branch`
 over the Tier-1 Rust suite (1,237 tests; doctests are not instrumented): **92.4% of lines

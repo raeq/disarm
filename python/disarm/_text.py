@@ -293,7 +293,8 @@ class Text:
         resolve deletions → NFKC → strip bidi/format → strip invisibles (#413) →
         strip control → strip zero-width → collapse whitespace → drop repeated marks →
         cap combining marks (anti-zalgo, #429) → NFC → confusables and NFC to a fixed
-        point → drop repeated marks (the confusable fold is iterated with NFC for
+        point → drop repeated marks → cap combining marks again (the confusable fold is
+        iterated with NFC for
         idempotency, #416/#434). `PRESETS` lists the steps exactly.
         """
         return Text(self._t().canonicalize(self._value))

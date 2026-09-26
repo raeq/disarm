@@ -44,22 +44,25 @@ jobs:
         with:
           persist-credentials: false
       - name: Poll the crates.io sparse index for the target core version
-        # `working-directory: bindings/node` comes from the workflow-level defaults,
-        # so `Cargo.toml` is the node binding's manifest.
+        # The EXACT core this ref releases: the root Cargo.toml's version, not any
+        # 0.MINOR.* the glue pin allows. On a patch release the previous patch already
+        # satisfies the pin, so polling for the pin passed at once and 0.17.1 shipped to
+        # npm built against core 0.17.0, without the fix it was released for.
         shell: bash
         run: |
-          req="$(sed -nE 's/.*package = "disarm", version = "([0-9]+\.[0-9]+)".*/\1/p' Cargo.toml | head -n1)"
-          if [ -z "$req" ]; then echo "::error::could not parse disarm_core version from Cargo.toml"; exit 1; fi
-          esc="${req//./\\.}"
-          echo "Waiting for a non-yanked disarm $req.* on the crates.io sparse index…"
-          deadline=$((SECONDS + 600))
-          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qE "^${esc}\.[0-9]+$"; do
+          want="$(sed -n '/^\[package\]/,/^\[/s/^version = "\([^"]*\)".*/\1/p' "$GITHUB_WORKSPACE/Cargo.toml" | head -n1)"
+          if [ -z "$want" ]; then echo "::error::could not read the [package] version from Cargo.toml"; exit 1; fi
+          echo "Waiting for a non-yanked disarm $want on the crates.io sparse index…"
+          # publish.yml pushes the core after Tier 3 and the wheels: about 8 minutes
+          # for 0.17.1, so 10 was too close to the edge once the wait became exact.
+          deadline=$((SECONDS + 1800))
+          until curl -sf https://index.crates.io/di/sa/disarm | jq -r 'select(.yanked==false) | .vers' | grep -qxF "$want"; do
             if [ "$SECONDS" -ge "$deadline" ]; then
-              echo "::error::disarm $req.* did not appear on crates.io within 10 minutes"; exit 1
+              echo "::error::disarm $want did not appear on crates.io within 30 minutes"; exit 1
             fi
             echo "  not yet; retrying in 15s…"; sleep 15
           done
-          echo "disarm $req.* is available on crates.io."
+          echo "disarm $want is available on crates.io."
 
       # #830: the poll above proves a 0.MINOR.* EXISTS on crates.io. It does not prove
       # the glue AT THIS REF can build against it, and between releases it usually
@@ -72,6 +75,9 @@ jobs:
       # documents — which resolves the OLD published core and used to die deep in a
       # per-platform matrix with a bare E0425/E0609 rather than here, with a reason.
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - name: Pin the lockfile to the core this ref releases
+        shell: bash
+        run: bash ../../scripts/pin_published_core.sh .
       - name: The published core must be one this glue compiles against (#830)
         shell: bash
         run: |
@@ -164,6 +170,12 @@ jobs:
           mkdir -p ~/.cargo
           printf '[target.aarch64-unknown-linux-gnu]\nlinker = "aarch64-linux-gnu-gcc"\n' >> ~/.cargo/config.toml
 
+      - name: Pin the lockfile to the core this ref releases
+        # Publish path only: the validation build above redirects to the in-repo core.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash ../../scripts/pin_published_core.sh .
+
       # --ignore-scripts: no dependency's install hook runs. The lockfile has one,
       # fsevents (macOS file watching for vitest), and nothing here needs it; the
       # napi, tsc and biome CLIs ship as plain JS or prebuilt binaries.
@@ -178,6 +190,18 @@ jobs:
         with:
           name: addon-${{ matrix.settings.target }}
           path: bindings/node/disarm.*.node
+          if-no-files-found: error
+
+      # The loader and its types are the same from every leg; `publish` takes them
+      # from here so that it never compiles Rust itself (see its steps).
+      - name: Upload the binding loader and types
+        if: matrix.settings.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: binding-loader
+          path: |
+            bindings/node/binding.js
+            bindings/node/binding.d.ts
           if-no-files-found: error
 
   # ── Tier 3 runs on the CORE only (#159, and the 0.15.0 release) ──
@@ -237,17 +261,36 @@ jobs:
           merge-multiple: true
           path: bindings/node
 
-      - name: Emit the TypeScript layer (index.js / index.d.ts) + binding loader
-        # The release tarball ships compiled JS + types; the .node files came from
-        # the build matrix above. Generate the loader/types without rebuilding Rust.
+      - name: Collect the binding loader and types
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: binding-loader
+          path: bindings/node
+
+      - name: Record the prebuilds as downloaded
+        # Checked again just before `npm publish`, so no later step can replace one.
         run: |
-          npx napi build --platform --js binding.js --dts binding.d.ts
-          npx tsc
+          set -euo pipefail
+          prebuilds=(disarm.*.node)
+          ls -l "${prebuilds[@]}"
+          test "${#prebuilds[@]}" -eq 5
+          sha256sum "${prebuilds[@]}" > "$RUNNER_TEMP/prebuilds.sha256"
+
+      - name: Emit the TypeScript layer (index.js / index.d.ts)
+        # `tsc` only. This step used to run `napi build` for the loader too, which
+        # compiles the addon: a DEBUG build for the runner's platform, written over
+        # the release prebuild the matrix made. Every npm release through 0.17.1
+        # shipped that debug linux-x64 addon (about 40 MB against 2.7 MB), built
+        # against whichever core resolved at that moment.
+        run: npx tsc
 
       - name: Update npm for OIDC trusted publishing
         # Trusted Publishing needs npm CLI >= 11.5 (Node 22 bundles 10.x). Pinned
         # for a reproducible release; bump deliberately.
         run: npm install -g --ignore-scripts npm@11.5.1
+
+      - name: The prebuilds are still the ones the matrix made
+        run: sha256sum -c "$RUNNER_TEMP/prebuilds.sha256"
 
       - name: npm publish (OIDC trusted publishing + provenance)
         # No long-lived NPM_TOKEN: a Trusted Publisher configured on npmjs.org for

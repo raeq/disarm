@@ -18,6 +18,9 @@ Each finding's minimal fix, written against the model so `Bounded.lean` can chec
   separates a composition the fold then misses (`normalize_web_input`).
 * **F4 presets.** Recompose at the end of `strip_obfuscation` and `ml_normalize`
   (`NfcIfNonAscii`, as `sort_key` does).
+* **F8 `canonicalize`.** Cap the marks again after the fold, on text the cap would cut
+  (`ZalgoIfOver`), as #1072 does: the fold can move a mark to another class, past the cap
+  that counted it.
 -/
 
 namespace Presets
@@ -73,10 +76,17 @@ def stripObfuscationFixed (p : Pol) :=
 def mlNormalizeFixed (fold : Bool) :=
   runGuarded (mlNormalizeSteps fold ++ [.base .nfcIfNonAscii]) .numeric
 
+/-! ## F8 -/
+
+def canonicalizeFixedSteps : List Step := canonicalizeSteps ++ [.base (.zalgoIfOver 3)]
+
+def canonicalizeFixed (p : Pol) := runGuarded canonicalizeFixedSteps p
+
 /-- Every surface with its fixed variant, for the difftest and the bounded checks. -/
 def fixedSurfaces : List (String × (Str -> Str)) :=
   (pols.flatMap fun (n, p) =>
-    [ ("skeleton_key@" ++ n, skeletonKeyFixed p),
+    [ ("canonicalize@" ++ n, canonicalizeFixed p),
+      ("skeleton_key@" ++ n, skeletonKeyFixed p),
       ("search_key@" ++ n, searchKeyFixed p),
       ("sort_key@" ++ n, sortKeyFixed p),
       ("strip_obfuscation@" ++ n, stripObfuscationFixed p) ]) ++

@@ -41,7 +41,7 @@ TABLES = HERE / "Presets" / "Tables.lean"
 
 #: Carries every finding: I, 1, |, space, BS, the three marks, y-acute, upsilon with
 #: dialytika and tonos, cent, =, Latin VY and vy, the lateral click, A with macron, ZWSP,
-#: CGJ, PUA, NUL and the two jamo.
+#: CGJ, PUA, NUL, the two jamo, and for Finding 8 g with cedilla and a third mark above.
 SMALL = [
     0x49,
     0x31,
@@ -66,6 +66,8 @@ SMALL = [
     0x61,
     0x1100,
     0x1161,
+    0x123,
+    0x303,
 ]
 
 

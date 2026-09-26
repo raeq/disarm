@@ -21,8 +21,11 @@ list a `..._native.native_decide.ax_...` axiom: they trust the compiler `native_
 #print axioms Presets.Findings.search_vy2
 #print axioms Presets.Findings.guard_cent2
 #print axioms Presets.Findings.obf_jamo2
+#print axioms Presets.Findings.canon_gcedilla_twice
+#print axioms Presets.Findings.canon_fixed_gcedilla
 #print axioms Presets.Findings.applySteps_eq_run
 #print axioms Presets.Findings.guard_skips
 #print axioms Presets.Bounded.idem_S4
+#print axioms Presets.Bounded.canonicalize_failures
 #print axioms Presets.Bounded.guard_sound_S4
 #print axioms Presets.Bounded.fixes_idem_S4

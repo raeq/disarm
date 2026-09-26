@@ -101,9 +101,10 @@ every ecosystem at once. Two rules keep that honest without forcing wasteful rel
    every build on the publish path runs `scripts/pin_published_core.sh` first, which
    pins the binding's lockfile to that version or fails. The glue's `0.MINOR` pin
    alone let 0.17.1's npm and Maven artifacts build against core 0.17.0: the previous
-   patch satisfied the wait, and the new core reached crates.io three to four minutes after the
-   bindings had published. A per-registry patch keeps the root version where it is, so
-   it builds against the core already published — which is the core that ref carries.
+   patch satisfied the wait, and the new core reached crates.io three to four minutes
+   after the bindings had published. A per-registry patch keeps the root version where
+   it is, so it builds against the core already published — which is the core that ref
+   carries.
 
 The consequence: at any minor, the shared `0.MINOR` *is* the compatibility statement — a
 binding's `0.11.x` wraps core `0.11`. Once per-registry patch numbers have diverged

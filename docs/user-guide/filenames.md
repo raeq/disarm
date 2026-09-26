@@ -100,7 +100,8 @@ name grow on every call.
 from disarm import InvalidArgumentError
 
 assert sanitize_filename("hello:world", separator="") == "helloworld"
-for bad in ["/", "\\", " ", "\x00", "\u202e"]:
+assert sanitize_filename("Dune: Part One", separator=" ") == "Dune Part One"
+for bad in ["/", "\\", "_ ", "\x00", "\u202e"]:
     try:
         sanitize_filename("../etc/passwd", separator=bad)
     except InvalidArgumentError:

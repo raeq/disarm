@@ -276,9 +276,11 @@ pub(crate) fn normalize_confusables_cow<'a>(
 /// strings that `is_confusable` still flagged, and the five non-Python bindings all
 /// inherited it.
 ///
-/// It converges in a few passes: every fold moves toward the ASCII-ish target script and
-/// composition only shrinks length, so no cycle is possible, and the exhaustive
-/// (confusable × mark) idempotency test bounds the pass count.
+/// Most input settles in two or three passes. A fold cycle takes one pass per mark:
+/// `C` with U+0327 composes to `Ç`, which folds back to `C`, ready for the next
+/// cedilla, so a stack of nine outlasts [`MAX_CONFUSABLE_PASSES`] (found by the nightly
+/// fuzz run). Input still changing at the cap goes to [`converge_slow`], which finishes
+/// it span by span and skips a cycle's repeats: a few passes, not one per mark.
 ///
 /// Borrows on a no-op exactly as `_cow` does (#352): input with nothing to fold is
 /// already a fixed point, so the common case still never allocates.
@@ -301,11 +303,219 @@ pub(crate) fn normalize_confusables_fixed_cow<'a>(
             std::borrow::Cow::Owned(next) => cur = next,
         }
     }
-    debug_assert!(
-        false,
-        "normalize_confusables did not converge in {MAX_CONFUSABLE_PASSES} passes: {cur:?}"
-    );
-    Ok(std::borrow::Cow::Owned(cur))
+    let tr39_digits = digit_policy == "tr39" && target_script == "latin";
+    converge_slow(
+        cur,
+        &fold_pass(target_script, digit_policy),
+        &folds(target_script, tr39_digits, digit_policy == "preserve"),
+    )
+    .map(std::borrow::Cow::Owned)
+}
+
+/// A run of one combining mark at least this long loses the same number of copies to a
+/// pass at every length ([`skip_cycle`]). Composition takes at most three marks into a
+/// starter, since no character's NFD is longer than four, and the excluded-composition
+/// map can touch only a run's first and last copy. Eight leaves copies between them.
+const CYCLE_RUN_MIN: usize = 8;
+
+/// The fold's own pass, for [`converge_slow`].
+fn fold_pass<'p>(
+    target_script: &'p str,
+    digit_policy: &'p str,
+) -> impl Fn(&str) -> Result<String, crate::ErrorRepr> + 'p {
+    move |text| Ok(normalize_confusables_cow(text, target_script, digit_policy)?.into_owned())
+}
+
+/// Whether the fold rewrites `ch`, under the policy flags `normalize_confusables_cow`
+/// and `normalize_confusables_into` resolve.
+fn folds(target_script: &str, tr39_digits: bool, preserve_digits: bool) -> impl Fn(char) -> bool {
+    let map = tables::resolve_confusable_map(target_script);
+    move |ch| lookup_with_policy(map, ch, tr39_digits, preserve_digits).is_some()
+}
+
+/// Finish a presets loop of the confusable fold and then `form`, `normalize_into` style,
+/// which its cap of passes did not settle. The presets and the pipeline iterate the
+/// fold that way, rather than through compose-at-lookup, and meet the same cycles.
+pub(crate) fn converge_fold_then_normalize(
+    text: String,
+    target_script: &str,
+    digit_policy: DigitPolicy,
+    form: &str,
+) -> Result<String, crate::ErrorRepr> {
+    let tr39_digits = digit_policy == DigitPolicy::Tr39 && target_script == "latin";
+    let preserve_digits = digit_policy == DigitPolicy::Preserve;
+    let pass = |text: &str| {
+        let mut folded = String::with_capacity(text.len());
+        normalize_confusables_into(text, target_script, digit_policy, &mut folded)?;
+        let mut out = String::with_capacity(folded.len());
+        crate::normalize::normalize_into(&folded, form, &mut out)?;
+        Ok(out)
+    };
+    converge_slow(
+        text,
+        &pass,
+        &folds(target_script, tr39_digits, preserve_digits),
+    )
+}
+
+/// Can a span begin at `ch`? It starts a unit ([`crate::compose::starts_unit`]), and so
+/// does the first character of its compatibility decomposition: U+FF9E starts a unit,
+/// and NFKC turns it into U+3099, which composes with the character before.
+fn cuts_before(ch: char) -> bool {
+    let mut first = None;
+    unicode_normalization::char::decompose_compatible(ch, |c| {
+        first.get_or_insert(c);
+    });
+    crate::compose::starts_unit(ch) && first.is_some_and(crate::compose::starts_unit)
+}
+
+/// The fixed point of `pass` from `text`, which a capped loop of it did not settle.
+///
+/// Only a fold cycle keeps a string changing that long, and each pass over the whole
+/// string would cost its full length, once per mark. So the string is cut before every
+/// character a span can begin at ([`cuts_before`]): no cluster, Hangul syllable or
+/// compatibility decomposition crosses a cut, and every fold output starts a unit, so
+/// each span folds on its own as it does in place. The spans converge one at a time, and
+/// the whole is checked with one more pass.
+///
+/// `folds` says whether the pass's fold rewrites a character, for [`skip_cycle`].
+pub(crate) fn converge_slow(
+    mut text: String,
+    pass: &dyn Fn(&str) -> Result<String, crate::ErrorRepr>,
+    folds: &dyn Fn(char) -> bool,
+) -> Result<String, crate::ErrorRepr> {
+    for _ in 0..MAX_CONFUSABLE_PASSES {
+        let mut next = String::with_capacity(text.len());
+        let mut start = 0;
+        for (i, ch) in text.char_indices().skip(1) {
+            if cuts_before(ch) {
+                next.push_str(&converge_span(&text[start..i], pass, folds)?);
+                start = i;
+            }
+        }
+        next.push_str(&converge_span(&text[start..], pass, folds)?);
+        if pass(&next)? == next {
+            return Ok(next);
+        }
+        text = next;
+    }
+    debug_assert!(false, "the confusable fold did not converge: {text:?}");
+    Ok(text)
+}
+
+/// The fixed point of `pass` on one span, skipping the repeats of a fold cycle
+/// ([`skip_cycle`]).
+fn converge_span(
+    span: &str,
+    pass: &dyn Fn(&str) -> Result<String, crate::ErrorRepr>,
+    folds: &dyn Fn(char) -> bool,
+) -> Result<String, crate::ErrorRepr> {
+    let mut cur = span.to_owned();
+    // Every pass that changes the span without a cycle to skip takes a mark or folds a
+    // character, so the span's length bounds them.
+    for _ in 0..=cur.chars().count() + MAX_CONFUSABLE_PASSES {
+        let next = pass(&cur)?;
+        if next == cur {
+            return Ok(cur);
+        }
+        cur = match skip_cycle(&cur, &next, pass, folds)? {
+            Some(skipped) => skipped,
+            None => next,
+        };
+    }
+    debug_assert!(false, "the confusable fold did not converge: {cur:?}");
+    Ok(cur)
+}
+
+/// `text` as runs of one character: `(char, count)`.
+fn runs(text: &str) -> Vec<(char, usize)> {
+    let mut out: Vec<(char, usize)> = Vec::new();
+    for ch in text.chars() {
+        match out.last_mut() {
+            Some((c, n)) if *c == ch => *n += 1,
+            _ => out.push((ch, 1)),
+        }
+    }
+    out
+}
+
+fn from_runs(runs: &[(char, usize)]) -> String {
+    runs.iter()
+        .flat_map(|&(c, n)| std::iter::repeat_n(c, n))
+        .collect()
+}
+
+/// When the pass `prev` → `next` is a fold cycle eating a run of marks, the string the
+/// cycle leaves once the run is down to [`CYCLE_RUN_MIN`]: the passes in between are
+/// skipped.
+///
+/// The pass must have removed `d` copies of one mark `m` from one run and changed nothing
+/// else, with at least [`CYCLE_RUN_MIN`] copies left. `m` has a nonzero combining class,
+/// is its own NFKD and does not fold. Then, for any length `x` of that run of at least
+/// [`CYCLE_RUN_MIN`], a pass maps the string to `P' m^(x - c) S'`, with `P'`, `S'` and
+/// `c` the same at every `x`:
+///
+/// * canonical ordering keeps the copies together, and composition takes at most three
+///   of them, a prefix, into the starter; the first copy it leaves blocks the rest, and
+///   blocks nothing a copy would not;
+/// * the excluded-composition map of compose-at-lookup can take only the run's first or
+///   last copy, since no key holds a character twice in a row;
+/// * the fold leaves every copy alone.
+///
+/// That holds for every pass [`converge_slow`] is given: compose-at-lookup then the
+/// fold; the fold then NFC or NFKC; and `skeleton_key`'s case fold, fold and NFKC.
+/// `folds` then covers a case fold as well.
+///
+/// Where `P'` ends is checked, not assumed: one more pass, on `prev` with the run one
+/// copy longer, must give `next` with the run one copy longer. Then the insertion point
+/// lies inside the run, and a pass at any length `x` gives `next`'s shape with `x - d`
+/// copies, so the cycle is applied as many times as that holds at once.
+fn skip_cycle(
+    prev: &str,
+    next: &str,
+    pass: &dyn Fn(&str) -> Result<String, crate::ErrorRepr>,
+    folds: &dyn Fn(char) -> bool,
+) -> Result<Option<String>, crate::ErrorRepr> {
+    use unicode_normalization::char::{canonical_combining_class, decompose_compatible};
+
+    let (before, mut after) = (runs(prev), runs(next));
+    if before.len() != after.len() {
+        return Ok(None);
+    }
+    let mut changed = before
+        .iter()
+        .zip(&after)
+        .enumerate()
+        .filter(|(_, (b, a))| b != a);
+    let Some((run, (&(mark, was), &(still, left)))) = changed.next() else {
+        return Ok(None);
+    };
+    let taken = was.saturating_sub(left);
+    if changed.next().is_some()
+        || mark != still
+        || taken == 0
+        || taken >= CYCLE_RUN_MIN
+        || left < CYCLE_RUN_MIN
+    {
+        return Ok(None);
+    }
+    let mut own_nfkd = true;
+    decompose_compatible(mark, |c| own_nfkd &= c == mark);
+    if canonical_combining_class(mark) == 0 || !own_nfkd || folds(mark) {
+        return Ok(None);
+    }
+
+    let mut longer = before;
+    longer[run].1 += 1;
+    let probe = pass(&from_runs(&longer))?;
+    after[run].1 += 1;
+    if probe != from_runs(&after) {
+        return Ok(None);
+    }
+    // Each pass needs `CYCLE_RUN_MIN` copies going in: skip every pass that has them.
+    let passes = (left - CYCLE_RUN_MIN) / taken + 1;
+    after[run].1 = left - passes * taken;
+    Ok(Some(from_runs(&after)))
 }
 
 /// In-place form of [`normalize_confusables`] writing into `out` (cleared
@@ -830,6 +1040,254 @@ mod tests {
             once
         );
         assert!(!is_confusable(&once, "latin").unwrap());
+    }
+
+    /// The fixed point taken one pass at a time with no cap: what the fold must equal.
+    fn fixed_point_by_passes(text: &str, script: &str, policy: &str) -> String {
+        let mut cur = text.to_owned();
+        loop {
+            let next = normalize_confusables_cow(&cur, script, policy)
+                .unwrap()
+                .into_owned();
+            if next == cur {
+                return cur;
+            }
+            cur = next;
+        }
+    }
+
+    /// The nightly fuzz run's input, as the `confusables` target decodes it: `Ҫ` folds
+    /// to `C`, and then each pass composes one of the eight cedillas into `Ç` and folds
+    /// it back to `C`. The loop gave up after eight passes with one cedilla left, so the
+    /// fold was not idempotent and its output was still confusable.
+    #[test]
+    fn a_fold_cycle_converges_past_the_pass_cap() {
+        let text = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\
+                    \u{327}\u{32A}\u{327}\u{327}\u{327}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+                    \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}";
+        let once = normalize_confusables(text, "latin", "numeric").unwrap();
+        assert_eq!(
+            once,
+            "A. \u{FFFD}\u{FFFD}\u{3AA}C\u{32A}\u{32A}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+             \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}"
+        );
+        assert_eq!(once, fixed_point_by_passes(text, "latin", "numeric"));
+        assert_eq!(
+            normalize_confusables(&once, "latin", "numeric").unwrap(),
+            once
+        );
+        assert!(!is_confusable(&once, "latin").unwrap());
+    }
+
+    /// `skip_cycle` jumps over passes; the result must be the one the passes reach. The
+    /// three cycles the tables hold ([`every_fold_cycle_is_a_self_loop`]), plus a
+    /// precomposed and a cross-script way in, at run lengths either side of
+    /// `CYCLE_RUN_MIN` and the pass cap, with context the skip must carry unchanged: a
+    /// mark of a higher class after the run, a second run the first one blocks, a
+    /// spacing mark that starts a run of its own, and a second cluster.
+    #[test]
+    fn skipping_a_fold_cycle_matches_the_pass_by_pass_fixed_point() {
+        let cycles = [
+            ('C', '\u{327}'),
+            ('c', '\u{327}'),
+            ('i', '\u{309}'),
+            ('\u{C7}', '\u{327}'),
+            ('\u{4AA}', '\u{327}'),
+        ];
+        for (base, mark) in cycles {
+            for n in 0..40 {
+                let run: String = std::iter::repeat_n(mark, n).collect();
+                for text in [
+                    format!("{base}{run}"),
+                    format!("x{base}{run}\u{301}\u{32A}y"),
+                    format!("{base}{run}\u{328}{run}"),
+                    format!("{base}{run}\u{9BE}{run}"),
+                    format!("{base}{run} {base}{run}{run}\u{301}"),
+                ] {
+                    for policy in ["numeric", "tr39", "preserve"] {
+                        assert_eq!(
+                            normalize_confusables(&text, "latin", policy).unwrap(),
+                            fixed_point_by_passes(&text, "latin", policy),
+                            "{text:?} ({policy})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// The presets' and the pipeline's form of the loop, the fold then a normal form, must
+    /// reach the fixed point its passes reach too.
+    #[test]
+    fn the_presets_slow_path_matches_their_passes() {
+        let cycles = [('C', '\u{327}'), ('c', '\u{327}'), ('i', '\u{309}')];
+        for (base, mark) in cycles {
+            for n in [0, 7, 8, 9, 17, 39] {
+                let run: String = std::iter::repeat_n(mark, n).collect();
+                for text in [
+                    format!("{base}{run}"),
+                    format!("x{base}{run}\u{301}\u{32A}y {base}{run}{run}"),
+                    format!("{base}{run}\u{9BE}{run}\u{FF9E}"),
+                ] {
+                    for policy in [
+                        DigitPolicy::Numeric,
+                        DigitPolicy::Tr39,
+                        DigitPolicy::Preserve,
+                    ] {
+                        for form in ["NFC", "NFKC"] {
+                            let mut want = text.clone();
+                            loop {
+                                let mut folded = String::new();
+                                normalize_confusables_into(&want, "latin", policy, &mut folded)
+                                    .unwrap();
+                                let mut next = String::new();
+                                crate::normalize::normalize_into(&folded, form, &mut next).unwrap();
+                                if next == want {
+                                    break;
+                                }
+                                want = next;
+                            }
+                            let got =
+                                converge_fold_then_normalize(text.clone(), "latin", policy, form)
+                                    .unwrap();
+                            assert_eq!(got, want, "{text:?} ({policy:?}, {form})");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One pass per mark would make this quadratic: 200,000 passes over 400 KB.
+    #[test]
+    fn a_long_mark_stack_folds_in_a_few_passes() {
+        let cedillas = format!("C{}", "\u{327}".repeat(200_000));
+        assert_eq!(
+            normalize_confusables(&cedillas, "latin", "numeric").unwrap(),
+            "C"
+        );
+        let two = format!("{cedillas} i{}", "\u{309}".repeat(200_000));
+        assert_eq!(
+            normalize_confusables(&two, "latin", "numeric").unwrap(),
+            "C i"
+        );
+    }
+
+    /// A fold cycle that took two passes to come round would change the string in two
+    /// places, or change the starter, and `skip_cycle` would not recognize it: the fold
+    /// would still converge, one pass per mark. So every cycle in the graph of "a mark
+    /// composes onto this fold output, and the result folds to that one" must be a self
+    /// loop. These are the ones the tables hold.
+    #[test]
+    fn every_fold_cycle_is_a_self_loop() {
+        use std::collections::{BTreeMap, BTreeSet};
+        use unicode_normalization::char::canonical_combining_class;
+        use unicode_normalization::UnicodeNormalization;
+
+        let marks: Vec<char> = (0u32..=0x10_FFFF)
+            .filter_map(char::from_u32)
+            .filter(|&c| canonical_combining_class(c) > 0)
+            .collect();
+        let mut self_loops = Vec::new();
+        for script in ["latin", "cyrillic", "arabic", "hebrew"] {
+            let map = tables::resolve_confusable_map(script).unwrap();
+            let starters: BTreeSet<char> = map
+                .entries()
+                .filter_map(|(_, value)| value.chars().last())
+                .collect();
+            let mut edges: BTreeMap<char, BTreeSet<char>> = BTreeMap::new();
+            for &v in &starters {
+                for &m in &marks {
+                    let composed: Vec<char> = [v, m].into_iter().nfc().collect();
+                    let [x] = composed[..] else { continue };
+                    let Some(w) = map.get(&x).and_then(|value| value.chars().last()) else {
+                        continue;
+                    };
+                    if w == v {
+                        self_loops.push((script, v, m));
+                    } else {
+                        edges.entry(v).or_default().insert(w);
+                    }
+                }
+            }
+            // Kahn's algorithm: an acyclic graph empties.
+            let mut indegree: BTreeMap<char, usize> = BTreeMap::new();
+            for (&v, ws) in &edges {
+                indegree.entry(v).or_default();
+                for &w in ws {
+                    *indegree.entry(w).or_default() += 1;
+                }
+            }
+            let mut ready: Vec<char> = indegree
+                .iter()
+                .filter(|&(_, &n)| n == 0)
+                .map(|(&v, _)| v)
+                .collect();
+            let mut removed = 0;
+            while let Some(v) = ready.pop() {
+                removed += 1;
+                for w in edges.get(&v).into_iter().flatten() {
+                    let n = indegree.get_mut(w).unwrap();
+                    *n -= 1;
+                    if *n == 0 {
+                        ready.push(*w);
+                    }
+                }
+            }
+            assert_eq!(removed, indegree.len(), "a longer fold cycle ({script})");
+        }
+        assert_eq!(
+            self_loops,
+            [
+                ("latin", 'C', '\u{327}'),
+                ("latin", 'c', '\u{327}'),
+                ("latin", 'i', '\u{309}'),
+            ]
+        );
+    }
+
+    /// `skip_cycle` assumes a pass takes fewer than `CYCLE_RUN_MIN - 2` copies of a run:
+    /// at most one less than the longest canonical decomposition by composition, and two
+    /// more at the ends.
+    #[test]
+    fn the_cycle_run_minimum_clears_what_one_pass_can_take() {
+        use unicode_normalization::UnicodeNormalization;
+        let longest = (0u32..=0x10_FFFF)
+            .filter_map(char::from_u32)
+            .map(|c| std::iter::once(c).nfd().count())
+            .max()
+            .unwrap();
+        assert_eq!(longest, 4);
+        assert!(CYCLE_RUN_MIN > (longest - 1) + 2);
+    }
+
+    /// `converge_slow` folds span by span. That is the whole-string fold only if what a
+    /// span folds to never joins the span before it. A span's output starts with a table
+    /// value, or with the NFC of the character that starts it, grown by composition. So
+    /// every table value, every such NFC, and every primary composite built on a
+    /// character that starts a unit must start one.
+    #[test]
+    fn a_span_folds_as_it_does_in_place() {
+        use crate::compose::starts_unit;
+        use unicode_normalization::UnicodeNormalization;
+        for script in ["latin", "cyrillic", "arabic", "hebrew"] {
+            let map = tables::resolve_confusable_map(script).unwrap();
+            for (&key, value) in map.entries() {
+                let first = value.chars().next().unwrap();
+                assert!(starts_unit(first), "U+{:04X} ({script})", key as u32);
+            }
+        }
+        for c in (0u32..=0x10_FFFF).filter_map(char::from_u32) {
+            if starts_unit(c) {
+                let first = std::iter::once(c).nfc().next().unwrap();
+                assert!(starts_unit(first), "NFC of U+{:04X}", c as u32);
+            }
+            let nfd: Vec<char> = std::iter::once(c).nfd().collect();
+            if nfd.len() > 1 && starts_unit(nfd[0]) && nfd.into_iter().nfc().eq(std::iter::once(c))
+            {
+                assert!(starts_unit(c), "composite U+{:04X}", c as u32);
+            }
+        }
     }
 
     #[test]

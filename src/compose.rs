@@ -149,6 +149,18 @@ fn is_cluster_follower(c: char) -> bool {
     is_combining_mark(c) || composes_with_preceding_starter(c)
 }
 
+/// Can no unit [`composed`] builds continue into `c`? True unless `c` is a cluster
+/// follower or a Hangul vowel or trailing jamo. A string cut before each such `c` folds
+/// piece by piece exactly as it folds whole, which is what the confusables fixed point
+/// relies on to work one span at a time.
+#[inline]
+pub(crate) fn starts_unit(c: char) -> bool {
+    let u = c as u32;
+    !is_cluster_follower(c)
+        && !(HANGUL_V_BASE..=HANGUL_V_LAST).contains(&u)
+        && !(HANGUL_T_FIRST..=HANGUL_T_LAST).contains(&u)
+}
+
 pub(crate) struct Composed<'a> {
     text: &'a str,
     iter: std::iter::Peekable<std::str::CharIndices<'a>>,
@@ -457,6 +469,17 @@ mod tests {
         for key in EXCLUDED_COMPOSITIONS.keys() {
             assert!(may_start_excluded(key), "{key:?}");
             assert!(may_start_excluded(&format!("{key}\u{301}x")), "{key:?}");
+        }
+    }
+
+    /// No excluded composition holds a character twice in a row, so a run of one mark
+    /// meets the map at its first and last copy only. The confusables fixed point skips
+    /// the repeats of a fold cycle on that basis (`skip_cycle`).
+    #[test]
+    fn no_excluded_key_repeats_a_character() {
+        for key in EXCLUDED_COMPOSITIONS.keys() {
+            let chars: Vec<char> = key.chars().collect();
+            assert!(chars.windows(2).all(|w| w[0] != w[1]), "{key:?}");
         }
     }
 

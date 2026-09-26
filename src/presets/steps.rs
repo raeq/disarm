@@ -219,17 +219,24 @@ fn confusables_nfc_fixed_point_into(
     // immediately-preceding NFC), so the NFC still runs there. The result is
     // byte-identical to normalizing on every pass.
     let mut cur_is_nfc = false;
+    let mut settled = false;
     for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
         confusables::normalize_confusables_into(&cur, target, digits, &mut conf)?;
         if conf == cur && cur_is_nfc {
+            settled = true;
             break;
         }
         crate::normalize::normalize_into(&conf, "NFC", &mut nxt)?;
         if nxt == cur {
+            settled = true;
             break;
         }
         std::mem::swap(&mut cur, &mut nxt);
         cur_is_nfc = true;
+    }
+    if !settled {
+        // A fold cycle takes one mark a pass: `C` + U+0327 NFCs to `Ç`, which folds to `C`.
+        cur = confusables::converge_fold_then_normalize(cur, target, digits, "NFC")?;
     }
     if cur == input {
         Ok(false)
@@ -262,17 +269,23 @@ fn confusables_mark_fixed_point_into(
     for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
         // Inner fold-to-fixed-point, same shape as ConfusablesNfcFixedPoint.
         let mut cur_is_nfc = false;
+        let mut settled = false;
         for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
             confusables::normalize_confusables_into(&cur, target, digits, &mut conf)?;
             if conf == cur && cur_is_nfc {
+                settled = true;
                 break;
             }
             crate::normalize::normalize_into(&conf, "NFC", &mut nxt)?;
             if nxt == cur {
+                settled = true;
                 break;
             }
             std::mem::swap(&mut cur, &mut nxt);
             cur_is_nfc = true;
+        }
+        if !settled {
+            cur = confusables::converge_fold_then_normalize(cur, target, digits, "NFC")?;
         }
         zalgo::strip_cross_script_marks_into(&cur, &mut stripped);
         if stripped == cur {
@@ -288,6 +301,19 @@ fn confusables_mark_fixed_point_into(
         *out = cur;
         Ok(true)
     }
+}
+
+/// Whether `confusables::converge_slow` may finish a [`Step::FixedPoint`] over `inner`:
+/// every step rewrites characters one at a time, or composes. That is what its cycle
+/// skip is proved for. `StripAccents` deletes marks and `Transliterate` reads context,
+/// so `catalog_key`'s loop keeps its cap, which it never reaches: it strips every mark.
+fn cycle_skip_applies(inner: &[Step]) -> bool {
+    inner.iter().all(|step| {
+        matches!(
+            step,
+            Step::FoldCase | Step::ConfusablesCtx(_) | Step::Nfkc | Step::Nfc
+        )
+    })
 }
 
 /// Apply one step, writing into the reused scratch `out`. Returns `true` when `out`
@@ -438,12 +464,24 @@ pub(super) fn apply_into(
             // strip-accents, or a letter the next transliterate pass romanizes), so
             // it converges in a couple of passes and is bounded by the cap.
             let mut cur = input.to_owned();
+            let mut settled = false;
             for _ in 0..CONFUSABLE_FIXED_POINT_ITERS {
                 let next = apply_steps(inner, &cur, ctx)?;
                 if next == cur {
+                    settled = true;
                     break;
                 }
                 cur = next;
+            }
+            // `skeleton_key`'s loop meets the fold cycles too (`c` + U+0327 NFKCs to `ç`,
+            // which folds to `c`). Its steps are ones the cycle skip is proved for.
+            if !settled && cycle_skip_applies(inner) {
+                let pass = |text: &str| apply_steps(inner, text, ctx);
+                let folds = |c: char| {
+                    let alone = c.to_string();
+                    pass(&alone).map_or(true, |out| out != alone)
+                };
+                cur = confusables::converge_slow(cur, &pass, &folds)?;
             }
             if cur == input {
                 Ok(false)

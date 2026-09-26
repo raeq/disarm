@@ -18,6 +18,23 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
 
 <!-- towncrier release notes start -->
 
+## [0.17.1] — 2026-09-26
+
+### Fixed
+
+- **`sanitize_filename` accepts `separator=" "` again (#1079, #1080).** 0.17.0 refused
+  it: #1026 held the separator to printable, non-space ASCII, so
+  `sanitize_filename("Dune: Part One", separator=" ")`, which gave `Dune Part One` in
+  0.16.0, raised `InvalidArgumentError`. The 0.17.0 entry filed that under *Fixed*, and
+  its upgrade notes did not mention it. The ban was not needed: the reason given,
+  `"con _"` truncating to a bare `con`, is closed by #1026's own reserved check on the
+  stem Windows reads, and the Lean model's fix never refused a space. A lone `" "` is
+  accepted again in every binding. A space inside a longer separator is still refused,
+  because `"_ "` and `" _"` are not fixed points: `"c c"` comes back as `"c________ c"`.
+  A new test checks the space separator over every word of length 1-4 on every platform,
+  truncated and not: no output is empty, a device name, or changed by a second call.
+  No stored key moves.
+
 ## [0.17.0] — 2026-09-26
 
 ### Upgrade notes

@@ -79,6 +79,7 @@ These tests iterate over every element in a bounded Unicode domain. Unlike prope
 | All CJK Unified Ideographs (U+4E00–U+9FFF) | 20,992 | Output is ASCII, unmapped count < 200 |
 | 15 Indic script blocks | ~2,000 codepoints | Every consonant/vowel/virama in the block is correctly classified |
 | Determinism | 10 × 100 runs | Same mixed-script input produces identical output 100 times |
+| Mark stacks on the confusable fold (`tests/mark_stacking.rs`) | 22,407 | Every base the four confusable tables reach, crossed with every mark that composes with it, stacked 1–12 and 33 deep, under all three digit policies: a fixed point, and complete under `numeric` and `tr39`. See [Run length](#run-length-what-the-bounded-checks-could-not-see) |
 
 **Total exhaustive coverage: ~159,000+ individually verified codepoints.**
 
@@ -113,8 +114,76 @@ Exhaustive testing is not formal verification. We are precise about the boundary
 | Unicode version drift | New Unicode versions add codepoints | CI tracks Unicode version; unknown chars handled by ErrorMode |
 | Memory safety / UB | Requires Miri (nightly-only) | `unsafe_code = "forbid"` in Cargo.toml — zero unsafe anywhere |
 | Absence of panics | Requires Kani bounded model checking (nightly-only) | Property tests with 1,000+ random inputs; no panics in 2,900+ tests; cargo-fuzz over arbitrary bytes and text (below) |
+| Run length beyond the tested shapes | An exhaustive sweep fixes the shape of its inputs, and a bounded check proves nothing about inputs longer than its bound: the Lean check of the fold's convergence stopped at five characters, and the failure it was meant to rule out needs ten | `tests/mark_stacking.rs` stacks marks past every pass cap in the code; cargo-fuzz grows and repeats input freely. See [Run length](#run-length-what-the-bounded-checks-could-not-see) |
 
 **Future**: When nightly Rust is available in CI, we plan to add Kani bounded model checking — a form of formal verification that would prove absence of panics and overflow in `romanize_hangul`, `indic_char_role`, and decomposition arithmetic — and Miri UB detection.
+
+---
+
+## Run length: what the bounded checks could not see
+
+The confusable fold iterated to a fixed point under a cap of eight passes (#434, 0.11.1),
+on the argument that "each pass removes at least one mark, so it converges in a couple
+of iterations". That argument bounds the passes by the number of marks, which the input
+chooses. `C` + U+0327 composes to `Ç`, which folds back to `C`, so every pass takes one
+cedilla: nine used up the cap, and from ten a release build returned a string that was
+still confusable and folded again on a second call. The presets, the pipeline and
+`skeleton_key` iterate the same fold in loops of their own under the same cap, and
+`canonicalize_strict` joined them when #862 (0.15.0) moved its mark cap after the fold.
+The nightly fuzz run found it on 2026-09-26, two nights after fuzzing was added (#1071).
+
+Every layer above had a reason it could not, and none of them was bad luck:
+
+| Layer | Why it could not see a stack of ten |
+|---|---|
+| Lean model of the fold | Every symbol of the failure is in its alphabet (`C`, U+0327, U+04AA), but the convergence check covers every string up to length five: at most four cedillas, five passes. No amount of checking at that bound reaches ten |
+| Lean differential test | It checks that the model and the library agree, and they shared the cap. On the failing input they agree on the wrong answer |
+| Library sweeps and exhaustive tests | Every one crosses a base with one or two marks, so none can take more than three passes. "No swept input reached the cap" was true by construction |
+| Property tests (proptest, Hypothesis) | They draw characters independently. With U+0327 at 1.4% of draws, the likeliest generator here, a run of ten after a `c` comes up about once in 10^19 strings |
+| The `debug_assert` on the cap | It fires only in a debug build, and only on input nothing generated |
+| cargo-fuzz | libFuzzer inserts repeated bytes and copies input into itself, so runs are cheap for it. It found the bug |
+
+A second finding the same day had the opposite cause (#1072). `canonicalize` caps
+stacked marks before the fold, and the fold can move a mark to another class: `ģ` (a
+cedilla, below) folds to `ġ` (a dot, above). `ģ` and three marks above is four
+characters, inside the Presets model's exhaustive bound, but that model's alphabet has
+no fold that moves a mark, so the bound never mattered.
+
+**What changed.** The loops no longer stop at a cap (#1071), `canonicalize` caps again
+after the fold (#1072), and `tests/mark_stacking.rs` tests run length on purpose, on
+`disarm::api`, in PR CI:
+
+* the fold on every base the four tables reach (their sources, their values' characters,
+  and each canonical prefix of a source's decomposition) crossed with every mark that
+  composes with it, canonically or through a composition exclusion, stacked 1–12 and 33
+  deep, under all three policies;
+* every builder under every policy and every profile, on each stack whose composition
+  is itself a fold source, and on each of those beside one to four marks of another
+  class;
+* one stack of 20,000 per cycle, which must settle in the fold, `canonicalize_strict`
+  and `skeleton_key` inside a time a pass per mark could not meet.
+
+The cases come from the tables in `src/tables/data/`, not a list of known cycles, so a
+table change that adds one is covered the day it lands, and floors on the derived sets
+keep the test from passing by finding nothing. Run on the code before each fix, it
+fails: all three tests before #1071 (in a release build too, where the assertion is
+compiled out, from `C` and ten cedillas exactly), and the builders before #1072.
+
+**What it means for the other bounded claims.**
+
+* A loop cap is a claim about the input. Either prove a constant bound, or finish the
+  work some other way when the cap is reached; an argument whose bound grows with the
+  input does not justify a constant.
+* A bounded check says nothing above its bound. Each one should say how long its
+  shortest possible counterexample could be, and a result is evidence only if that is
+  within the bound.
+* A sweep varies which characters appear. Run length is a separate dimension, and a
+  sweep that fixes it at one or two cannot see a defect that needs ten.
+* Differential testing against a model finds where they differ, never a defect the
+  model shares.
+* A model's alphabet needs a representative of every class the code branches on. "A
+  fold that moves a mark to another combining class" was not one of the Presets
+  model's classes, and still is not: adding it is open.
 
 ---
 

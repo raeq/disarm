@@ -238,7 +238,8 @@ def test_changelog_has_the_marker_and_no_hand_written_unreleased_section() -> No
     text = CHANGELOG.read_text(encoding="utf-8")
     assert text.count(MARKER) == 1, f"expected exactly one {MARKER!r}"
     # A heading, not a mention: 0.17.0's entry for #993 quotes the heading it removed.
-    assert not re.search(r"^## \[Unreleased\]", text, flags=re.MULTILINE), (
+    # Markdown still renders `##` as a heading after up to three spaces.
+    assert not re.search(r"^ {0,3}##[ \t]+\[Unreleased\]", text, flags=re.MULTILINE), (
         "`## [Unreleased]` is back in CHANGELOG.md. Unreleased content lives in "
         "changelog.d/ now; read it with `towncrier build --draft --version NEXT`."
     )

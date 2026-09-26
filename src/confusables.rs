@@ -362,11 +362,15 @@ pub(crate) fn converge_fold_then_normalize(
 /// does the first character of its compatibility decomposition: U+FF9E starts a unit,
 /// and NFKC turns it into U+3099, which composes with the character before.
 fn cuts_before(ch: char) -> bool {
+    // A mark never starts a span, so it skips the decomposition.
+    if !crate::compose::starts_unit(ch) {
+        return false;
+    }
     let mut first = None;
     unicode_normalization::char::decompose_compatible(ch, |c| {
         first.get_or_insert(c);
     });
-    crate::compose::starts_unit(ch) && first.is_some_and(crate::compose::starts_unit)
+    first.is_some_and(crate::compose::starts_unit)
 }
 
 /// The fixed point of `pass` from `text`, which a capped loop of it did not settle.
@@ -446,8 +450,8 @@ fn from_runs(runs: &[(char, usize)]) -> String {
 }
 
 /// When the pass `prev` → `next` is a fold cycle eating a run of marks, the string the
-/// cycle leaves once the run is down to [`CYCLE_RUN_MIN`]: the passes in between are
-/// skipped.
+/// cycle leaves once the run is shorter than [`CYCLE_RUN_MIN`]: every pass whose input
+/// still has that many copies is skipped, and ordinary passes take it from there.
 ///
 /// The pass must have removed `d` copies of one mark `m` from one run and changed nothing
 /// else, with at least [`CYCLE_RUN_MIN`] copies left. `m` has a nonzero combining class,

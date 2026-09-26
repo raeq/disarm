@@ -386,9 +386,9 @@ fn a_key_is_its_own_key_across_a_stripped_control() {
 // -- 9. normalize_confusables: a fold cycle outlasted the pass cap -------------------
 
 /// Found on 2026-09-26. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each
-/// pass takes one cedilla, and the loop stopped after eight with the rest in place: the
-/// fold was not idempotent, and what it returned was still confusable. The `c` and `i`
-/// + U+0309 cycles are the other two the tables hold.
+/// pass takes one cedilla, and the loop stopped after eight. Nine cedillas tripped its
+/// debug assertion; from ten, the fold was not idempotent and what it returned was still
+/// confusable. The `c` and `i` + U+0309 cycles are the other two the tables hold.
 #[test]
 fn a_fold_cycle_takes_every_mark_however_many() {
     for (base, mark) in [("C", "\u{327}"), ("c", "\u{327}"), ("i", "\u{309}")] {

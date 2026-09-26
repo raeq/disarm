@@ -278,7 +278,7 @@ pub(crate) fn normalize_confusables_cow<'a>(
 ///
 /// Most input settles in two or three passes. A fold cycle takes one pass per mark:
 /// `C` with U+0327 composes to `Ç`, which folds back to `C`, ready for the next
-/// cedilla, so a stack of nine outlasts [`MAX_CONFUSABLE_PASSES`] (found by the nightly
+/// cedilla: nine use up [`MAX_CONFUSABLE_PASSES`] and ten outlast it (found by the nightly
 /// fuzz run). Input still changing at the cap goes to [`converge_slow`], which finishes
 /// it span by span and skips a cycle's repeats: a few passes, not one per mark.
 ///
@@ -1062,8 +1062,9 @@ mod tests {
 
     /// The nightly fuzz run's input, as the `confusables` target decodes it: `Ҫ` folds
     /// to `C`, and then each pass composes one of the eight cedillas into `Ç` and folds
-    /// it back to `C`. The loop gave up after eight passes with one cedilla left, so the
-    /// fold was not idempotent and its output was still confusable.
+    /// it back to `C`. The eighth pass took the last one, so the loop ended with no pass
+    /// left to confirm it and tripped its debug assertion. A ninth cedilla would have
+    /// come back in the output, still confusable.
     #[test]
     fn a_fold_cycle_converges_past_the_pass_cap() {
         let text = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\

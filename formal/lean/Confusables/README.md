@@ -428,9 +428,10 @@ holds for another reason, the loop (`fixedFold_idem`).
   one cedilla, and a stack needs one pass per mark. The nightly fuzz run found U+04AA +
   eight U+0327, which used up the 8-pass cap. A wrong result needs U+04AA + nine or
   `C` + ten, 10 or 11 characters, twice the bound. Every symbol of it is in the
-  alphabet: no bound of 5 could reach it, however long the check ran. Since then the Rust no longer stops at the cap: past it,
-  `converge_slow` folds span by span and skips a cycle's repeats. `fixedLoop` and
-  `maxPasses` model the loop as it was, and still hold on every string of length <= 5.
+  alphabet: no bound of 5 could reach it, however long the check ran. Since then the
+  Rust no longer stops at the cap: past it, `converge_slow` folds span by span and skips
+  a cycle's repeats. `fixedLoop` and `maxPasses` model the loop as it was, and still
+  hold on every string of length <= 5.
 
 ## Re-running
 

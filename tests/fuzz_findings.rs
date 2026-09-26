@@ -7,10 +7,10 @@
 //! `docs/architecture/testing-guarantees.md` under *Fuzzing* for the list.
 
 use disarm::api::{
-    catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables,
-    normalize_confusables, sanitize_filename, search_key, search_key_with, sort_key_with,
-    try_slugify, DigitPolicy, NormalizationForm, OnUnknown, Platform, SlugConfig, TargetScript,
-    Transliterate,
+    catalog_key, catalog_key_with, find_confusables, find_unmapped_confusables, is_confusable,
+    normalize_confusables, normalize_confusables_with, sanitize_filename, search_key,
+    search_key_with, sort_key_with, try_slugify, DigitPolicy, NormalizationForm, OnUnknown,
+    Platform, SlugConfig, TargetScript, Transliterate,
 };
 
 /// `try_slugify` for the configs these tests build, every one with a valid `lang` (or
@@ -381,4 +381,104 @@ fn a_key_is_its_own_key_across_a_stripped_control() {
         search_key("\u{16D67}\0\u{16D67}", None).unwrap(),
         "\u{16D68}"
     );
+}
+
+// -- 9. normalize_confusables: a fold cycle outlasted the pass cap -------------------
+
+/// Found on 2026-09-26. `C` + U+0327 composes to `Ç`, which folds back to `C`, so each
+/// pass takes one cedilla, and the loop stopped after eight with the rest in place: the
+/// fold was not idempotent, and what it returned was still confusable. The `c` and `i`
+/// + U+0309 cycles are the other two the tables hold.
+#[test]
+fn a_fold_cycle_takes_every_mark_however_many() {
+    for (base, mark) in [("C", "\u{327}"), ("c", "\u{327}"), ("i", "\u{309}")] {
+        for n in [9, 10, 64, 10_000] {
+            let text = format!("{base}{}", mark.repeat(n));
+            for policy in [
+                DigitPolicy::Numeric,
+                DigitPolicy::Tr39,
+                DigitPolicy::Preserve,
+            ] {
+                let once = normalize_confusables_with(&text, TargetScript::Latin, policy);
+                assert_eq!(once, base, "{base} + {n} marks ({policy})");
+            }
+            assert!(!is_confusable(
+                &normalize_confusables(&text, TargetScript::Latin),
+                TargetScript::Latin
+            ));
+        }
+    }
+    // The reported input, with a mark of another class after the run.
+    let crash = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\
+                 \u{327}\u{32A}\u{327}\u{327}\u{327}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+                 \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}";
+    let once = normalize_confusables(crash, TargetScript::Latin);
+    assert_eq!(normalize_confusables(&once, TargetScript::Latin), once);
+    assert!(once.contains("C\u{32A}\u{32A}\u{32C}"), "{once:?}");
+}
+
+/// The same cycles in the presets' and the pipeline's own fold loops, which iterate the
+/// fold and NFC (or NFKC, with a case fold in `skeleton_key`) under the same cap: the
+/// nightly run's input made `canonicalize_strict` return `Ç` and then `C`, and
+/// `skeleton_key` return `ç` and then `c`.
+#[test]
+fn every_preset_takes_every_mark_of_a_fold_cycle() {
+    use disarm::api as d;
+    let crash = "A. \u{FFFD}\u{FFFD}\u{3AA}\u{4AA}\u{327}\u{32A}\u{327}\u{327}\u{327}\
+                 \u{327}\u{32A}\u{327}\u{327}\u{327}\u{32C}\u{FFFD}\u{F37C}\u{FFFD}\
+                 \u{FFFD}\u{F37C}\u{FFFD}\u{FFFD}";
+    let mut inputs = vec![crash.to_owned()];
+    for (base, mark) in [("C", "\u{327}"), ("c", "\u{327}"), ("i", "\u{309}")] {
+        for n in [9, 10, 64, 2_000] {
+            inputs.push(format!("{base}{}", mark.repeat(n)));
+        }
+    }
+    let profiles = d::list_profiles();
+    for s in &inputs {
+        let head: String = s.chars().take(12).collect();
+        for policy in [
+            DigitPolicy::Numeric,
+            DigitPolicy::Tr39,
+            DigitPolicy::Preserve,
+        ] {
+            let builders: [(&str, &dyn Fn(&str) -> String); 7] = [
+                ("canonicalize", &|t| {
+                    d::canonicalize_with(t, policy).unwrap().into_owned()
+                }),
+                ("canonicalize_strict", &|t| {
+                    d::canonicalize_strict_with(t, policy).unwrap().into_owned()
+                }),
+                ("strip_obfuscation", &|t| {
+                    d::strip_obfuscation_with(t, policy).unwrap().into_owned()
+                }),
+                ("catalog_key", &|t| {
+                    catalog_key_with(t, None, false, policy)
+                        .unwrap()
+                        .into_owned()
+                }),
+                ("search_key", &|t| {
+                    search_key_with(t, None, policy).unwrap().into_owned()
+                }),
+                ("sort_key", &|t| {
+                    sort_key_with(t, None, policy).unwrap().into_owned()
+                }),
+                ("skeleton_key", &|t| {
+                    d::skeleton_key(t, policy).unwrap().into_owned()
+                }),
+            ];
+            for (name, f) in builders {
+                let once = f(s);
+                assert_eq!(f(&once), once, "{name} ({policy}) on {head:?}...");
+            }
+        }
+        for profile in &profiles {
+            let pipe = d::get_pipeline(profile).unwrap();
+            let once = pipe.process(s).unwrap();
+            assert_eq!(
+                pipe.process(&once).unwrap(),
+                once,
+                "{profile} on {head:?}..."
+            );
+        }
+    }
 }

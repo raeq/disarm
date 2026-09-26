@@ -639,6 +639,7 @@ impl Pipeline {
             let mut conf = String::new();
             let mut nxt = String::new();
             let mut cur_is_normal = false;
+            let mut settled = false;
             for _ in 0..crate::presets::CONFUSABLE_FIXED_POINT_ITERS {
                 confusables::normalize_confusables_into(
                     &cur,
@@ -647,14 +648,25 @@ impl Pipeline {
                     &mut conf,
                 )?;
                 if conf == cur && cur_is_normal {
+                    settled = true;
                     break;
                 }
                 normalize::normalize_into(&conf, form, &mut nxt)?;
                 if nxt == cur {
+                    settled = true;
                     break;
                 }
                 std::mem::swap(&mut cur, &mut nxt);
                 cur_is_normal = true;
+            }
+            if !settled {
+                // A fold cycle takes one mark a pass (`C` + U+0327, `Ç`, `C`, ...).
+                cur = confusables::converge_fold_then_normalize(
+                    cur,
+                    "latin",
+                    self.digit_policy,
+                    form,
+                )?;
             }
             if cur == input {
                 Ok(false)

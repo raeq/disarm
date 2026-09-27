@@ -90,6 +90,11 @@ val nativePrebuilt = providers.gradleProperty("disarm.nativePrebuilt").isPresent
 tasks.named<Jar>("jar") {
     if (!nativePrebuilt) dependsOn(stageNativeLib)
     from(nativeLibDir) // build/nativeLib/dev/disarm/native/... -> jar's dev/disarm/native/...
+    // The native library carries confusable data adapted under CC-BY-4.0, so the jar
+    // carries the credit (#738): the repository's LICENSE and NOTICE, under META-INF.
+    from(files("../../../LICENSE", "../../../NOTICE")) {
+        into("META-INF")
+    }
 }
 
 tasks.test {

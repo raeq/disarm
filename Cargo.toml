@@ -20,7 +20,7 @@ keywords = ["unicode-security", "homoglyph", "confusable", "transliteration", "n
 categories = ["text-processing", "internationalization", "encoding"]
 # Ship the Rust crate (#42): sources + build inputs (src/tables/data/*.tsv), the
 # integration tests and Rust benches (so the published crate is verifiable, as is
-# the cargo default), examples, manifest, license, README, and the Rust-API doc
+# the cargo default), examples, manifest, license and NOTICE, README, and the Rust-API doc
 # the README links to. Anchored (leading `/`) so the globs match only the package
 # root. Excludes the Python package, CI config, the docs site, and the Python
 # benchmark/eval tooling (the `*.rs` globs skip the `.py` files under benchmarks/).
@@ -35,6 +35,7 @@ include = [
     "/Cargo.toml",
     "/README.md",
     "/LICENSE",
+    "/NOTICE",
     "/docs/RUST_API.md",
 ]
 

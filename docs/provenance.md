@@ -207,6 +207,16 @@ snapshot: #336 added high-confidence cross-script pairs that are correct but not
 fold these upstream or add more. When any bundled version moves, the change is recorded here and
 in the changelog.
 
+**Adapted third-party data.** Some of those additions are measured pairs adapted from
+[confusable-vision](https://github.com/paultendo/confusable-vision), © 2026 Paul Wood FRSA
+(@paultendo), whose data is licensed
+[CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/). disarm selects pairs from it by the
+admission rules stated in `data/confusables_supplement.tsv` (the Greek/Cyrillic pairs at
+`danger >= 0.97`, from `confusable-weights-v2.json` v2026-03-02) and `data/confusables_vision.tsv`
+(the multi-font SSIM rule, from the 2026-02-27 discovery sets), and folds them into
+`confusables_to_latin.tsv` and `confusables_to_cyrillic.tsv`. Both generated tables carry the credit
+in their header, and every package ships it in the `NOTICE` file.
+
 ## Methodology
 
 Provenance was determined by comparing disarm's actual per-character mappings

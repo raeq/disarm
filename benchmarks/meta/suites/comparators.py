@@ -202,7 +202,7 @@ class ConfusableVision(SuiteBase):
             url="https://raw.githubusercontent.com/paultendo/confusable-vision/main"
             "/data/output/confusable-weights-v2.json",
             filename="confusable-vision.json",
-            licence="CC-BY-4.0 (datasets); repository licence unspecified",
+            licence="CC-BY-4.0 (datasets), MIT (code)",
             note="the exact file data/confusables_supplement.tsv cites as its "
             "provenance — 4,174 pairs, v2026-03-02",
         ),

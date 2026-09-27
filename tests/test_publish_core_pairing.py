@@ -195,9 +195,17 @@ def _jobs(name: str) -> dict:
 
 
 def _root_version() -> str:
-    import tomllib
+    """The `[package]` version, read without a TOML parser.
 
-    return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+    `tomllib` is not in Python 3.10, which disarm supports, and `tomli` is not a
+    dependency.
+    """
+    text = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    assert "[package]" in text, "Cargo.toml has no [package] section"
+    package = text.split("[package]", 1)[1].split("\n[", 1)[0]
+    match = re.search(r'^version\s*=\s*"([^"]+)"', package, re.M)
+    assert match is not None, "Cargo.toml [package] has no version"
+    return match.group(1)
 
 
 def _compiles(step: dict) -> bool:

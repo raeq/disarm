@@ -39,7 +39,8 @@
     "index.d.ts",
     "binding.js",
     "binding.d.ts",
-    "disarm.*.node"
+    "disarm.*.node",
+    "NOTICE"
   ],
   "scripts": {
     "build": "napi build --platform --release --js binding.js --dts binding.d.ts && tsc",

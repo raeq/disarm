@@ -32,7 +32,8 @@ Gem::Specification.new do |spec|
     "lib/**/*.rb",
     "ext/**/*.{rs,toml,rb}",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ]
   spec.require_paths = ["lib"]
   spec.extensions = ["ext/disarm/extconf.rb"]

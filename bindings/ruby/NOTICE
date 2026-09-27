@@ -1,0 +1,26 @@
+disarm
+Copyright (c) 2026 Richard Quinn
+Licensed under the MIT License; see LICENSE.
+
+disarm includes data adapted from the following work, which remains under its
+own licence.
+
+confusable-vision
+  (c) 2026 Paul Wood FRSA (@paultendo)
+  https://github.com/paultendo/confusable-vision
+  Data licensed under the Creative Commons Attribution 4.0 International
+  License (CC-BY-4.0): https://creativecommons.org/licenses/by/4.0/
+  The data is provided as-is; see the licence for its disclaimer of warranties.
+
+  Used:
+    data/output/confusable-weights-v2.json (v2026-03-02)
+    data/output/candidate-discoveries.json (2026-02-27 revision)
+    data/output/m2b-verification-report.json (2026-02-27 revision)
+
+  Changed: disarm selects confusable pairs from those files by the admission
+  rules stated in data/confusables_supplement.tsv and
+  data/confusables_vision.tsv, and folds the selected pairs into its confusable
+  tables (src/tables/data/confusables_to_latin.tsv and
+  src/tables/data/confusables_to_cyrillic.tsv). Those tables are compiled into
+  every disarm package. The measurements themselves are not redistributed.
+  The author does not endorse disarm by this credit.

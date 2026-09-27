@@ -174,7 +174,7 @@ def test_the_override_set_is_generated() -> None:
     lines = tsv.read_text(encoding="utf-8").splitlines()
     assert lines[0].startswith("#") and "gen_confusables.py" in lines[0]
 
-    rows = [line for line in lines[1:] if line.strip()]
+    rows = [line for line in lines if line.strip() and not line.startswith("#")]
     assert rows, "override set is empty"
 
     for row in rows:
@@ -205,11 +205,13 @@ def test_every_divergence_is_in_the_override_set() -> None:
 
     overrides = {
         int(line.split("\t", 1)[0], 16)
-        for line in tsv.read_text(encoding="utf-8").splitlines()[1:]
-        if line.strip()
+        for line in tsv.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
     }
-    for line in latin.read_text(encoding="utf-8").splitlines()[1:]:
-        if not line.strip():
+    # Every `#` line is a comment, as build.rs reads it: the header is more than one line
+    # when the table carries adapted data (#738).
+    for line in latin.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
             continue
         hex_cp, value = line.split("\t", 1)
         if not (len(value) == 1 and value.isascii() and value.isdigit()):

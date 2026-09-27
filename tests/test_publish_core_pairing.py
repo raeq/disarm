@@ -200,8 +200,10 @@ def _root_version() -> str:
     `tomllib` is not in Python 3.10, which disarm supports, and `tomli` is not a
     dependency.
     """
-    package = (ROOT / "Cargo.toml").read_text(encoding="utf-8").split("[package]", 1)[1]
-    match = re.search(r'^version = "([^"]+)"', package.split("\n[", 1)[0], re.M)
+    text = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    assert "[package]" in text, "Cargo.toml has no [package] section"
+    package = text.split("[package]", 1)[1].split("\n[", 1)[0]
+    match = re.search(r'^version\s*=\s*"([^"]+)"', package, re.M)
     assert match is not None, "Cargo.toml [package] has no version"
     return match.group(1)
 

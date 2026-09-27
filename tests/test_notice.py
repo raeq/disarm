@@ -43,6 +43,7 @@ def _targets_fed_by(source: Path) -> set[str]:
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         cells = line.split("\t")
+        assert len(cells) >= 3, f"{source.name}: expected source, latin, cyrillic columns: {line!r}"
         for name, cell in (("latin", cells[1]), ("cyrillic", cells[2])):
             if cell.strip() not in ("", "-"):
                 targets.add(name)
@@ -51,7 +52,9 @@ def _targets_fed_by(source: Path) -> set[str]:
 
 def _header(table: Path) -> str:
     lines = table.read_text(encoding="utf-8").splitlines()
-    return "\n".join(line for line in lines[:20] if line.startswith("#"))
+    header = "\n".join(line for line in lines[:20] if line.lstrip().startswith("#"))
+    assert header, f"{table.name} has no comment header"
+    return header
 
 
 def test_notice_credits_the_source_and_the_licence() -> None:
@@ -121,7 +124,7 @@ def test_the_npm_package_ships_notice() -> None:
 def test_the_gem_ships_notice() -> None:
     gemspec = (ROOT / "bindings" / "ruby" / "disarm.gemspec").read_text(encoding="utf-8")
     files = re.search(r"spec\.files\s*=\s*Dir\[(.*?)\]", gemspec, re.S)
-    assert files is not None
+    assert files is not None, "disarm.gemspec has no spec.files = Dir[...]"
     assert '"NOTICE"' in files.group(1)
 
 
@@ -131,5 +134,5 @@ def test_the_jar_ships_notice() -> None:
         encoding="utf-8"
     )
     jar = re.search(r'tasks\.named<Jar>\("jar"\)\s*\{(.*?)\n\}', gradle, re.S)
-    assert jar is not None
+    assert jar is not None, "disarm-java/build.gradle.kts has no jar task block"
     assert '"../../../NOTICE"' in jar.group(1) and 'into("META-INF")' in jar.group(1)

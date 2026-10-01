@@ -136,3 +136,79 @@ def test_the_jar_ships_notice() -> None:
     jar = re.search(r'tasks\.named<Jar>\("jar"\)\s*\{(.*?)\n\}', gradle, re.S)
     assert jar is not None, "disarm-java/build.gradle.kts has no jar task block"
     assert '"../../../NOTICE"' in jar.group(1) and 'into("META-INF")' in jar.group(1)
+
+
+# ---------------------------------------------------------------------------
+# Unicode data: the UCD, UTS #39 and CLDR, under the Unicode License v3
+# ---------------------------------------------------------------------------
+#
+# Every table under src/tables/ is generated from Unicode data, and the Unicode License v3
+# grants its rights on the condition that its copyright and permission notice travel with
+# every copy. NOTICE carries the text; these tests keep it complete and current.
+
+#: The clauses of the Unicode License v3 that carry its conditions, whitespace-normalised.
+UNICODE_LICENCE_CLAUSES = (
+    "UNICODE LICENSE V3",
+    "COPYRIGHT AND PERMISSION NOTICE",
+    "provided that either (a) this copyright and permission notice appear with all copies "
+    "of the Data Files or Software, or (b) this copyright and permission notice appear in "
+    "associated Documentation.",
+    'THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND',
+    "IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE BE LIABLE",
+    "the name of a copyright holder shall not be used in advertising",
+)
+
+_UNICODE_HOLDER = re.compile(
+    r"(?:©|\(c\)|Copyright)[^\n]*?(?:(\d{4})-)?(\d{4}) Unicode(?:®)?, Inc\."
+)
+
+
+def _normalised(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _vendored_unicode_files() -> dict[Path, int]:
+    """Files under data/ whose header names Unicode, Inc. as copyright holder, with the year."""
+    found: dict[Path, int] = {}
+    for path in sorted((ROOT / "data").rglob("*")):
+        if not path.is_file() or path.suffix not in (".txt", ".xml"):
+            continue
+        with path.open(encoding="utf-8", errors="replace") as f:
+            head = f.read(4096)
+        match = _UNICODE_HOLDER.search(head)
+        if match:
+            found[path] = int(match.group(2))
+    return found
+
+
+def test_notice_carries_the_unicode_licence() -> None:
+    text = _normalised(NOTICE.read_text(encoding="utf-8"))
+    for clause in UNICODE_LICENCE_CLAUSES:
+        assert _normalised(clause) in text, f"NOTICE lacks the Unicode licence clause {clause!r}"
+
+
+def test_the_unicode_scan_finds_the_vendored_files() -> None:
+    """Guards the scan below: it must find the files it is meant to check."""
+    found = {path.relative_to(ROOT).as_posix() for path in _vendored_unicode_files()}
+    for expected in ("data/Scripts.txt", "data/confusables.txt", "data/cldr/en.xml"):
+        assert expected in found, f"{expected} was not recognised as Unicode data: {sorted(found)}"
+
+
+def test_notice_names_every_vendored_unicode_file() -> None:
+    text = NOTICE.read_text(encoding="utf-8")
+    for path in _vendored_unicode_files():
+        name = path.relative_to(ROOT).as_posix()
+        assert name in text, f"NOTICE does not name {name}, which is Unicode data"
+
+
+def test_the_unicode_copyright_covers_the_newest_vendored_file() -> None:
+    """Vendoring a newer Unicode release moves its copyright year; NOTICE must follow."""
+    match = re.search(
+        r"Copyright © (\d{4})-(\d{4}) Unicode, Inc\.", NOTICE.read_text(encoding="utf-8")
+    )
+    assert match is not None, "NOTICE has no `Copyright © YYYY-YYYY Unicode, Inc.` line"
+    newest = max(_vendored_unicode_files().values())
+    assert int(match.group(2)) >= newest, (
+        f"NOTICE's Unicode copyright ends in {match.group(2)}, but data/ carries Unicode data "
+        f"from {newest}"
+    )

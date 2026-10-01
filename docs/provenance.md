@@ -33,6 +33,12 @@ against for byte-stable behavior.
 | Simple lowercasing — the `to_lowercase` side of `is_case_fold_stable` | UCD, via the **compiling toolchain's** standard library (not a bundled table, and not a dependency) | whatever the build's rustc carries — ≥ Unicode 16.0 in practice, since the crate's MSRV is 1.88 |
 | Transliteration / romanization | per-block standards (the rest of this document) | mixed; conventional where no single published standard exists |
 
+**Licensing.** The Unicode data behind those tables (the UCD, UTS&nbsp;#39 `confusables.txt`
+and the CLDR emoji annotations) is © Unicode, Inc., under the
+[Unicode License v3](https://www.unicode.org/license.txt). That licence asks for its notice
+to travel with every copy, so the full text is in the `NOTICE` file each disarm package
+ships, beside the credit for the adapted confusable-vision data described below.
+
 Three of those rows are crate dependencies rather than bundled tables, and all three are
 **floating** requirements (`unicode-normalization = "0.1"`, `unicode-segmentation = "1"`,
 `idna = "1"`). A `cargo update` can therefore move the Unicode data behind a security

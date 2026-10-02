@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 
-class Family(str, enum.Enum):
+class Family(enum.StrEnum):
     """Which kind of external artifact a suite is anchored to."""
 
     ACADEMIC = "academic"  # a corpus released with a paper
@@ -33,7 +33,7 @@ class Family(str, enum.Enum):
     INTROSPECTIVE = "introspective"  # sweeps disarm's own tables — NOT external
 
 
-class Availability(str, enum.Enum):
+class Availability(enum.StrEnum):
     """How the suite's external artifact reaches the machine."""
 
     VENDORED = "vendored"  # already in the repo (data/, tests/fixtures/)
@@ -43,7 +43,7 @@ class Availability(str, enum.Enum):
     MANUAL = "manual"  # operator must place the file
 
 
-class Status(str, enum.Enum):
+class Status(enum.StrEnum):
     OK = "ok"
     SKIPPED = "skipped"  # artifact absent — never a silent pass
     ERROR = "error"

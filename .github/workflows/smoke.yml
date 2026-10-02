@@ -103,10 +103,10 @@ jobs:
         # The declared floor, `requires-python` in pyproject.toml. The test suite
         # runs on 3.12 in ci.yml; this is the one place CI installs and exercises
         # the shipped artifact on the oldest Python it claims, which is where an
-        # abi3-py310 or syntax regression would show. `tests/test_toolchain_pins.py`
-        # holds it to `requires-python`. 3.10 is supported upstream until
-        # 2026-10-01 (PEP 619); raise both together when it is not.
-        python: ["3.10"]
+        # abi3-py311 or syntax regression would show. `tests/test_toolchain_pins.py`
+        # holds it to `requires-python`. 3.11 is supported upstream until
+        # 2027-10-01 (PEP 664); raise both together when it is not.
+        python: ["3.11"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

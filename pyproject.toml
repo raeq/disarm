@@ -7,7 +7,7 @@ name = "disarm"
 version = "0.17.2"
 description = "Unicode canonicalization and TR39 visual confusable analysis for Python: building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based phonetic transliteration — powered by Rust"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
 authors = [
@@ -34,7 +34,6 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -112,7 +111,7 @@ Changelog = "https://github.com/raeq/disarm/blob/main/CHANGELOG.md"
 python-source = "python"
 module-name = "disarm._core"
 # The crate default is now the pure Rust core (no pyo3); the Python extension
-# must opt into the `extension-module` feature (which pulls in pyo3 + abi3-py310).
+# must opt into the `extension-module` feature (which pulls in pyo3 + abi3-py311).
 features = ["extension-module"]
 # data/*.bin is not shipped in the wheel
 # (see docs/contributing/packaging.md#dictionary-data-files).
@@ -152,7 +151,7 @@ ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 # The binding-parity seeder + live checker are compact, standalone tooling scripts
 # kept as-authored; exempt them from lint/format rather than expand their dense style.
 extend-exclude = ["scripts/parity.py", "scripts/parity_check.py", "scripts/parity_runtime.py"]
@@ -167,7 +166,7 @@ ignore = [
 known-first-party = ["disarm"]
 
 [tool.pyright]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "strict"
 include = ["python"]

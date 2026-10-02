@@ -207,7 +207,7 @@ pub fn _transliterate_entry<'py>(
 /// #277 lever 4: takes the Python string object itself (not an extracted
 /// `&str`) so the no-op case can return the *original object* with an incref
 /// instead of allocating a copy. `to_str()` is zero-copy for compact ASCII
-/// strings on the abi3-py310 floor (`PyUnicode_AsUTF8AndSize`, cached on the
+/// strings on the abi3-py311 floor (`PyUnicode_AsUTF8AndSize`, cached on the
 /// object by CPython). Wraps the Layer-1 engine `crate::transliterate::*` (#38).
 #[pyfunction]
 #[pyo3(signature = (text, lang=None, errors="replace", replace_with="[?]", strict_iso9=false, gost7034=false, tones=false))]

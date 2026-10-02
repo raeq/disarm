@@ -13,7 +13,6 @@ found, and the near-misses that must not be.
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import re
 from pathlib import Path
@@ -236,18 +235,8 @@ class TestBannerProvenance:
     def test_a_missing_project_version_is_none_not_a_crash(self) -> None:
         assert banner._project_version('[tool.x]\nversion = "9.9.9"\n') is None
 
-    def test_it_does_not_need_tomllib(self) -> None:
-        """`tomllib` is 3.11+; `requires-python` is >=3.10, so a contributor on
-        3.10 would take an ImportError before the docs build even started."""
-        tree = ast.parse((REPO / "scripts" / "mkdocs_build_banner.py").read_text(encoding="utf-8"))
-        imported: set[str] = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imported |= {a.name.split(".")[0] for a in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                imported.add(node.module.split(".")[0])
-        assert "tomllib" not in imported
-        assert "tomli" not in imported
+    def test_a_file_that_does_not_parse_is_none_not_a_crash(self) -> None:
+        assert banner._project_version("[project\nversion = ") is None
 
     def test_an_environment_override_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """CI asks PyPI, which is the authority; pyproject is only the fallback."""

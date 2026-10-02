@@ -23,15 +23,12 @@ locally otherwise, so ``mkdocs serve`` shows the same footer a deploy does.
 from __future__ import annotations
 
 import os
-import re
 import subprocess  # noqa: S404 — reading our own git metadata, no user input
+import tomllib
 from pathlib import Path
 from typing import Any
 
 _ROOT = Path(__file__).resolve().parent.parent
-
-#: ``version = "0.14.1"`` inside a TOML table.
-_TOML_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"')
 
 #: Every environment variable ``_build_commit`` consults, in order. Named rather
 #: than inlined so a test isolating the function can clear exactly this set:
@@ -97,25 +94,17 @@ def _released_version() -> str | None:
 
 
 def _project_version(pyproject: str) -> str | None:
-    """``project.version`` from ``pyproject.toml``, scanned rather than parsed.
+    """``project.version`` from ``pyproject.toml``, or ``None`` when it has none.
 
-    ``tomllib`` is Python 3.11+ and this project's floor is 3.10
-    (``requires-python``), so a contributor on 3.10 running ``mkdocs serve``
-    would take an ``ImportError`` before the build started. One key from one
-    known table does not need a parser; walking to the ``[project]`` header is
-    what keeps a ``version`` in some other table from being picked up.
+    Only the ``[project]`` table counts: a ``version`` in some other table is not the
+    package version. An unparseable file is ``None`` too, so a docs build falls back
+    rather than stopping.
     """
-    in_project = False
-    for line in pyproject.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("["):
-            in_project = stripped == "[project]"
-            continue
-        if in_project:
-            match = _TOML_VERSION.match(stripped)
-            if match:
-                return match.group(1)
-    return None
+    try:
+        version = tomllib.loads(pyproject).get("project", {}).get("version")
+    except tomllib.TOMLDecodeError:
+        return None
+    return version if isinstance(version, str) else None
 
 
 def on_config(config: Any) -> Any:  # noqa: ANN401 — mkdocs.config.defaults.MkDocsConfig

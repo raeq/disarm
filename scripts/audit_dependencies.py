@@ -38,12 +38,11 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-
-import tomllib
 
 REPO = Path(__file__).resolve().parent.parent
 USER_AGENT = "disarm-dependency-audit (https://github.com/raeq/disarm)"

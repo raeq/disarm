@@ -51,7 +51,7 @@ def _option(argv: list[str], flag: str) -> str | None:
 
 
 def test_the_marker_is_registered(pytestconfig: pytest.Config) -> None:
-    """Read from pytest's parsed config, not the TOML: `tomllib` is 3.11+, the floor 3.10."""
+    """Read from pytest's parsed config, which is what decides whether the marker exists."""
     markers = pytestconfig.getini("markers")
     assert any(m.split(":", 1)[0].strip() == "serial" for m in markers), markers
 

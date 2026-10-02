@@ -34,7 +34,7 @@ issue.
 ## Prerequisites
 
 - Rust stable toolchain (>= 1.88, the MSRV in `Cargo.toml`): `rustup update stable`
-- Python 3.10+
+- Python 3.11+
 - `maturin` for building the Python extension: `pip install maturin[patchelf]`
 
 ## Development setup

@@ -10,15 +10,14 @@ and Rust 1.85 while this crate's MSRV was 1.81 (the closed attempt, #509). Since
 MSRV is 1.88, so the hold's reason is gone, and an `ignore` left behind would hide every
 later release too.
 
-The manifests are read with regular expressions rather than `tomllib`, which needs
-Python 3.11; the package still supports 3.10. `Cargo.lock` is not committed (this is a
-library crate), so the requirement in `Cargo.toml` is what CI resolves from; the lockfile
-check runs wherever a build has produced one.
+`Cargo.lock` is not committed (this is a library crate), so the requirement in
+`Cargo.toml` is what CI resolves from; the lockfile check runs wherever a build has
+produced one.
 """
 
 from __future__ import annotations
 
-import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -38,30 +37,35 @@ def _version(text: str) -> tuple[int, ...]:
     return tuple(int(part) for part in text.split("."))
 
 
+def _manifest() -> dict:
+    return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+
+
 def _declared(name: str) -> str:
-    manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
-    match = re.search(rf'^{name}\s*=\s*"([^"]+)"', manifest, re.MULTILINE)
-    assert match, f"Cargo.toml declares no {name} requirement"
-    return match.group(1)
+    manifest = _manifest()
+    for table in ("dependencies", "build-dependencies", "dev-dependencies"):
+        spec = manifest.get(table, {}).get(name)
+        if spec is not None:
+            return spec if isinstance(spec, str) else spec["version"]
+    raise AssertionError(f"Cargo.toml declares no {name} requirement")
 
 
 def _locked() -> dict[str, list[str]]:
     lock_path = ROOT / "Cargo.lock"
     if not lock_path.exists():
         pytest.skip("no Cargo.lock: it is not committed, and nothing has been built here")
-    lock = lock_path.read_text(encoding="utf-8")
+    lock = tomllib.loads(lock_path.read_text(encoding="utf-8"))
     found: dict[str, list[str]] = {}
-    for name, version in re.findall(r'^name = "([^"]+)"\nversion = "([^"]+)"', lock, re.MULTILINE):
-        if name in PHF_FAMILY:
-            found.setdefault(name, []).append(version)
+    for package in lock.get("package", []):
+        if package["name"] in PHF_FAMILY:
+            found.setdefault(package["name"], []).append(package["version"])
     return found
 
 
 def _rust_version() -> tuple[int, ...]:
-    manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
-    match = re.search(r'^rust-version\s*=\s*"([^"]+)"', manifest, re.MULTILINE)
-    assert match, "Cargo.toml declares no rust-version"
-    return _version(match.group(1))
+    rust_version = _manifest()["package"].get("rust-version")
+    assert rust_version, "Cargo.toml declares no rust-version"
+    return _version(rust_version)
 
 
 def test_phf_and_phf_codegen_declare_the_same_requirement() -> None:

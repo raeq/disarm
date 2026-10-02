@@ -9,7 +9,7 @@ Rust toolchain to install. The package and the import share one name, `disarm`.
 pip install disarm
 ```
 
-Requires Python 3.10+. Wheels are published for Linux, macOS, and Windows; on
+Requires Python 3.11+. Wheels are published for Linux, macOS, and Windows; on
 other platforms pip builds from source (which needs a Rust toolchain).
 
 ```python

@@ -333,14 +333,16 @@ function is unchanged on every scalar.
 
 ## CI matrix
 
-Every push and pull request runs the full test suite across:
+Every pull request runs `ci.yml`, on Ubuntu:
 
 | Axis | Values |
 |------|--------|
-| **OS** | Ubuntu, macOS, Windows |
-| **Python** | 3.10, 3.11, 3.12, 3.13, 3.14 |
+| **Python** | 3.12 for the full test suite. `smoke.yml` installs the built wheel and sdist on 3.11, the declared floor (`requires-python`), and exercises them there |
 | **Rust checks** | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` |
 | **Python checks** | pytest, ruff lint, mypy strict mode, doctest |
+
+The test suite does not run on macOS or Windows. `publish.yml` builds the wheels for
+Linux, macOS and Windows on those platforms at release.
 
 ---
 

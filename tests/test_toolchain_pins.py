@@ -52,9 +52,8 @@ LINT_STEP = "Install Python lint tools"
 PIN = re.compile(r"ruff==(\d+\.\d+\.\d+)")
 
 runs_the_lint_step = pytest.mark.skipif(
-    sys.platform == "win32" or sys.version_info < (3, 11),
-    reason="the step is a bash script that reads pyproject.toml with tomllib (3.11+); "
-    "CI runs it on ubuntu with Python 3.12",
+    sys.platform == "win32",
+    reason="the step is a bash script; CI runs it on ubuntu",
 )
 
 
@@ -433,11 +432,12 @@ def test_java_ci_floor_is_the_declared_floor() -> None:
 #:
 #: Verified 2026-09-23 against nodejs/Release `schedule.json`, ruby-lang.org
 #: `_data/branches.yml`, python/peps `release_management/python-releases.toml` and
-#: Oracle's Java SE Support Roadmap. Python 3.10 is next: end of life 2026-10-01.
+#: Oracle's Java SE Support Roadmap; the Python row again on 2026-10-02, when 3.10 retired.
+#: Python 3.11 is next: end of life 2027-10-01.
 KNOWN_EOL: dict[str, dict[str, str]] = {
     "node": {"14": "2023-04-30", "16": "2023-09-11", "18": "2025-04-30", "20": "2026-04-30"},
     "ruby": {"3.0": "2024-04-23", "3.1": "2025-03-26", "3.2": "2026-04-01"},
-    "python": {"3.8": "2024-10-07", "3.9": "2025-10-31"},
+    "python": {"3.8": "2024-10-07", "3.9": "2025-10-31", "3.10": "2026-10-01"},
     # Oracle Premier Support; 11 and 17 remain only under paid Extended Support.
     "java": {"11": "2023-09", "17": "2026-09"},
 }

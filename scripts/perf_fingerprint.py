@@ -28,7 +28,7 @@ import platform
 import subprocess
 import sys
 import sysconfig
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SCHEMA = "disarm-perf-fingerprint/v1"
@@ -208,7 +208,7 @@ def build_record() -> dict[str, object]:
     rust = rust_half()
     return {
         "schema": SCHEMA,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "corpus_digest": rust.get("corpus_digest"),
         "disarm": disarm_info(rust),
         "build": {

@@ -73,7 +73,7 @@ log = ["dep:log"]
 log-content = ["log"]
 
 [dependencies]
-pyo3 = { version = "0.29.0", features = ["abi3-py310"], optional = true }
+pyo3 = { version = "0.29.0", features = ["abi3-py311"], optional = true }
 # #208: binding-neutral logging facade (optional; behind the `log`/`log-content`
 # features). Core depends only on this — no pyo3/napi/wasm in the logging path.
 log = { version = "0.4", optional = true }

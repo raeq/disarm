@@ -1,0 +1,12 @@
+- **An unassigned code point in a Brahmic block no longer takes the vowel sign after
+  it.** `transliterate` reads a Brahmic character's role from its offset in the block,
+  and an unassigned code point has one too, so U+0BDF counted as a Tamil consonant and
+  U+0BC4 as its vowel sign. The sign was erased instead of being replaced, dropped or
+  kept as `errors` says, one per call: `search_key("\u0bdf\u0bc4\u0bc4")` gave
+  `"\u0bdf\u0bc4"`, and the key of that dropped the other, so neither `search_key`
+  nor `catalog_key` was idempotent on it. Under `errors="ignore"` the sign also took the
+  `a` of the text before it: `transliterate("ba\u09a9\u093f", errors="ignore")` gave
+  `"bi"` and now gives `"bai"`. Only a consonant whose romanization ends in its inherent
+  `a` opens the context now. Text of assigned characters romanizes as before, except
+  that under `errors="ignore"` the text before U+0C5C or U+0CDC (new in Unicode 17, with
+  no romanization yet) keeps its `a`. Found by the `presets` fuzz target.

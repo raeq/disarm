@@ -576,3 +576,60 @@ fn a_word_character_separator_leaves_no_joiner_at_the_edge() {
         "ab"
     );
 }
+
+// -- 12. transliterate: an unassigned code point opened a consonant's context --------
+
+/// Found on 2026-10-02 by the `presets` target, in a pull request's smoke run. The
+/// Brahmic loop reads a character's role from its offset in the block, and an unassigned
+/// code point has an offset too: U+0BDF is where Devanagari keeps a nukta consonant, and
+/// U+0BC4 where it keeps a vowel sign. A "consonant" with no romanization still opened the
+/// context, so the "vowel sign" after it was erased instead of reaching the error mode,
+/// one per call: `search_key` of U+0BDF U+0BC4 U+0BC4 kept one U+0BC4, and the key of
+/// that dropped it. Under `Ignore` the consonant writes nothing, and the sign stripped
+/// the `a` of the text before it: `ba` + U+09A9 + U+093F gave `bi`.
+#[test]
+fn an_unassigned_consonant_slot_takes_no_vowel_sign() {
+    let found = "}\u{BB5}\u{FFFD}\u{BDF}\u{BC4}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\u{FFFD}\
+                 \u{B81}\u{FFFD}\u{BB5}\u{FFFD}\u{BDF}\u{BC4}\u{FFFD}\u{FFFD}\u{FFFD}\
+                 \u{FFFD}\u{FFFD}\u{B81}\u{BB5}\u{FFFD}\u{BDF}\u{BC4}\u{BC4}\u{FFFD}\
+                 \u{FFFD}\u{FFFD}\u{BAE}";
+    for policy in [
+        DigitPolicy::Numeric,
+        DigitPolicy::Tr39,
+        DigitPolicy::Preserve,
+    ] {
+        for s in [found, "\u{BDF}\u{BC4}\u{BC4}", "\u{9A9}\u{93F}\u{93F}"] {
+            let once = search_key_with(s, None, policy).unwrap().into_owned();
+            assert_eq!(
+                search_key_with(&once, None, policy).unwrap(),
+                once,
+                "{policy} on {s:?}"
+            );
+            let once = catalog_key_with(s, None, false, policy)
+                .unwrap()
+                .into_owned();
+            assert_eq!(
+                catalog_key_with(&once, None, false, policy).unwrap(),
+                once,
+                "{policy} on {s:?}"
+            );
+        }
+    }
+    // Neither code point has a romanization, so `Preserve` keeps both.
+    assert_eq!(
+        search_key("\u{BDF}\u{BC4}\u{BC4}", None).unwrap(),
+        "\u{BDF}\u{BC4}\u{BC4}"
+    );
+    let run = |on_unknown: OnUnknown, s: &str| {
+        Transliterate::new()
+            .on_unknown(on_unknown)
+            .try_run(s)
+            .unwrap()
+            .into_owned()
+    };
+    // The text before the unassigned code point keeps its `a`.
+    assert_eq!(run(OnUnknown::Ignore, "ba\u{9A9}\u{93F}"), "bai");
+    assert_eq!(run(OnUnknown::Replace("?".into()), "\u{BDF}\u{BC4}"), "??");
+    // A consonant that is assigned still takes its sign: KA + I is `ki`.
+    assert_eq!(run(OnUnknown::Ignore, "ba\u{B95}\u{BBF}"), "baki");
+}

@@ -847,7 +847,15 @@ where
                     }
                 }
                 IndicRole::Consonant => {
-                    last_was_indic_consonant = true;
+                    // The role is read from the code point's offset in its block, which
+                    // an unassigned code point has too: U+0BDF sits where Devanagari keeps
+                    // a nukta consonant. Only a consonant that wrote its inherent "a" opens
+                    // the context. Otherwise the sign that follows strips an "a" the text
+                    // before it wrote (`ba` + U+09A9 + U+093F gave `bi` under `Ignore`),
+                    // and an unmapped sign is erased instead of reaching the error mode, one
+                    // per call: `search_key` of U+0BDF U+0BC4 U+0BC4 kept one U+0BC4 and
+                    // its next call dropped it.
+                    last_was_indic_consonant = mapped.as_deref().is_some_and(|s| s.ends_with('a'));
                 }
                 _ => {
                     last_was_indic_consonant = false;

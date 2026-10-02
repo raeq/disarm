@@ -31,6 +31,7 @@ looks like a complete gate and reads like one.
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -195,17 +196,11 @@ def _jobs(name: str) -> dict:
 
 
 def _root_version() -> str:
-    """The `[package]` version, read without a TOML parser.
-
-    `tomllib` is not in Python 3.10, which disarm supports, and `tomli` is not a
-    dependency.
-    """
-    text = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
-    assert "[package]" in text, "Cargo.toml has no [package] section"
-    package = text.split("[package]", 1)[1].split("\n[", 1)[0]
-    match = re.search(r'^version\s*=\s*"([^"]+)"', package, re.M)
-    assert match is not None, "Cargo.toml [package] has no version"
-    return match.group(1)
+    """The `[package]` version: the core a release tag publishes."""
+    manifest = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    version = manifest.get("package", {}).get("version")
+    assert version, "Cargo.toml [package] has no version"
+    return version
 
 
 def _compiles(step: dict) -> bool:

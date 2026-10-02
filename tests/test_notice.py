@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -94,25 +95,16 @@ def test_every_table_fed_by_an_adapted_source_carries_the_credit() -> None:
             assert source in header, f"confusables_to_{target}.tsv header does not name {source}"
 
 
-def _toml_array(path: Path, key: str) -> list[str]:
-    """The string items of a top-level TOML array, read without a TOML parser.
-
-    `tomllib` is not in Python 3.10, which disarm supports, and `tomli` is not a
-    dependency, so the two arrays are read directly.
-    """
-    match = re.search(
-        rf"^{re.escape(key)}\s*=\s*\[(.*?)\]", path.read_text(encoding="utf-8"), re.M | re.S
-    )
-    assert match is not None, f"{path.name} has no `{key} = [...]`"
-    return re.findall(r'"([^"]*)"', match.group(1))
+def _toml(path: Path) -> dict:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def test_the_crate_ships_notice() -> None:
-    assert "/NOTICE" in _toml_array(ROOT / "Cargo.toml", "include")
+    assert "/NOTICE" in _toml(ROOT / "Cargo.toml")["package"]["include"]
 
 
 def test_the_wheel_and_sdist_ship_notice() -> None:
-    assert "NOTICE" in _toml_array(ROOT / "pyproject.toml", "license-files")
+    assert "NOTICE" in _toml(ROOT / "pyproject.toml")["project"]["license-files"]
 
 
 def test_the_npm_package_ships_notice() -> None:

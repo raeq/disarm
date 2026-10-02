@@ -70,13 +70,13 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b  # v1.51.0
         with:
           target: ${{ matrix.target }}
-          # Pin the interpreter to 3.10 so maturin builds a single abi3 wheel
-          # (cp310-abi3). Without this, maturin enumerates every interpreter in
+          # Pin the interpreter to 3.11 so maturin builds a single abi3 wheel
+          # (cp311-abi3). Without this, maturin enumerates every interpreter in
           # the manylinux container — including interpreters below the
-          # abi3-py310 floor — and emits version-specific wheels instead of
-          # cp310-abi3 (see issue #26). abi3-py310 wheels are forward-compatible
-          # with all CPython >= 3.10 (#277 lever 1: fastcall + AsUTF8AndSize).
-          args: --release --out dist --interpreter 3.10
+          # abi3-py311 floor — and emits version-specific wheels instead of
+          # cp311-abi3 (see issue #26). abi3-py311 wheels are forward-compatible
+          # with all CPython >= 3.11 (#277 lever 1: fastcall + AsUTF8AndSize).
+          args: --release --out dist --interpreter 3.11
           manylinux: auto
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
@@ -152,8 +152,8 @@ jobs:
         run: ls -lh dist/
       - name: Verify Linux wheels are abi3 (guard against regression of #26)
         run: |
-          # abi3 wheels are tagged cpXY-abi3 (the abi3 floor — cp310-abi3 since
-          # #277/#284 raised it from cp39); a version-specific CPython Linux wheel
+          # abi3 wheels are tagged cpXY-abi3 (the abi3 floor — cp311-abi3 since
+          # Python 3.10 reached end of life; #277/#284 raised it from cp39 to cp310); a version-specific CPython Linux wheel
           # (e.g. cp38-cp38, cp39-cp39) means the abi3 build was bypassed (#26).
           # The check is floor-agnostic (cp3[0-9]+-abi3) so a future floor bump
           # does not silently re-introduce this stale-guard failure.

@@ -46,7 +46,7 @@ No `>=` permitted here: a floating comparator silently shifts every ratio's
 denominator. The hash-locked lockfile (gate V7) pins transitive deps + wheels;
 these `==` lines pin the declared intent. Versions are PyPI-current stable.
 
-On `uroman`: (marker no longer needed: requires-python is >=3.10 since #277 lever 1)
+On `uroman`: (marker no longer needed: requires-python has been >=3.10 since #277 lever 1, and is >=3.11 now)
 
 ### No context-mode extras
 

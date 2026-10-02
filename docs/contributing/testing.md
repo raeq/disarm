@@ -163,7 +163,7 @@ fails `test_docs_index_drift`, whose tests depend on sharing a worker.
 puts coverage.py on CPython 3.12's `sys.monitoring` rather than its `settrace` hook —
 120.4s against 34.6s here, with the measurement identical to the statement. CI sets it
 on the test job; it needs 3.12, so it is not set in `pyproject.toml`, where a
-contributor on 3.10 would meet a fallback warning.
+contributor on 3.11 would meet a fallback warning.
 
 **Anything that spawns pytest per file must pass `-n 0`.** `scripts/run_doc_tests.py`
 runs one pytest process per doc page, several at once; each inherited `-n auto` and

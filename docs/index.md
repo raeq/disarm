@@ -35,7 +35,7 @@ assert suspicious and analysis.canonical == "apple.com"
 ## Install
 
 ```bash
-pip install disarm      # Python 3.10+   (wheels for Linux, macOS, Windows)
+pip install disarm      # Python 3.11+   (wheels for Linux, macOS, Windows)
 cargo add disarm        # Rust 1.88+     (pure Rust — no Python, no pyo3)
 npm install disarm      # Node.js 22+
 gem install disarm      # Ruby 3.3+
@@ -96,7 +96,7 @@ Node, builders in Java — over one shared core, so every language returns the s
 
 | Language | Package | Getting started |
 |---|---|---|
-| Python 3.10+ | `disarm` on [PyPI](https://pypi.org/project/disarm/) | [guide](python/getting-started.md) |
+| Python 3.11+ | `disarm` on [PyPI](https://pypi.org/project/disarm/) | [guide](python/getting-started.md) |
 | Rust 1.88+ | `disarm` on [crates.io](https://crates.io/crates/disarm) | [guide](rust/getting-started.md) · [docs.rs](https://docs.rs/disarm) |
 | Ruby 3.3+, RubyGems 3.3.22+ | `disarm` on RubyGems | [guide](ruby/getting-started.md) |
 | Node.js 22+ | `disarm` on npm | [guide](node/getting-started.md) |

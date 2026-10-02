@@ -1,0 +1,5 @@
+- **Clippy 1.99's `assert_is_empty` is allowed with the other pedantic lints the crate
+  opts out of.** Rust 1.99 added it to `pedantic`, which the crate enables, and every pull
+  request's lint job failed on `main` the day it shipped. Its fix rewrites
+  `assert!(found.is_empty())` as `assert_eq!(found, [] as [Payload; 0])` at about fifty
+  test sites; the reason is beside the line in `Cargo.toml`.

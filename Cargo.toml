@@ -143,6 +143,10 @@ cast_possible_truncation = "allow"
 cast_sign_loss = "allow"
 cast_lossless = "allow"
 type_complexity = "allow"
+# Rust 1.99 added this to pedantic. Its fix turns `assert!(found.is_empty())` into
+# `assert_eq!(found, [] as [Payload; 0])` at about fifty test sites; the shorter form says
+# what is checked, and a failing test's own message names the input.
+assert_is_empty = "allow"
 
 [profile.release]
 lto = true

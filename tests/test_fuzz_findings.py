@@ -229,3 +229,17 @@ def test_a_word_character_separator_leaves_no_joiner_at_the_edge(
             )
             assert not out.startswith(("\u200c", "\u200d")), out
             assert not out.endswith(("\u200c", "\u200d")), out
+
+
+# -- 12. transliterate: an unassigned code point opened a consonant's context -------------
+
+
+@pytest.mark.parametrize("digit_policy", ["numeric", "tr39", "preserve"])
+@pytest.mark.parametrize("text", ["\u0bdf\u0bc4\u0bc4", "\u09a9\u093f\u093f"])
+def test_an_unassigned_consonant_slot_takes_no_vowel_sign(text: str, digit_policy: str) -> None:
+    for key in (catalog_key, search_key):
+        once = key(text, digit_policy=digit_policy)
+        assert key(once, digit_policy=digit_policy) == once
+    assert search_key("\u0bdf\u0bc4\u0bc4") == "\u0bdf\u0bc4\u0bc4"
+    assert transliterate("ba\u09a9\u093f", errors="ignore") == "bai"
+    assert transliterate("ba\u0b95\u0bbf", errors="ignore") == "baki"

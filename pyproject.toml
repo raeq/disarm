@@ -67,7 +67,7 @@ test = [
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.16.8",
+    "ruff==0.16.9",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
@@ -86,7 +86,7 @@ bench = [
     # ── adversarial-defense axis comparator (visual mapping, like disarm) ──
     "decancer-py==0.4.1",       # the only comparator that also maps visually
     # ── slugify / filename axis comparators ──
-    "python-slugify==9.0.0",
+    "python-slugify==9.1.1",
     "pathvalidate==3.3.1",
 ]
 docs = [

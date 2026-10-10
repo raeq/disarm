@@ -6,6 +6,8 @@ and regex_pattern behavior.
 
 from __future__ import annotations
 
+import pytest
+
 from disarm import slugify
 
 
@@ -175,9 +177,14 @@ class TestUniqueSlugifierCheckWalk:
     `check` refused are kept and asked about again. Slugs, callbacks and errors are
     the ones the full walk gave."""
 
+    @pytest.mark.serial
     def test_time_follows_the_calls_and_not_the_base(self) -> None:
         """8,000 calls take the same time on one base as on eight: 5.4 times as long
-        on 0.17.2, where the one base walked 32 million suffixes."""
+        on 0.17.2, where the one base walked 32 million suffixes.
+
+        In the serial tier (#1101 review): each side is a few milliseconds of wall
+        clock, and under `-n auto` a worker on every core can stretch one of them.
+        CI runs the tier by itself with `-n 0`."""
         import time
 
         from disarm import UniqueSlugifier
@@ -194,6 +201,12 @@ class TestUniqueSlugifierCheckWalk:
         one = min(seconds(1, 8000) for _ in range(5))
         eight = min(seconds(8, 1000) for _ in range(5))
         assert one < 3 * eight, f"one base {one * 1e3:.1f} ms, eight bases {eight * 1e3:.1f} ms"
+
+    def test_the_timing_test_is_in_the_serial_tier(self) -> None:
+        """#1101 review. Unmarked, the timing test ran in the default tier beside the
+        xdist workers; without its marker it would go back there unnoticed."""
+        marks = type(self).test_time_follows_the_calls_and_not_the_base.pytestmark
+        assert [mark.name for mark in marks] == ["serial"]
 
     def test_a_refused_slug_is_asked_about_again_and_given_out_when_free(self) -> None:
         from disarm import UniqueSlugifier
@@ -268,8 +281,6 @@ class TestUniqueSlugifierCheckWalk:
         assert asked[calls:] == asked[:calls]
 
     def test_a_check_that_raises_leaves_the_instance_as_it_was(self) -> None:
-        import pytest
-
         from disarm import UniqueSlugifier
 
         calls: list[str] = []
@@ -290,8 +301,6 @@ class TestUniqueSlugifierCheckWalk:
         assert calls == ["total", "total-1", "total-1"]
 
     def test_the_limit_stays_where_it_is(self) -> None:
-        import pytest
-
         from disarm import ResourceLimitError, UniqueSlugifier
 
         asked: list[str] = []
@@ -306,8 +315,6 @@ class TestUniqueSlugifierCheckWalk:
         assert asked[10_001:] == asked[:10_001]
 
     def test_call_10_002_for_one_base_raises_with_and_without_a_check(self) -> None:
-        import pytest
-
         from disarm import ResourceLimitError, UniqueSlugifier
 
         for options in ({}, {"check": lambda slug: False}):

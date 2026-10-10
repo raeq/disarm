@@ -153,7 +153,7 @@ jobs:
         # pyo3 extension layer is thin FFI glue whose owned-by-value signatures
         # are idiomatic (they'd trip needless_pass_by_value), same rationale as
         # the binding investigation in #457. Runtime heap profiling (dhat-rs) and
-        # complexity (iai-callgrind, perf-gate.yml) are separate on-demand tools.
+        # complexity (gungraun, perf-gate.yml) are separate on-demand tools.
         run: bash scripts/perf_lint.sh
 
       - name: Pure core has no pyo3 (#38/#42 acceptance gate)

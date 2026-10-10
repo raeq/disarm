@@ -62,19 +62,25 @@ did not — that is how an over-broad filter deleted `Ç → C` during #593.
 ### The iai estimated-cycles gate
 
 `benchmarks/bench_iai.rs` runs each benchmark once under Valgrind's Callgrind and counts
-instructions and estimated cycles. The counts are deterministic, so the required
+instructions and estimated cycles. The harness is gungraun, which was iai-callgrind
+until 0.17.0; the bench and the gate keep the `iai` name, because the required check
+has it. The counts are deterministic, so the required
 `iai estimated-cycles gate` fails a pull request that costs more than 5% estimated cycles
 against its merge base. Run it the way CI does:
 
 ```bash
-# needs valgrind and: cargo install iai-callgrind-runner --version 0.16.1 --locked
+# needs valgrind and: cargo install gungraun-runner --version 0.20.0 --locked
 git checkout --detach origin/main
 CARGO_PROFILE_BENCH_STRIP=false cargo bench --no-default-features --bench bench_iai -- --save-baseline=base
 git checkout -
 cargo bench --no-default-features --bench bench_iai -- \
   --baseline=base --callgrind-limits="EstimatedCycles=5%" --save-summary=json
-python3 scripts/check_iai_nonzero.py target/iai
+python3 scripts/check_iai_nonzero.py target/gungraun
 ```
+
+On a machine with no Valgrind, `cargo test --no-default-features --bench bench_iai` runs
+each benchmark once and measures nothing: gungraun's test mode, which still needs
+`gungraun-runner` on the `PATH`. It shows that a benchmark runs, not what it costs.
 
 **A zero is not a measurement.** Callgrind counts only inside the benchmark function, which
 it finds by symbol, so a stripped binary measures 0. `[profile.release]` strips, and the

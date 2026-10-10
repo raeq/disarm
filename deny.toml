@@ -16,7 +16,8 @@ version = 2
 # job, so CI runs `cargo deny check licenses bans sources` (not advisories).
 # This section only shapes a local `cargo deny check`: a yanked crate still
 # fails, but unmaintained advisories are not gated — they would otherwise flag
-# benchmark-only dev dependencies (e.g. proc-macro-error2 via iai-callgrind)
+# benchmark-only dev dependencies (proc-macro-error2 and bincode did, through
+# iai-callgrind 0.16.1, until #983/#984 moved the bench to gungraun)
 # that never reach the published artifact.
 yanked = "deny"
 unmaintained = "none"

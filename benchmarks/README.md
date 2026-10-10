@@ -32,7 +32,7 @@ numbers are FFI-dominated and must never gate a core cluster.
 
 | Signal | Metric | Scale | Validity | Role |
 |---|---|---|---|---|
-| iai-callgrind (`--cache-sim`) | **estimated cycles** | doc-scale subset | deterministic; machine-independent *within an ISA* | **hard gate** — may fail a PR (V10) |
+| gungraun (`--cache-sim`) | **estimated cycles** | doc-scale subset | deterministic; machine-independent *within an ISA* | **hard gate** — may fail a PR (V10) |
 | disarm(PR) vs disarm(merge-base), interleaved one session | wall-clock | doc-scale | first-order noise-cancel; no comparator HW-sensitivity | **primary regression signal — flag only** (V13) |
 | disarm vs pinned comparators, interleaved | wall-clock ratio | doc-scale, bucketed by microarch + CPython | cross-arch "claim" | **informational — flag only** (V14) |
 | short-string per-call | wall-clock | short | FFI-dominated | **report-only; never a gate** (V15) |

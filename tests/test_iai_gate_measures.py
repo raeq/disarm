@@ -1,7 +1,8 @@
 """The iai gate measures something, and says so when it does not.
 
-`[profile.release]` sets `strip = true`, and `cargo bench` inherits it. iai-callgrind
-counts only between the entry and exit of the benchmark function, which Callgrind finds by
+`[profile.release]` sets `strip = true`, and `cargo bench` inherits it. gungraun
+(iai-callgrind until 0.17.0) counts only between the entry and exit of the benchmark
+function, which Callgrind finds by
 symbol, so in a stripped binary it finds nothing and every metric is 0. The required
 "iai estimated-cycles gate" then compared 0 against 0 from #893 until this fix, and passed
 every pull request whatever it did to performance.
@@ -27,6 +28,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 CHECKER = ROOT / "scripts" / "check_iai_nonzero.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "perf-gate.yml"
+MANIFEST = ROOT / "Cargo.toml"
+TESTING_DOC = ROOT / "docs" / "contributing" / "testing.md"
 
 
 def _checker():
@@ -38,21 +41,24 @@ def _checker():
     return module
 
 
-def _summary(root: Path, name: str, metrics: dict) -> None:
-    """A `summary.json` in the shape iai-callgrind 0.16 writes, reduced to what is read."""
+def _summary(
+    root: Path, name: str, values: dict | None, *, version: str = "7", tool: str = "Callgrind"
+) -> None:
+    """A `summary.json` in the shape gungraun 0.20 writes (version 7), reduced to what is
+    read. `values` is `{"new": n}`, `{"old": n}` or both; `None` leaves the count out."""
     path = root / "disarm" / "bench_iai" / "perf_gate" / name / "summary.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    metrics = {} if values is None else {"Ir": {"values": values}}
     path.write_text(
         json.dumps(
             {
                 "module_path": f"bench_iai::perf_gate::{name.split('.')[0]}",
                 "id": name.split(".")[1],
+                "version": version,
                 "profiles": [
                     {
-                        "tool": "Callgrind",
-                        "summaries": {
-                            "total": {"summary": {"Callgrind": {"Ir": {"metrics": metrics}}}}
-                        },
+                        "tool": tool,
+                        "data": {"parts": [], "total": {"metrics": metrics, "regressions": []}},
                     }
                 ],
             }
@@ -61,22 +67,23 @@ def _summary(root: Path, name: str, metrics: dict) -> None:
 
 
 def test_a_run_that_measured_passes(tmp_path: Path) -> None:
-    _summary(tmp_path, "transliterate_doc.ascii", {"Left": {"Int": 4982}})
-    _summary(tmp_path, "slugify_doc.latin", {"Both": [{"Int": 1474160}, {"Int": 1474160}]})
-    assert _checker().zero_measurements(tmp_path) == []
+    _summary(tmp_path, "transliterate_doc.ascii", {"new": 4982})
+    _summary(tmp_path, "slugify_doc.latin", {"new": 1474160, "old": 1474160})
+    assert _checker().unmeasured(tmp_path) == ([], [])
+    _checker().main([str(tmp_path)])
 
 
 def test_a_benchmark_that_measured_zero_is_named(tmp_path: Path) -> None:
-    _summary(tmp_path, "transliterate_doc.ascii", {"Left": {"Int": 4982}})
-    _summary(tmp_path, "slugify_doc.latin", {"Both": [{"Int": 0}, {"Int": 0}]})
+    _summary(tmp_path, "transliterate_doc.ascii", {"new": 4982})
+    _summary(tmp_path, "slugify_doc.latin", {"new": 0, "old": 0})
     assert _checker().zero_measurements(tmp_path) == ["bench_iai::perf_gate::slugify_doc latin"]
 
 
 def test_a_zero_baseline_is_as_invalid_as_a_zero_run(tmp_path: Path) -> None:
     """A comparison against 0 is no comparison: 4,982 against 0 reads as +inf, and
     0 against 0 as "no change". Either side measuring zero fails the gate."""
-    _summary(tmp_path, "transliterate_doc.ascii", {"Both": [{"Int": 4982}, {"Int": 0}]})
-    _summary(tmp_path, "slugify_doc.ascii", {"Both": [{"Int": 0}, {"Int": 851918}]})
+    _summary(tmp_path, "transliterate_doc.ascii", {"new": 4982, "old": 0})
+    _summary(tmp_path, "slugify_doc.ascii", {"new": 0, "old": 851918})
     assert _checker().zero_measurements(tmp_path) == [
         "bench_iai::perf_gate::slugify_doc ascii",
         "bench_iai::perf_gate::transliterate_doc ascii",
@@ -86,6 +93,75 @@ def test_a_zero_baseline_is_as_invalid_as_a_zero_run(tmp_path: Path) -> None:
 def test_no_summaries_at_all_is_a_failure(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         _checker().main([str(tmp_path)])
+
+
+def test_a_summary_with_no_instruction_count_is_a_failure(tmp_path: Path) -> None:
+    """A count the script cannot find is not a count it checked. Until the move to
+    gungraun a summary with no Callgrind profile was skipped, and the run passed."""
+    _summary(tmp_path, "transliterate_doc.ascii", {"new": 4982})
+    _summary(tmp_path, "slugify_doc.latin", None)
+    _summary(tmp_path, "slugify_doc.ascii", {"new": 851918}, tool="DHAT")
+    assert _checker().unmeasured(tmp_path) == (
+        [],
+        ["bench_iai::perf_gate::slugify_doc ascii", "bench_iai::perf_gate::slugify_doc latin"],
+    )
+    with pytest.raises(SystemExit, match="2 of 3 benchmarks have no Callgrind"):
+        _checker().main([str(tmp_path)])
+
+
+def test_a_summary_of_another_version_is_a_failure(tmp_path: Path) -> None:
+    """The paths are version 7's. Version 6 kept the same count somewhere else, so a
+    runner of another version must stop the gate, not pass it unread."""
+    _summary(tmp_path, "transliterate_doc.ascii", {"new": 4982}, version="6")
+    with pytest.raises(SystemExit, match="summary version '6'"):
+        _checker().main([str(tmp_path)])
+
+
+def _gungraun_pin() -> str:
+    pin = re.search(r'^gungraun = "=([0-9.]+)"$', MANIFEST.read_text(), re.M)
+    assert pin, "Cargo.toml no longer pins gungraun to one exact version"
+    return pin[1]
+
+
+def test_the_runner_ci_installs_is_the_version_the_bench_links() -> None:
+    """gungraun refuses a `gungraun-runner` of another version, so the pin in Cargo.toml,
+    the version the workflow installs and the one the docs tell a contributor to
+    install are one number. A bump of one alone fails here, not in the gate."""
+    workflow = WORKFLOW.read_text()
+    installed = re.search(r'GUNGRAUN_RUNNER_VERSION:\s*"([0-9.]+)"', workflow)
+    assert installed, "perf-gate.yml no longer sets GUNGRAUN_RUNNER_VERSION"
+    assert (
+        'cargo install gungraun-runner --version "${GUNGRAUN_RUNNER_VERSION}" --locked' in workflow
+    )
+    documented = re.search(
+        r"cargo install gungraun-runner --version ([0-9.]+) --locked", TESTING_DOC.read_text()
+    )
+    assert documented, "docs/contributing/testing.md no longer gives the install command"
+    assert installed[1] == documented[1] == _gungraun_pin()
+
+
+def test_nothing_reads_the_old_harness_any_more() -> None:
+    """iai-callgrind 0.16.1 held `bincode` 1.3.3 and `proc-macro-error2` 2.0.1, the two
+    unmaintained crates of #983 and #984. Its runner, its output directory and its
+    summary format went with it; a line that still names one reads nothing."""
+    manifest = MANIFEST.read_text()
+    assert not re.search(r"^iai-callgrind\b", manifest, re.M)
+    workflow = WORKFLOW.read_text()
+    assert "iai-callgrind-runner" not in workflow
+    assert "target/iai" not in workflow
+    assert "scripts/check_iai_nonzero.py target/gungraun" in workflow
+    assert _checker().DEFAULT_ROOT == Path("target") / "gungraun"
+
+
+def test_the_gate_compares_only_against_a_base_under_the_same_harness() -> None:
+    """A merge-base that still runs bench_iai under iai-callgrind cannot be the baseline:
+    this job has no runner for it, and its output is another directory and format. The
+    workflow must ask the base's manifest for gungraun before it benchmarks the base."""
+    workflow = WORKFLOW.read_text()
+    guard = workflow.index("grep -qE '^gungraun = ' <<<\"$base_manifest\"")
+    baseline = workflow.index("--save-baseline=base")
+    bootstrap = workflow.index("--save-baseline=pr")
+    assert guard < baseline < bootstrap
 
 
 def test_the_bench_profile_keeps_symbols() -> None:

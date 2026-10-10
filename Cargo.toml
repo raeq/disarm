@@ -106,7 +106,11 @@ proptest = "1"
 # consumer, and the gate in `tests/msrv_declared.rs` deliberately measures the runtime
 # tree only, so a future criterion bump cannot silently raise the published MSRV.
 criterion = { version = "0.8", features = ["html_reports"] }
-iai-callgrind = "0.16.1"
+# The harness of the `iai estimated-cycles gate`: iai-callgrind under the name it took
+# at 0.17.0 (#983, #984). Exact, because the `gungraun-runner` binary that runs the
+# bench must be this version: `GUNGRAUN_RUNNER_VERSION` in perf-gate.yml, which
+# tests/test_iai_gate_measures.py holds equal to it.
+gungraun = "=0.20.0"
 stats_alloc = "0.1.10"
 
 [[bench]]
@@ -153,7 +157,7 @@ lto = true
 codegen-units = 1
 strip = true
 
-# Benchmarks inherit release, but keep their symbols: iai-callgrind counts only inside the
+# Benchmarks inherit release, but keep their symbols: gungraun counts only inside the
 # benchmark function, which Callgrind finds by name, so a stripped binary measures 0 and the
 # iai gate passed everything from #893 on. scripts/check_iai_nonzero.py now fails on a 0.
 [profile.bench]
@@ -164,7 +168,7 @@ name = "bench_personas"
 path = "benchmarks/bench_personas.rs"
 harness = false
 
-# Deterministic estimated-cycle gate (#234 V10). iai-callgrind needs Valgrind to
+# Deterministic estimated-cycle gate (#234 V10). gungraun needs Valgrind to
 # *run* (Linux CI only) but compiles anywhere.
 [[bench]]
 name = "bench_iai"

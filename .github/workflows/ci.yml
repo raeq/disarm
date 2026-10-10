@@ -462,7 +462,7 @@ jobs:
         # already has a worker on it, so it skipped itself — on every run, which meant
         # it ran nowhere (#997 review). Here it gets the whole runner, with `-n 0`.
         #
-        # No `--cov`: two timing tests add nothing to the report the step above wrote,
+        # No `--cov`: the timing tests add nothing to the report the step above wrote,
         # and a tracer in the timed region is noise in the ratio they assert. Nothing
         # here touches `coverage.xml`, so the upload below still gets that step's.
         run: pytest tests/ --ignore=tests/test_typing.py -m serial -n 0 -q --tb=short -rs

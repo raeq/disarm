@@ -16,7 +16,7 @@ PYO3_PYTHON=$(which python3) cargo test --no-default-features
 # Python deterministic tests (~4,490). Since #658 this is what bare `pytest` runs.
 pytest
 
-# The serial tier: wall-clock parallelism tests that cannot share the box (#997 review).
+# The serial tier: wall-clock tests that cannot share the box (#997 review).
 pytest -m serial -n 0
 ```
 

@@ -140,7 +140,7 @@ markers = [
     "slow: expensive, opt-in - run with 'pytest -m slow' (see #658)",
     "formal: exhaustive formal invariant tests — run before release with 'pytest -m formal'",
     "hypothesis: property-based / fuzz tests using Hypothesis — expensive, run locally not in CI",
-    "serial: measures wall-clock parallelism, so cannot share the box with xdist workers — deselected by default; CI runs it with 'pytest -m serial -n 0'",
+    "serial: measures wall-clock time or parallelism, so cannot share the box with xdist workers — deselected by default; CI runs it with 'pytest -m serial -n 0'",
 ]
 
 [tool.mypy]

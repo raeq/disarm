@@ -81,8 +81,10 @@ def step (cfg : Config) (maxAttempts : Nat) (st : St) (text : List Char) :
   | .ok (k, c) => (.ok c, ⟨c :: st.seen, setHint st.hint base (k + 1)⟩)
   | .error e => (.error e, st)
 
-/-- The same call without the hint: the walk always starts at counter 0. This is the
-path taken when `check` is set (L404-409, `use_hint`), and what the hint claims to be equivalent to. -/
+/-- The same call without the hint: the walk always starts at counter 0. This was the
+path taken when `check` is set (L404-409, `use_hint`) until #1100, and it is what the hint
+claims to be equivalent to. Since #1100 the `check` path resumes the walk too and keeps the
+counters `check` refused; `tests/test_slugify_regressions.py` holds it to this walk. -/
 def stepNoHint (cfg : Config) (maxAttempts : Nat) (st : St) (text : List Char) :
     Except Err (List Char) × St :=
   let base := slugify cfg text

@@ -9,7 +9,7 @@ Induction only: no `native_decide`, no `sorry`.
 | Theorem | Statement |
 |---|---|
 | `run_nodup` | **Uniqueness**: the slugs one instance returns are pairwise distinct |
-| `runNoHint_nodup` | the same for the walk without the per-base hint (the `check` path) |
+| `runNoHint_nodup` | the same for the walk without the per-base hint (the `check` path until #1100) |
 | `runFixed_nodup` | the fixed model returns pairwise distinct *non-empty* slugs (it returns the empty slug unsuffixed, as `slugify` does) |
 
 Whether the hint changes any output (`run = runNoHint`) is checked bounded in

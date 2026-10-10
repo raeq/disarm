@@ -111,7 +111,7 @@ free, though: re-measured on four cores, one small file costs ~0.6s more under
 single-file inner loop, and for a debugger. `--dist loadfile` is not optional — see
 the `test` extra.
 
-`not serial` (#997 review): tests that measure wall-clock parallelism cannot be
+`not serial` (#997 review): tests that measure wall-clock time or parallelism cannot be
 measured with a worker already on every core, so the parallel run deselects them and
 CI runs them in a step of their own with `pytest -m serial -n 0`. CI's `-m` replaces
 this one, so its expression has to say `not serial` too; tests/test_serial_tier.py

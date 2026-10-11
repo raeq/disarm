@@ -33,4 +33,4 @@ crate-type = ["cdylib"]
 disarm_core = { package = "disarm", version = "0.17", default-features = false }
 # magnus: ergonomic, safe Ruby<->Rust bindings over rb-sys. 0.8 supports Ruby >= 3.0
 # (the gem's required_ruby_version); rb-sys handles the platform glue.
-magnus = "0.8"
+magnus = "0.9"

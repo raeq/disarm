@@ -92,9 +92,9 @@ jobs:
       matrix:
         include:
           - target: x86_64-apple-darwin
-            runner: macos-14
+            runner: macos-latest
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

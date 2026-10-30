@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "disarm"
-version = "0.17.2"
+version = "0.18.0"
 description = "Unicode canonicalization and TR39 visual confusable analysis for Python: building blocks for text-security pipelines (homoglyph/bidi/zalgo/invisible-character handling) plus standards-based phonetic transliteration — powered by Rust"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -67,7 +67,7 @@ test = [
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.16.8",
+    "ruff==0.17.2",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
@@ -86,12 +86,13 @@ bench = [
     # ── adversarial-defense axis comparator (visual mapping, like disarm) ──
     "decancer-py==0.4.1",       # the only comparator that also maps visually
     # ── slugify / filename axis comparators ──
-    "python-slugify==9.0.0",
+    "python-slugify==9.1.3",
     "pathvalidate==3.3.1",
 ]
 docs = [
     "mkdocs>=1.6",
-    "mkdocstrings[python]>=1.0.4",
+    # 1.0.8 is the first that builds under pymdown-extensions 12 (#1121).
+    "mkdocstrings[python]>=1.0.8",
     "pymdown-extensions>=10.0",
 ]
 # No context-mode extras: the ar/fa/he dictionaries are not in the wheel (#56, #60; see
@@ -140,7 +141,7 @@ markers = [
     "slow: expensive, opt-in - run with 'pytest -m slow' (see #658)",
     "formal: exhaustive formal invariant tests — run before release with 'pytest -m formal'",
     "hypothesis: property-based / fuzz tests using Hypothesis — expensive, run locally not in CI",
-    "serial: measures wall-clock parallelism, so cannot share the box with xdist workers — deselected by default; CI runs it with 'pytest -m serial -n 0'",
+    "serial: measures wall-clock time or parallelism, so cannot share the box with xdist workers — deselected by default; CI runs it with 'pytest -m serial -n 0'",
 ]
 
 [tool.mypy]

@@ -153,7 +153,7 @@ jobs:
         # pyo3 extension layer is thin FFI glue whose owned-by-value signatures
         # are idiomatic (they'd trip needless_pass_by_value), same rationale as
         # the binding investigation in #457. Runtime heap profiling (dhat-rs) and
-        # complexity (iai-callgrind, perf-gate.yml) are separate on-demand tools.
+        # complexity (gungraun, perf-gate.yml) are separate on-demand tools.
         run: bash scripts/perf_lint.sh
 
       - name: Pure core has no pyo3 (#38/#42 acceptance gate)
@@ -462,7 +462,7 @@ jobs:
         # already has a worker on it, so it skipped itself — on every run, which meant
         # it ran nowhere (#997 review). Here it gets the whole runner, with `-n 0`.
         #
-        # No `--cov`: two timing tests add nothing to the report the step above wrote,
+        # No `--cov`: the timing tests add nothing to the report the step above wrote,
         # and a tracer in the timed region is noise in the ratio they assert. Nothing
         # here touches `coverage.xml`, so the upload below still gets that step's.
         run: pytest tests/ --ignore=tests/test_typing.py -m serial -n 0 -q --tb=short -rs
@@ -741,7 +741,7 @@ jobs:
       # Gradle published before running it: a swapped wrapper would run with every
       # credential this job has. Checked against Gradle's published checksums.
       - name: Validate the Gradle wrapper
-        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
+        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6  # v6.4.0
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6  # v6.0.1
         with:

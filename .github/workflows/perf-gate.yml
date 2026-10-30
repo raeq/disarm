@@ -49,7 +49,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  IAI_RUNNER_VERSION: "0.16.1"
+  # The `gungraun` pin in Cargo.toml, exactly: the library refuses a runner of another
+  # version (tests/test_iai_gate_measures.py holds the two equal).
+  GUNGRAUN_RUNNER_VERSION: "0.20.0"
   # The gate metric and threshold (V10/V11): estimated cycles, directional —
   # fails only on a regression beyond this percentage vs the merge-base baseline.
   CYCLES_LIMIT: "EstimatedCycles=5%"
@@ -187,12 +189,12 @@ jobs:
         with:
           python-version: "3.12" # pinned interpreter (V9)
 
-      - name: Install Valgrind + iai-callgrind-runner
+      - name: Install Valgrind + gungraun-runner
         if: needs.changes.outputs.perf == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y valgrind
-          cargo install iai-callgrind-runner --version "${IAI_RUNNER_VERSION}" --locked
+          cargo install gungraun-runner --version "${GUNGRAUN_RUNNER_VERSION}" --locked
 
       - name: Run the deterministic gate
         if: needs.changes.outputs.perf == 'true'
@@ -216,9 +218,17 @@ jobs:
           echo "baseline: $BASE"
           # Gate metric = estimated cycles (cache-sim), built twice with the same
           # rustc; compared directionally vs the merge-base baseline.
+          #
+          # The baseline must come from the same harness. A merge-base from before
+          # #983/#984 runs bench_iai under iai-callgrind 0.16.1, which wants its own
+          # runner binary and writes another directory in the version 6 summary
+          # format; this job reads neither, so such a base takes the bootstrap path, as a base
+          # with no bench_iai does. Read once into a variable: `git show | grep -q`
+          # under pipefail fails on a match when grep closes the pipe first.
+          base_manifest="$(git show "$BASE:Cargo.toml" 2>/dev/null || true)"
           if git cat-file -e "$BASE:benchmarks/bench_iai.rs" 2>/dev/null \
-             && git cat-file -e "$BASE:Cargo.toml" 2>/dev/null \
-             && git show "$BASE:Cargo.toml" | grep -q 'name = "bench_iai"'; then
+             && grep -q 'name = "bench_iai"' <<<"$base_manifest" \
+             && grep -qE '^gungraun = ' <<<"$base_manifest"; then
             echo "::group::baseline (merge-base)"
             git checkout --detach "$BASE"
             cargo bench --no-default-features --bench bench_iai -- --save-baseline=base
@@ -229,13 +239,13 @@ jobs:
               --baseline=base --callgrind-limits="${CYCLES_LIMIT}" --save-summary=json
             echo "::endgroup::"
           else
-            echo "::notice::bench_iai is not present on the merge-base — bootstrap run."
+            echo "::notice::the merge-base has no bench_iai under gungraun — bootstrap run."
             echo "Establishing the gate: running the bench once to confirm it executes."
             cargo bench --no-default-features --bench bench_iai -- --save-baseline=pr \
               --save-summary=json
           fi
           # A 0 on either side is no measurement, and 0 against 0 reads as "No change".
-          python3 scripts/check_iai_nonzero.py target/iai
+          python3 scripts/check_iai_nonzero.py target/gungraun
 
   # ── Informational signals (V13–V15, V3, V5, V19) — never blocks the PR ───
   # NOT a required check, so a clean job-level skip on non-perf PRs is fine.

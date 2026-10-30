@@ -42,10 +42,10 @@ def test_normalize_confusables_is_not_nfkc_first() -> None:
 
 
 def test_the_published_share_of_compatibility_forms_is_right() -> None:
-    """#760 — the 4,965 / 3,722 / 75.0% figures, derived from the bundled UCD.
+    """#760 — the 5,033 / 3,790 / 75.3% figures, derived from the bundled UCD.
 
     Deliberately measured with `disarm.normalize`, not `unicodedata`: the interpreter
-    ships UCD 15.1.0 and disarm ships 17.0.0, and the counts differ.
+    ships UCD 15.1.0 and disarm ships 18.0.0, and the counts differ.
     """
     changed = [
         ch

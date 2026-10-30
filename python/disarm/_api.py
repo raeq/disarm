@@ -688,10 +688,10 @@ def normalize(
     Accepts a single string or a list of strings.
 
     Note:
-        **Unicode version.** disarm implements **UCD 17.0.0**. Results differ from
+        **Unicode version.** disarm implements **UCD 18.0.0**. Results differ from
         the standard library's ``unicodedata.normalize`` for code points assigned
-        after the *host interpreter's* ``unicodedata.unidata_version`` — one code
-        point on a UCD 16.0.0 host, more on an older one. Every divergence is
+        after the *host interpreter's* ``unicodedata.unidata_version`` — 68 code
+        points on a UCD 17.0.0 host, more on an older one. Every divergence is
         disarm being more current, never wrong, but a pipeline that canonicalizes
         with one and validates with the other will disagree about which strings are
         normalized. `disarm.UNICODE_VERSION` reports which UCD this build normalizes

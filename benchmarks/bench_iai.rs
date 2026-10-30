@@ -1,6 +1,7 @@
 //! Deterministic estimated-cycle benchmarks for the CI hard gate (#234 gate V10).
 //!
-//! Unlike the wall-clock criterion benches, iai-callgrind runs each function once
+//! Unlike the wall-clock criterion benches, gungraun (iai-callgrind until 0.17.0, and the
+//! `iai` this file and its gate are named for) runs each function once
 //! under Valgrind/Callgrind with **cache simulation on**, so the gated metric is
 //! **estimated cycles** — deterministic and machine-independent *within an ISA*
 //! (and so safe to hard-fail on). Cache simulation (not raw instruction count) is
@@ -29,7 +30,7 @@ use disarm::api::{normalize, DigitPolicy, NormalizationForm, TargetScript};
 use disarm::api::{try_slugify, SlugConfig};
 use disarm::api::{OnUnknown, Transliterate};
 
-use iai_callgrind::{
+use gungraun::{
     library_benchmark, library_benchmark_group, main, Callgrind, LibraryBenchmarkConfig,
 };
 
@@ -210,21 +211,39 @@ fn skeleton_key_doc(text: String) -> usize {
     black_box(skeleton_key(black_box(&text), DigitPolicy::Numeric).unwrap()).len()
 }
 
+// The list syntax (`,` and `[...]`) is the one gungraun's docs use since 0.17.1, and the
+// one rustfmt can format; the `;` form these groups were written in still parses.
 library_benchmark_group!(
-    name = perf_gate;
-    // Cache simulation on → iai reports Estimated Cycles, the gated metric (V10).
-    config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=yes"]));
-    benchmarks = transliterate_doc, slugify_doc, escape_html_doc, percent_encode_doc, strip_log_injection_doc
+    name = perf_gate,
+    // Cache simulation on → gungraun reports Estimated Cycles, the gated metric (V10).
+    config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=yes"])),
+    benchmarks = [
+        transliterate_doc,
+        slugify_doc,
+        escape_html_doc,
+        percent_encode_doc,
+        strip_log_injection_doc
+    ]
 );
 
 // The main entry points: romanization, the normalization presets and the confusable fold.
 // Same cache-simulated config, so every group is gated on estimated cycles.
 library_benchmark_group!(
-    name = entry_points;
-    config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=yes"]));
-    benchmarks = transliterate_more, canonicalize_doc, canonicalize_strict_doc,
-        strip_obfuscation_doc, ml_normalize_doc, search_key_doc, nfkc_doc,
-        normalize_confusables_doc, find_confusables_doc, is_confusable_doc, skeleton_key_doc
+    name = entry_points,
+    config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=yes"])),
+    benchmarks = [
+        transliterate_more,
+        canonicalize_doc,
+        canonicalize_strict_doc,
+        strip_obfuscation_doc,
+        ml_normalize_doc,
+        search_key_doc,
+        nfkc_doc,
+        normalize_confusables_doc,
+        find_confusables_doc,
+        is_confusable_doc,
+        skeleton_key_doc
+    ]
 );
 
-main!(library_benchmark_groups = perf_gate, entry_points);
+main!(library_benchmark_groups = [perf_gate, entry_points]);

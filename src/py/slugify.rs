@@ -6,7 +6,7 @@
 //! in the Layer-1 module; these validate at the boundary and convert the native
 //! `ErrorRepr` to a Python exception via `?`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use pyo3::prelude::*;
 
@@ -270,16 +270,113 @@ pub struct _UniqueSlugifier {
     inner: _Slugifier,
     seen: HashSet<String>,
     check: Option<Py<PyAny>>,
-    /// #242 item 3: per-base hint for the next suffix counter to try, so the
-    /// k-th duplicate of a base does not re-walk suffixes 1..k (O(n²) →
-    /// amortized O(n)). Only used when `check` is `None`: without an external
-    /// callback the candidate sequence (bare, base-1, base-2, …) is rejected
-    /// solely by `seen`, which grows monotonically and stays contiguous from the
-    /// start, so skipping ahead can only skip already-`seen` candidates. With a
-    /// `check` callback a rejected suffix is *not* in `seen`, leaving gaps that
-    /// the hint would unsafely skip — there we keep the full walk so output is
-    /// byte-identical.
-    next_counter: HashMap<String, u64>,
+    /// #242 item 3, #1100: where the suffix walk of each base stands, so the k-th
+    /// duplicate of a base does not re-walk suffixes 1..k (O(n²) → amortized O(n)).
+    /// A cache and nothing more: a base with no entry is walked from counter 0 and
+    /// gives the same slugs and the same `check` calls, slower. A walk that has not
+    /// passed counter 0 is not kept, so a base that is used once costs no entry.
+    walks: HashMap<String, SuffixWalk>,
+}
+
+/// The suffix walk of one base (bare, base-1, base-2, …), resumed on each call.
+///
+/// Invariant: the candidate of every counter below `next` is in `seen`, or the
+/// counter is in `refused`. `seen` only grows until `reset`, so a counter that is
+/// in neither can be skipped without a look.
+#[derive(Default)]
+struct SuffixWalk {
+    /// The first counter the walk has not reached.
+    next: u64,
+    /// #1100: the counters below `next` whose candidate `check` refused. A refused
+    /// candidate is *not* in `seen`, and `check` may accept it later, so each call
+    /// asks about these again, lowest first, before it goes on at `next`. Until
+    /// #1100 a `check` meant a full walk from 0 instead, a `format!` and a lookup
+    /// for each counter already in `seen`: 32 million of them for 8,000 equal slugs.
+    /// Without a `check` nothing is ever refused and this stays empty.
+    refused: BTreeSet<u64>,
+}
+
+/// The candidate for `counter`, or the error for a `max_length` with no room for it.
+fn candidate_at(base: &str, counter: u64, config: &SlugConfig) -> PyResult<String> {
+    // No candidate: the suffix leaves no room for one character (one cluster under
+    // `allow_unicode`) of the base. This is the fail-fast check of #102 as well: it
+    // fires on the first suffixed counter when `max_length` cannot hold a character,
+    // the separator and a digit. The suffix only grows with the counter, so no later
+    // one fits either.
+    unique_slug_candidate(base, counter, config).map_err(|too_short| {
+        tl_warn!(
+            "unique_slug_max_length_too_small: max_length={} min_unique_len={}",
+            config.max_length,
+            too_short.min_unique_len
+        );
+        crate::ErrorRepr::UniqueSlugMaxLengthTooSmall {
+            max_length: config.max_length,
+            separator: config.separator.clone(),
+            min_unique_len: too_short.min_unique_len,
+        }
+        .into()
+    })
+}
+
+/// Whether `check` accepts `candidate`; no `check` accepts everything.
+fn is_free(py: Python<'_>, check: Option<&Py<PyAny>>, candidate: &str) -> PyResult<bool> {
+    match check {
+        Some(check_fn) => Ok(!check_fn.call1(py, (candidate,))?.extract::<bool>(py)?),
+        None => Ok(true),
+    }
+}
+
+/// Take the first free candidate of `base`: not in `seen`, and accepted by `check`.
+///
+/// The candidates are tried in rising counter order and `check` is asked about
+/// exactly those that are not in `seen`, which is what a walk from counter 0 does.
+/// An error leaves `walk` at the counter it stopped on, so the next call asks again.
+fn take_first_free(
+    py: Python<'_>,
+    base: &str,
+    text: &str,
+    config: &SlugConfig,
+    seen: &mut HashSet<String>,
+    check: Option<&Py<PyAny>>,
+    walk: &mut SuffixWalk,
+) -> PyResult<String> {
+    let mut pending = walk.refused.first().copied();
+    while let Some(counter) = pending {
+        pending = walk.refused.range(counter + 1..).next().copied();
+        let candidate = candidate_at(base, counter, config)?;
+        if seen.contains(&candidate) {
+            // Another base has produced this slug since. It stays taken.
+            walk.refused.remove(&counter);
+        } else if is_free(py, check, &candidate)? {
+            walk.refused.remove(&counter);
+            seen.insert(candidate.clone());
+            return Ok(candidate);
+        }
+    }
+    // A candidate never cuts into the suffix digits (the base is cut instead, and a
+    // budget with no room for one base character is an error), so distinct counters
+    // never alias, and the former M1 `lossy` tracking has nothing left to detect.
+    loop {
+        let counter = walk.next;
+        if counter > MAX_UNIQUE_ATTEMPTS {
+            tl_warn!("unique_slug_attempts_exceeded: max={MAX_UNIQUE_ATTEMPTS}");
+            return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
+                max: MAX_UNIQUE_ATTEMPTS,
+                text: text.to_owned(),
+            }
+            .into());
+        }
+        let candidate = candidate_at(base, counter, config)?;
+        if !seen.contains(&candidate) {
+            if is_free(py, check, &candidate)? {
+                seen.insert(candidate.clone());
+                walk.next = counter + 1;
+                return Ok(candidate);
+            }
+            walk.refused.insert(counter);
+        }
+        walk.next = counter + 1;
+    }
 }
 
 #[pymethods]
@@ -342,7 +439,7 @@ impl _UniqueSlugifier {
             inner,
             seen: HashSet::new(),
             check,
-            next_counter: HashMap::new(),
+            walks: HashMap::new(),
         })
     }
 
@@ -361,76 +458,31 @@ impl _UniqueSlugifier {
         if base.is_empty() {
             return Ok(base);
         }
-        // #242 item 3: when there's no external `check`, start the suffix counter
-        // from the cached per-base hint so the k-th duplicate of `base` doesn't
-        // re-walk 1..k (amortized O(1) vs O(k)). Counter 0 is the bare base; each
-        // later counter is the suffixed form. See `next_counter` for why the hint
-        // is sound only on the check-less path.
-        let use_hint = self.check.is_none();
-        let mut counter: u64 = if use_hint {
-            self.next_counter.get(&base).copied().unwrap_or(0)
-        } else {
-            0
-        };
-
-        let config = &self.inner.config;
-        // A candidate never cuts into the suffix digits (the base is cut instead,
-        // and a budget with no room for one base character is an error below), so
-        // distinct counters never alias, and the former M1 `lossy` tracking has
-        // nothing left to detect.
-        loop {
-            if counter > MAX_UNIQUE_ATTEMPTS {
-                tl_warn!("unique_slug_attempts_exceeded: max={MAX_UNIQUE_ATTEMPTS}");
-                return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
-                    max: MAX_UNIQUE_ATTEMPTS,
-                    text: text.to_owned(),
-                }
-                .into());
-            }
-            // No candidate: the suffix leaves no room for one character (one
-            // cluster under `allow_unicode`) of the base. This is the fail-fast
-            // check of #102 as well: it fires on the first suffixed counter when
-            // `max_length` cannot hold a character, the separator and a digit. The
-            // suffix only grows with the counter, so no later one fits either.
-            let candidate = match unique_slug_candidate(&base, counter, config) {
-                Ok(candidate) => candidate,
-                Err(too_short) => {
-                    tl_warn!(
-                        "unique_slug_max_length_too_small: max_length={} min_unique_len={}",
-                        config.max_length,
-                        too_short.min_unique_len
-                    );
-                    return Err(crate::ErrorRepr::UniqueSlugMaxLengthTooSmall {
-                        max_length: config.max_length,
-                        separator: config.separator.clone(),
-                        min_unique_len: too_short.min_unique_len,
-                    }
-                    .into());
-                }
-            };
-            if !self.seen.contains(&candidate) {
-                let free = match self.check.as_ref() {
-                    Some(check_fn) => !check_fn.call1(py, (&candidate,))?.extract::<bool>(py)?,
-                    None => true,
-                };
-                if free {
-                    self.seen.insert(candidate.clone());
-                    if use_hint {
-                        // Next duplicate of this base starts right after the
-                        // counter we just consumed.
-                        self.next_counter.insert(base, counter + 1);
-                    }
-                    return Ok(candidate);
-                }
-            }
-            counter += 1;
+        // #242 item 3, #1100: resume the walk of this base where the last call left
+        // it. The entry is taken out for the call and put back after it, error or not,
+        // so a `check` that raises loses nothing.
+        let mut walk = self.walks.remove(&base).unwrap_or_default();
+        let found = take_first_free(
+            py,
+            &base,
+            text,
+            &self.inner.config,
+            &mut self.seen,
+            self.check.as_ref(),
+            &mut walk,
+        );
+        // A walk still at counter 0 or 1 with nothing refused saves one lookup at
+        // most, and most bases are used once: not worth an entry each.
+        if walk.next > 1 || !walk.refused.is_empty() {
+            self.walks.insert(base, walk);
         }
+        found
     }
 
     fn reset(&mut self) {
         self.seen.clear();
-        // The per-base hints index into `seen`; clearing one without the other
-        // would let a stale hint skip now-free counters and change output.
-        self.next_counter.clear();
+        // The walks index into `seen`; clearing one without the other would let a
+        // stale walk skip now-free counters and change output.
+        self.walks.clear();
     }
 }

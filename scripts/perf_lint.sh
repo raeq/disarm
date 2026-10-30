@@ -34,7 +34,7 @@
 #       `tests/preset_alloc_count.rs` (a `stats_alloc` counting allocator).
 #   * Algorithmic / time complexity (O(n) or worse):
 #       No acclaimed *static* detector exists for Rust — measure it. Use the
-#       existing iai-callgrind harness (`benchmarks/bench_iai.rs`, the CI
+#       existing gungraun harness (`benchmarks/bench_iai.rs`, the CI
 #       `iai estimated-cycles gate`) with input-size sweeps; super-linear
 #       scaling shows up as a non-constant instruction-count ratio.
 #

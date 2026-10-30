@@ -84,9 +84,9 @@ You do not need to pre-normalise before handing text to `strip_obfuscation()` or
     strip_obfuscation("²")  # '2'   — this one is NFKC-first
     ```
 
-    Measured over `U+0020`–`U+2FFFF` against the bundled UCD 17.0.0: of the **4,965**
-    code points NFKC would change, `normalize_confusables` leaves **3,722 unchanged —
-    75.0%**.
+    Measured over `U+0020`–`U+2FFFF` against the bundled UCD 18.0.0: of the **5,033**
+    code points NFKC would change, `normalize_confusables` leaves **3,790 unchanged —
+    75.3%**.
 
     That is not a defect. The two functions answer different questions: the fold asks
     "does this look like something else", and NFKC asks "is this a compatibility

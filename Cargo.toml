@@ -1,6 +1,6 @@
 [package]
 name = "disarm"
-version = "0.17.2"
+version = "0.18.0"
 edition = "2021"
 # 1.88, not 1.81 (#718). The floor is set by a RUNTIME dependency, not a dev one:
 # `idna` -> `idna_adapter` -> `icu_normalizer` / `icu_properties` / `icu_provider`,
@@ -83,7 +83,9 @@ regex = "1"
 # items 1-2). No new supply-chain surface.
 aho-corasick = "1"
 bitflags = "2"
-unicode-normalization = "0.1"
+# 0.1.26 is the first with UCD 18.0.0. `KEY_SCHEMA_VERSION` 11 records that move, so an
+# older 0.1.x in a consumer's lockfile would give other keys under the same counter.
+unicode-normalization = "0.1.26"
 phf = "0.14"
 unicode-segmentation = "1"
 encoding_rs = "0.8"
@@ -96,7 +98,7 @@ phf_codegen = "0.14"
 # Read only for its `UNICODE_VERSION` const, so `api::UNICODE_VERSION` is derived
 # from the crate that actually normalizes rather than typed a second time (#645).
 # Already in the runtime tree at the same version — this adds no crate to the graph.
-unicode-normalization = "0.1"
+unicode-normalization = "0.1.26"
 
 [dev-dependencies]
 proptest = "1"
@@ -106,7 +108,11 @@ proptest = "1"
 # consumer, and the gate in `tests/msrv_declared.rs` deliberately measures the runtime
 # tree only, so a future criterion bump cannot silently raise the published MSRV.
 criterion = { version = "0.8", features = ["html_reports"] }
-iai-callgrind = "0.16.1"
+# The harness of the `iai estimated-cycles gate`: iai-callgrind under the name it took
+# at 0.17.0 (#983, #984). Exact, because the `gungraun-runner` binary that runs the
+# bench must be this version: `GUNGRAUN_RUNNER_VERSION` in perf-gate.yml, which
+# tests/test_iai_gate_measures.py holds equal to it.
+gungraun = "=0.20.0"
 stats_alloc = "0.1.10"
 
 [[bench]]
@@ -153,7 +159,7 @@ lto = true
 codegen-units = 1
 strip = true
 
-# Benchmarks inherit release, but keep their symbols: iai-callgrind counts only inside the
+# Benchmarks inherit release, but keep their symbols: gungraun counts only inside the
 # benchmark function, which Callgrind finds by name, so a stripped binary measures 0 and the
 # iai gate passed everything from #893 on. scripts/check_iai_nonzero.py now fails on a 0.
 [profile.bench]
@@ -164,7 +170,7 @@ name = "bench_personas"
 path = "benchmarks/bench_personas.rs"
 harness = false
 
-# Deterministic estimated-cycle gate (#234 V10). iai-callgrind needs Valgrind to
+# Deterministic estimated-cycle gate (#234 V10). gungraun needs Valgrind to
 # *run* (Linux CI only) but compiles anywhere.
 [[bench]]
 name = "bench_iai"

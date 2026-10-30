@@ -330,7 +330,7 @@ impl std::str::FromStr for NormalizationForm {
 ///
 /// # Unicode version
 /// Normalization tracks the `unicode-normalization` crate, currently **UCD
-/// 17.0.0** — a different version from several bundled tables, and typically a
+/// 18.0.0** — a different version from several bundled tables, and typically a
 /// newer one than a host Python's `unicodedata`. Results therefore differ from
 /// another implementation for code points assigned in between; disarm is the more
 /// current side of any such disagreement. `docs/provenance.md` records the version

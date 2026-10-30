@@ -83,7 +83,9 @@ regex = "1"
 # items 1-2). No new supply-chain surface.
 aho-corasick = "1"
 bitflags = "2"
-unicode-normalization = "0.1"
+# 0.1.26 is the first with UCD 18.0.0. `KEY_SCHEMA_VERSION` 11 records that move, so an
+# older 0.1.x in a consumer's lockfile would give other keys under the same counter.
+unicode-normalization = "0.1.26"
 phf = "0.14"
 unicode-segmentation = "1"
 encoding_rs = "0.8"
@@ -96,7 +98,7 @@ phf_codegen = "0.14"
 # Read only for its `UNICODE_VERSION` const, so `api::UNICODE_VERSION` is derived
 # from the crate that actually normalizes rather than typed a second time (#645).
 # Already in the runtime tree at the same version — this adds no crate to the graph.
-unicode-normalization = "0.1"
+unicode-normalization = "0.1.26"
 
 [dev-dependencies]
 proptest = "1"

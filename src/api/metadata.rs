@@ -324,7 +324,30 @@ pub fn unicode_version() -> &'static str {
 /// moves: no row of the fixture did. It had no such row; three were added, written with
 /// the `\U` escape `scripts/gen_key_fixture.py` now reads, and `search_key` and
 /// `catalog_key` are the columns that would have moved on them.
-pub const KEY_SCHEMA_VERSION: u32 = 10;
+///
+/// Bumped to 11 by #1121, for two changes 0.18.0 carries. Neither moves a key built only
+/// from characters assigned before Unicode 18. Measured against 0.17.2 over every
+/// scalar value (alone, after `a`, before U+0301, after `a` + U+0301) and every pair of
+/// code points in `U+0900..=U+0DFF` (alone, after `ba`).
+///
+/// `unicode-normalization` 0.1.26 moved normalization from UCD 17.0.0 to 18.0.0, with no
+/// change here: the requirement floats. 105 code points new in Unicode 18 move. The 68
+/// with a compatibility decomposition move every surface that runs NFKC, so
+/// `canonicalize("\u{209D}")` is `w`, where it kept the character; `normalize_confusables`
+/// and `fold_case` do not move. The 37 new marks move the surfaces that remove marks, so
+/// `search_key("\u{B53}")` is empty: `search_key`, `catalog_key`, `strip_obfuscation` and
+/// `ml_normalize`. `Cargo.toml` now requires 0.1.26, so a consumer's lockfile cannot keep
+/// the old tables under this counter.
+///
+/// And #1094, which merged without a bump: a Brahmic consonant slot with no inherent `a` to
+/// strip no longer opens the consonant context, so a sign slot after it reaches the error mode
+/// instead of being erased. `search_key("\u{9A9}\u{9C5}")` was `\u{9A9}` and is the input.
+/// `search_key` and `catalog_key` move, and nothing else, on 2,380 of the 1,638,400 pairs:
+/// 85 first code points, 12 of them assigned, before 28 second ones, none of them assigned.
+///
+/// The fixture was green through both, for the reason recorded above: its corpus held no
+/// character new in Unicode 18 and no such pair. 119 rows were added.
+pub const KEY_SCHEMA_VERSION: u32 = 11;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -359,7 +382,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 10;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "21cea025664b0bb6ca4c5a8bd2e24e8ed7997796e5368832127f24ffed5d75f8";
+    "55fb8cc77bb3de9287fc31befa250467bb6ef30c156a6365f5e55c479a7f7bf9";
 
 /// The key-schema counter, as a function (#645).
 ///

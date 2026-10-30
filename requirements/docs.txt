@@ -8,9 +8,9 @@ ghp-import==2.1.0 \
     --hash=sha256:8337dd7b50877f163d4c0289bc1f1c7f127550241988d568c1db512c4324a619 \
     --hash=sha256:9c535c4c61193c2df8871222567d7fd7e5014d835f97dc7b7439069e2413d343
     # via mkdocs
-griffelib==2.3.0 \
-    --hash=sha256:1b8f9cd525681c26b1d6d574faa1371651e8459ca51d209684f50b8096ae06e0 \
-    --hash=sha256:7b0952caf5bca6afa4bb5ee8c6a2d183fe3f21b62efc5f6c7243cb2b26d2d115
+griffelib==2.4.1 \
+    --hash=sha256:40c028dd2e623f464423f0e11e3c553158f1cf4f1368239a370534d73e1407ff \
+    --hash=sha256:76bc562f936ad1ce198d2cf6d0731bd5c92a7d934b69ef828ef22ee0ffdb62ce
     # via mkdocstrings-python
 jinja2==3.1.6 \
     --hash=sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d \
@@ -18,9 +18,9 @@ jinja2==3.1.6 \
     # via
     #   mkdocs
     #   mkdocstrings
-markdown==3.11 \
-    --hash=sha256:180224db6aed87ba9ce1f2781ebcd5826253de8ff637112090e24b84502bbf9f \
-    --hash=sha256:cd6c89e7eb308c8b332ed673215a52d208a43f8bacc030b1419376129408719e
+markdown==3.11.2 \
+    --hash=sha256:87bf5d90f2d2882e2c02fcda182c2800456b985bff38913867c49706481514b0 \
+    --hash=sha256:f80390747a2a0ff2ba54da074ce4f862f72a6685f608cd2637b646a6d83993f5
     # via
     #   mkdocs
     #   mkdocs-autorefs
@@ -196,9 +196,9 @@ mkdocs==1.6.1 \
     #   disarm (pyproject.toml)
     #   mkdocs-autorefs
     #   mkdocstrings
-mkdocs-autorefs==1.4.4 \
-    --hash=sha256:834ef5408d827071ad1bc69e0f39704fa34c7fc05bc8e1c72b227dfdc5c76089 \
-    --hash=sha256:d54a284f27a7346b9c38f1f852177940c222da508e66edc816a0fa55fc6da197
+mkdocs-autorefs==1.4.5 \
+    --hash=sha256:68ee484e0800f3ba50cda1bc4a94293adbdfcc010243c322b3f5d66e15d06770 \
+    --hash=sha256:856f75b327b7717923ce06267094650689a510a748c48657f5333965950c2788
     # via
     #   mkdocstrings
     #   mkdocstrings-python
@@ -224,13 +224,13 @@ pathspec==1.1.1 \
     --hash=sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a \
     --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
     # via mkdocs
-platformdirs==4.12.2 \
-    --hash=sha256:29dbf06d96c500bc6bdbce75fb0a14d63279c93b1842f97e72a135b33e856983 \
-    --hash=sha256:eab5f70271a490ef74618bb314fbb86e3c7e82fa3b9c922c2ea0e0a1a155d329
+platformdirs==4.13.5 \
+    --hash=sha256:05831adf87d392760f4b5c3a0a95579ab5a10b18b9b9bd43680dcb47544788a0 \
+    --hash=sha256:53d3ec4280b815c1e0b02edad7f9ee8fda1ba9c0865dd9c2e6e63849ce82fc1e
     # via mkdocs-get-deps
-pymdown-extensions==12.2 \
-    --hash=sha256:02da896c362b548d85123e7a377a40024ea6ea938b4e45ca064e408afd994b64 \
-    --hash=sha256:caea66e916b4cfe987b5dabb0a78558e3506988f6353812b0b0288be8f976c16
+pymdown-extensions==12.3 \
+    --hash=sha256:345493a8e3497e24382902903a1c43a28e34a52f2b7571a1c9641429b820ca74 \
+    --hash=sha256:a7f2a4e0bc60c6e6babfa7922cfb3b01cd640eb00fb208f3c582e12bae00ea67
     # via
     #   disarm (pyproject.toml)
     #   mkdocstrings

@@ -453,3 +453,28 @@ def test_no_floor_is_a_version_upstream_has_retired(binding: str) -> None:
         f"{retired[newest_dead]}; raise the floor to the oldest supported line in the "
         "manifest, the CI matrix and the docs together"
     )
+
+
+# ---------------------------------------------------------------------------
+# Runner images
+# ---------------------------------------------------------------------------
+
+#: Hosted runner images GitHub has retired or set a date for (actions/runner-images#13518).
+RETIRED_RUNNERS = {"macos-14": "2026-11-02"}
+
+
+def test_no_workflow_runs_on_a_retired_runner_image() -> None:
+    """A job on a retired image gets no runner, and no step of it runs.
+
+    `publish.yml` was the last workflow on `macos-14`. A scheduled brownout cancelled both
+    macOS wheel jobs of the 0.18.0 publish, so the PyPI job was skipped after the crate and
+    the bindings had shipped. `publish.yml` runs only at a release, so no pull request could
+    have shown it, and each image's brownouts start months before its retirement.
+    """
+    found = [
+        f"{path.name} names {image}, retired {day}"
+        for path in sorted(WORKFLOWS.glob("*.yml"))
+        for image, day in RETIRED_RUNNERS.items()
+        if image in path.read_text(encoding="utf-8")
+    ]
+    assert not found, found

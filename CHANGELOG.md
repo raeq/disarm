@@ -18,6 +18,120 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
 
 <!-- towncrier release notes start -->
 
+## [0.18.0] — 2026-10-30
+
+### Upgrade notes
+
+- **Minimum Python is now 3.11** (was 3.10; #1090). Python 3.10 reached end of life
+  on 2026-10-01 (PEP 619), and disarm's floor is the oldest Python upstream still
+  supports. The extension now targets the stable-ABI floor `abi3-py311`, so a single
+  `cp311-abi3` wheel runs on 3.11 and later; no wheel is built for 3.10. On Python 3.10,
+  pip resolves the 0.17 series, the last that supports it.
+
+- **`KEY_SCHEMA_VERSION` goes 10 → 11, for the two changes below (#1094, #1121).** Neither
+  moves a key built only from characters assigned before Unicode 18. If your stored text can
+  hold a character new in Unicode 18, or an unassigned code point in a Brahmic block, recompute
+  what you store from it once against 0.18.0; `disarm.KEY_SCHEMA_VERSION` reads `11`. Both were
+  measured by running 0.17.2 and 0.18.0 over every scalar value (alone, after `a`, before U+0301
+  and after `a` + U+0301) and every pair of code points in U+0900..U+0DFF (alone and after
+  `ba`), through the eight functions the fixture tracks, `skeleton_key` and `ml_normalize`.
+- **Normalization follows UCD 18.0.0: 105 code points new in Unicode 18 move (#1121).** The 68
+  with a compatibility decomposition move `canonicalize`, `canonicalize_strict`, `sort_key`,
+  `skeleton_key`, `search_key`, `catalog_key`, `strip_obfuscation` and `ml_normalize`:
+  `canonicalize("\u209d")` was `"\u209d"` and is `"w"`. The 37 new marks move `search_key`,
+  `catalog_key`, `strip_obfuscation` and `ml_normalize`, which remove marks:
+  `search_key("\u0b53")` was `"\u0b53"` and is `""`. `normalize_confusables` and `fold_case` do
+  not move.
+- **A Brahmic slot with no inherent `a` opens no consonant context (#1094).** `search_key` and
+  `catalog_key` move on 2,380 of the 1,638,400 pairs, and nothing else does. Each pair ends in
+  one of 28 unassigned code points at a vowel sign's offset, so no pair of assigned characters
+  moves: `search_key("\u09a9\u09c5")` was `"\u09a9"` and is `"\u09a9\u09c5"`.
+
+### Changed
+
+- **`normalize` implements UCD 18.0.0, and every surface that normalizes follows it
+  (#1121).** `unicode-normalization` 0.1.26 brought it with no change here, because the
+  requirement floats; the crate now requires that version, so a lockfile cannot keep the old
+  tables under the new `KEY_SCHEMA_VERSION`. `disarm.UNICODE_VERSION` reads `18.0.0`.
+  `disarm.normalize` differs from `unicodedata.normalize` on 68 code points on a UCD 17.0.0
+  Python (3.15), 69 on 16.0.0 (3.14) and 125 on 15.1.0 (3.13). The other bundled tables keep
+  their versions, which `docs/provenance.md` lists. What moves in a stored key is in *Upgrade
+  notes*. From 2026-10-16, every fresh dependency resolve failed `tests/normalization_ucd_drift.rs`
+  until this change.
+
+### Fixed
+
+- **Every package credits the confusable-vision data it carries (#738, #1084).** The
+  Latin and Cyrillic confusable tables include pairs adapted from confusable-vision,
+  © Paul Wood FRSA (@paultendo), https://github.com/paultendo/confusable-vision, whose
+  data is licensed CC-BY-4.0. The source files under `data/` credited it, but the
+  generated tables and the packages built from them did not. The crate, the wheels and
+  sdist, the gem, the npm package and the `disarm-java` jar now ship a `NOTICE` with the
+  credit, the licence and what disarm changed, and the generated tables carry the credit
+  in their header. No stored key moves.
+
+- **Every package carries the Unicode licence notice (#1089).** disarm's tables are
+  generated from the Unicode Character Database, UTS #39 `confusables.txt` and the CLDR
+  emoji annotations, all © Unicode, Inc. under the Unicode License v3, which asks for its
+  copyright and permission notice to travel with every copy. The `NOTICE` file each package
+  ships now names the Unicode data disarm uses and carries the licence text in full. No
+  stored key moves.
+
+- **An unassigned code point in a Brahmic block no longer takes the vowel sign after it
+  (#1094).** `transliterate` reads a Brahmic character's role from its offset in the
+  block, and an unassigned code point has one too, so U+0BDF counted as a Tamil
+  consonant and U+0BC4 as its vowel sign. The sign was erased instead of being replaced,
+  dropped or kept as `errors` says, one per call: `search_key("\u0bdf\u0bc4\u0bc4")`
+  gave `"\u0bdf\u0bc4"`, and the key of that dropped the other, so neither `search_key`
+  nor `catalog_key` was idempotent on it. Under `errors="ignore"` the sign also took the
+  `a` of the text before it: `transliterate("ba\u09a9\u093f", errors="ignore")` gave
+  `"bi"` and now gives `"bai"`. Only a consonant whose romanization ends in its inherent
+  `a` opens the context now. Text of assigned characters romanizes as before, except
+  that under `errors="ignore"` the text before U+0C5C or U+0CDC (new in Unicode 17, with
+  no romanization yet) keeps its `a`. Found by the `presets` fuzz target. `search_key` and
+  `catalog_key` move on input with an unassigned code point: see *Upgrade notes*.
+
+- **`UniqueSlugifier` with a `check` no longer takes quadratic time in the equal slugs of
+  one base (#1100, #1101).** With a `check`, every call walked the suffixes of its base
+  from the start again, a candidate and a lookup for each slug already given out, so
+  8,000 calls of `unique("Total")` took 3.9 s where the same calls without a `check` took
+  5 ms. They now take 3.7 ms. The walk of a base is resumed where the last call stopped,
+  as it has been without a `check` since #242, and the suffixes `check` refused are kept
+  and asked about again on each call, lowest first. The slugs, the `check` calls in their
+  order and the errors are the ones 0.17.2 gave, and a `check` that raises leaves the
+  instance as it was.
+
+### Internal
+
+- **Clippy 1.99's `assert_is_empty` is allowed with the other pedantic lints the crate
+  opts out of (#1091).** Rust 1.99 added it to `pedantic`, which the crate enables, and
+  every pull request's lint job failed on `main` the day it shipped. Its fix rewrites
+  `assert!(found.is_empty())` as `assert_eq!(found, [] as [Payload; 0])` at about fifty
+  test sites; the reason is beside the line in `Cargo.toml`.
+
+- **The estimated-cycles gate runs under gungraun 0.20.0, the name iai-callgrind took at
+  0.17.0 (#983, #984, #1104).** iai-callgrind 0.16.1 was the last release under the old
+  name, and it brought the two unmaintained crates the weekly advisory scan reported
+  into the dev-dependency graph: `bincode` 1.3.3 (RUSTSEC-2025-0141) and
+  `proc-macro-error2` 2.0.1 (RUSTSEC-2026-0173). Neither was in a published artifact.
+  gungraun uses `bincode-next` and `proc-macro-error3`, and `cargo audit` reports nothing
+  on the new graph. The dependency is pinned to one exact version, because the
+  `gungraun-runner` binary must match it; a test holds the pin, the version the workflow
+  installs and the one in `docs/contributing/testing.md` equal. gungraun writes its
+  summaries under `target/gungraun` in a new format (version 7), so
+  `scripts/check_iai_nonzero.py` reads that, and it now fails on a summary of another
+  version or one with no Callgrind instruction count, which it used to skip. A merge
+  base that still runs the bench under iai-callgrind cannot be the baseline, so the gate
+  runs such a pull request once without a comparison, as it did when the bench was new.
+  The bench, the script and the required check keep the `iai` name.
+
+- **The docs site builds again under `pymdown-extensions` 12 (#1107, #1121).** #1107 moved it
+  to 12.2, and `mkdocstrings` 1.0.6 then crashed `mkdocs build --strict` with
+  `Highlight.__init__() missing 1 required positional argument: 'md'`. The pull request's
+  docs job failed and the merge went ahead, because that job is not a required check. The
+  `docs` extra now requires `mkdocstrings` 1.0.8, the first that builds, with
+  `mkdocstrings-python` 2.0.10 beside it.
+
 ## [0.17.2] — 2026-09-26
 
 ### Fixed

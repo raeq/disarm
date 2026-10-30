@@ -240,6 +240,19 @@ class TestTheFixtureCoversWhatItClaims:
                 and unicodedata.category(c) in {"Mn", "Me"}
                 and unicodedata.combining(c) == 0
             ),
+            # The two classes `KEY_SCHEMA_VERSION` 11 records (#1121): the gate was green
+            # through both because the corpus held neither. Written out, because the
+            # interpreter's `unicodedata` is older than the normalizer's UCD 18.
+            "code point new in Unicode 18": sum(
+                1 for c in joined if c in "\u0558\u058b\u058c\u05c8\u05c9\u0b53\u0b54\u1ade\u209d"
+            ),
+            "Brahmic slot with no inherent `a` before an unassigned sign": sum(
+                1
+                for line in gen.read_corpus()
+                for first, second in zip(line, line[1:], strict=False)
+                if first in "\u09a9\u0bdf\u0c5c\u0c5d\u0cdc\u0d58"
+                and second in "\u09c5\u0a43\u0bc4\u0c45\u0cc5\u0d45"
+            ),
             "invisible inside a mark run": sum(
                 1
                 for line in gen.read_corpus()

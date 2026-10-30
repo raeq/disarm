@@ -1,7 +1,7 @@
 //! #642: the documented normalization UCD version cannot drift away from the
 //! crate that actually implements it.
 //!
-//! `Cargo.toml` declares `unicode-normalization = "0.1"`, a floating requirement,
+//! `Cargo.toml` declares `unicode-normalization = "0.1.26"`, a floating requirement,
 //! so a `cargo update` can move the bundled Unicode data with no disarm code
 //! change at all. Three places state that version in prose — `docs/provenance.md`,
 //! the `api::normalize` rustdoc, and the Python `normalize` docstring — and every
@@ -17,7 +17,7 @@ const PROVENANCE: &str = include_str!("../docs/provenance.md");
 const RUST_DOC: &str = include_str!("../src/api/text.rs");
 const PYTHON_DOC: &str = include_str!("../python/disarm/_api.py");
 
-/// `(17, 0, 0)` rendered the way the documentation writes it.
+/// `(18, 0, 0)` rendered the way the documentation writes it.
 fn version() -> String {
     let (major, minor, patch) = UNICODE_VERSION;
     format!("{major}.{minor}.{patch}")

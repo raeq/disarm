@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 23,208 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) + 25 NFKC-image rows (#833) + 58 negative-enclosed rows (#815) + 34 deletion-class rows (#937) + 2 measured-visual rows (#738) + 13 non-emoji-symbol rows (#990) + 5 selector-on-a-text-symbol rows (#991 follow-up) + 5 line-break and zero-width erase rows (Lean model) + 2 Unicode line-separator rows + 6 Kirat Rai composition rows (Lean model, `formal/lean/Confusables`) + 3 separated-composition rows (Lean model, `formal/lean/Presets`) + 3 control-separated Kirat Rai rows (#1040 fuzzing) |
+| `corpus.txt` | 23,327 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) + 25 NFKC-image rows (#833) + 58 negative-enclosed rows (#815) + 34 deletion-class rows (#937) + 2 measured-visual rows (#738) + 13 non-emoji-symbol rows (#990) + 5 selector-on-a-text-symbol rows (#991 follow-up) + 5 line-break and zero-width erase rows (Lean model) + 2 Unicode line-separator rows + 6 Kirat Rai composition rows (Lean model, `formal/lean/Confusables`) + 3 separated-composition rows (Lean model, `formal/lean/Presets`) + 3 control-separated Kirat Rai rows (#1040 fuzzing) + 11 Brahmic consonant-slot rows (#1094) + 108 Unicode 18 rows (#1121) |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read
@@ -60,6 +60,14 @@ sequences in the corpus: a syllable takes a base, a medial, two vowel signs and 
 They are what showed that a flat mark count cannot separate orthography from stacking —
 `is_zalgo` called 142 of them zalgo and `strip_zalgo` deleted a tone mark from each. Keep
 them.
+
+**What `KEY_SCHEMA_VERSION` 11 records (#1094, #1121).** 108 rows hold the 105 code points
+new in Unicode 18 that move under the UCD 18 normalizer, alone, and one new mark on a
+base and beside an old mark. 11 rows put a Brahmic consonant slot with no inherent `a`
+before an unassigned sign slot, in one block and across two, with text before it, on
+unassigned and on assigned first code points; two of them are controls with an assigned
+sign, which do not move. The corpus had neither class, so the fixture stayed green
+through both changes.
 
 `tests/test_key_stability.py` asserts a floor per class and the row count in the table
 above, rather than this paragraph, so adding rows stays free and losing a class fails.

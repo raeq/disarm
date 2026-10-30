@@ -91,7 +91,8 @@ bench = [
 ]
 docs = [
     "mkdocs>=1.6",
-    "mkdocstrings[python]>=1.0.4",
+    # 1.0.8 is the first that builds under pymdown-extensions 12 (#1121).
+    "mkdocstrings[python]>=1.0.8",
     "pymdown-extensions>=10.0",
 ]
 # No context-mode extras: the ar/fa/he dictionaries are not in the wheel (#56, #60; see

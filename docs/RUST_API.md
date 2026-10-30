@@ -108,6 +108,7 @@ That is the contract, and it is what a consumer can plan against:
 | `0.14.x` → `0.15.0` | Read the changelog's **Upgrade notes** first. Treat it as a possible reindex until they say otherwise. |
 | `0.15.x` → `0.16.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 3 → 9 in six steps, and the table there names what moved at each one. |
 | `0.16.x` → `0.17.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 9 → 10 in one step, and the table there names the twelve changes it records and what each moves. |
+| `0.17.x` → `0.18.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 10 → 11, for two changes. A key built only from characters assigned before Unicode 18 does not move. |
 
 The same rule holds in every binding, because they all wrap one core.
 

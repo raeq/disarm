@@ -64,7 +64,7 @@ This heuristic eliminates reallocations for the two most common workload shapes.
 
 ## Optimization 7: Consistent Rust-native normalization
 
-`normalize()` uses the Rust `unicode-normalization` crate (Unicode 16.0) for
+`normalize()` uses the Rust `unicode-normalization` crate for
 every input — single strings, list inputs and pipelines. The core returns ASCII
 unchanged without running the normalizer (ASCII is invariant under all four forms),
 and since #1064 it runs the normalizer only over the segments that can change. This

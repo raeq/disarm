@@ -27,7 +27,7 @@ against for byte-stable behavior.
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
 | Confusable prototype census — `confusable_prototype_census.tsv` | `confusables.txt` grouped by the UCD `Script` of each prototype, from the vendored `data/Scripts.txt` (#963) | **17.0.0** (both inputs) |
 | Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
-| Normalization — `normalize()`, every NFC/NFKC step inside the presets, and the NFD and combining classes `is_zalgo` / `strip_zalgo` count marks over | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **17.0.0** |
+| Normalization — `normalize()`, every NFC/NFKC step inside the presets, and the NFD and combining classes `is_zalgo` / `strip_zalgo` count marks over | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **18.0.0** |
 | Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the zero-width `Prepend` characters `terminal_width` looks past for a cluster's base (checked against it by `zero_width_prepend_matches_the_segmenter`) | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |
 | UTS&nbsp;#46 mapping and validation — every `xn--` label `is_suspicious_hostname` and `analyze_hostname` decode | ICU4X, via [`idna`](https://crates.io/crates/idna) → `idna_adapter` → `icu_normalizer` / `icu_properties` (not a bundled table) | `idna` **1.1.0**, `icu_properties_data` **2.3.0** — see below |
 | Simple lowercasing — the `to_lowercase` side of `is_case_fold_stable` | UCD, via the **compiling toolchain's** standard library (not a bundled table, and not a dependency) | whatever the build's rustc carries — ≥ Unicode 16.0 in practice, since the crate's MSRV is 1.88 |
@@ -70,8 +70,8 @@ crate at all.
 
 The normalization row is the one with an external consequence. Because it tracks a
 newer UCD than most shipped CPythons, `disarm.normalize` and `unicodedata.normalize`
-disagree on code points assigned in between — one code point on a UCD 16.0.0 host,
-more on an older one. Every divergence is disarm being more current. A pipeline that
+disagree on code points assigned in between — 68 code points on a UCD 17.0.0 host, 69
+on 16.0.0, 125 on 15.1.0. Every divergence is disarm being more current. A pipeline that
 canonicalizes with one and validates with the other is where that matters; see
 `docs/security/cve-validation.md` → *Normalization cost*. Since #645 the answer is also
 reachable from a running program as `UNICODE_VERSION` — see below — so a deployment can

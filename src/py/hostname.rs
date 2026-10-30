@@ -12,11 +12,7 @@ use pyo3::prelude::*;
 /// Reports factual findings; it claims nothing about absolute safety. A
 /// `suspicious == false` result is not a safety certificate (see
 /// `_is_suspicious_hostname`).
-//
-// `skip_from_py_object`: this is a return-only struct (it is never extracted
-// from a Python object as a `#[pyfunction]` argument), so we opt out of the
-// `FromPyObject` derive that pyo3 0.29 makes opt-in for `Clone` pyclasses.
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[pyo3(name = "HostnameAnalysis")]
 #[derive(Clone)]
 pub struct HostnameAnalysis {

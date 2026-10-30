@@ -9,7 +9,7 @@
 use pyo3::prelude::*;
 
 /// One group of distinct inputs that reduce to the same key.
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[pyo3(name = "KeyCollision")]
 #[derive(Clone)]
 pub struct KeyCollision {
@@ -74,7 +74,7 @@ pub fn _edit_distance(a: &str, b: &str) -> usize {
 }
 
 /// One candidate name and how far it is from the value asked about (#883).
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 pub struct NearestMatch {
     /// The candidate, in the spelling the caller supplied.
     #[pyo3(get)]

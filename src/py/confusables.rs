@@ -95,7 +95,7 @@ pub fn _find_unmapped_confusables(
 /// One decoded smuggled run (#701).
 ///
 /// A return-only result object, the shape [`crate::py::collisions::KeyCollision`] uses.
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[pyo3(name = "SmuggledPayload")]
 #[derive(Clone)]
 pub struct SmuggledPayload {

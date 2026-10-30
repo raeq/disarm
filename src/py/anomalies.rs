@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use pyo3::prelude::*;
 
 /// One reason a token is anomalous (a single [`crate::api::Finding`]).
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[pyo3(name = "Finding")]
 #[derive(Clone)]
 pub struct Finding {
@@ -61,7 +61,7 @@ impl From<crate::api::Finding> for Finding {
 }
 
 /// Structured anomaly report, parallel to `HostnameAnalysis`.
-#[pyclass(skip_from_py_object)]
+#[pyclass]
 #[pyo3(name = "AnomalyReport")]
 #[derive(Clone)]
 pub struct AnomalyReport {

@@ -168,7 +168,7 @@ def test_a_keycap_compares_equal_to_its_digit() -> None:
 
 
 def test_a_keycap_on_something_else_keeps_its_mark() -> None:
-    """Only a base Unicode registers for a keycap is one."""
+    """The fold applies only after a digit, `#` or `*`, the bases a keycap can have."""
     assert "\u20e3" in disarm.canonicalize("x\ufe0f\u20e3")
 
 

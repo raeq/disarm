@@ -422,6 +422,29 @@ mod tests {
     }
 
     #[test]
+    fn a_keycap_selector_and_mark_go_together_under_the_comparison_policy() {
+        // #1158: the selector alone left a bare enclosing mark, which the detector reports.
+        for (text, want) in [
+            ("1\u{FE0F}\u{20E3}", "1"),
+            ("#\u{FE0F}\u{20E3}", "#"),
+            ("1\u{FE0F}\u{20E3}2\u{FE0F}\u{20E3}", "12"),
+            ("x\u{FE0F}\u{20E3}", "x\u{20E3}"),
+            ("1\u{20E3}", "1\u{20E3}"),
+            ("\u{FE0F}\u{20E3}", "\u{20E3}"),
+        ] {
+            assert_eq!(
+                strip_invisible_classes(text, comparison()),
+                want,
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            strip_invisible_classes("1\u{FE0F}\u{20E3}", rendering()),
+            "1\u{FE0F}\u{20E3}"
+        );
+    }
+
+    #[test]
     fn classifiers_cover_the_ranges() {
         assert!(is_tag('\u{E0001}') && is_tag('\u{E0050}') && is_tag('\u{E007F}'));
         assert!(!is_tag('\u{1F3F4}')); // the flag base is not a tag char

@@ -161,6 +161,63 @@ def test_the_page_records_it() -> None:
     assert "Ideographic Variation Sequences are not distinguished" in page
 
 
+# --- The seam guide and the upgrade note (#1157, #1139) --------------------------
+
+RUSSIAN = "\u043f\u0440\u0438\u0432\u0435\u0442"
+
+
+def test_the_seam_section_says_non_latin_input_is_a_wrong_function_case() -> None:
+    assert (
+        "Non-Latin text is one such case. `canonicalize`, `llm_guardrail` and "
+        "`strip_obfuscation` fold letters that have a Latin look-alike and keep the others, so "
+        "a clean Russian or Hebrew word usually comes back as a mix that reports `mixed_script` "
+        "or `bidi_mixed`. Use `rag_ingest` to romanize it, or leave it alone if it goes straight "
+        "to a multilingual model."
+    ) in " ".join((ROOT / "docs/user-guide/anomaly-detection.md").read_text("utf-8").split())
+
+
+def test_the_llm_guide_shows_a_word_that_folds_partly() -> None:
+    page = (ROOT / "docs/user-guide/llm-pipelines.md").read_text(encoding="utf-8")
+    assert disarm.canonicalize(RUSSIAN) in page
+    assert '"\\u043f\\u0440\\u0438\\u0432\\u0435\\u0442"' in page or RUSSIAN in page
+
+
+def test_a_partly_folded_word_is_what_the_seam_check_sees() -> None:
+    folded = disarm.canonicalize(RUSSIAN)
+    assert not disarm.has_anomalies(RUSSIAN)
+    assert folded != RUSSIAN
+    assert not folded.isascii()
+    assert disarm.has_anomalies(folded)
+    assert not disarm.has_anomalies(disarm.get_pipeline("rag_ingest")(RUSSIAN))
+
+
+def test_the_next_release_note_names_the_profiles_that_moved() -> None:
+    """The guard on `CHANGELOG.md` lets only a release assembly edit it, so the 0.18.0 note takes
+    this sentence in the release PR. Until then the fragment carries it to the same reader."""
+    flat = " ".join((ROOT / "changelog.d/1183.docs.md").read_text(encoding="utf-8").split())
+    assert (
+        "The profiles move too, and the fixture does not track them: `llm_guardrail` and "
+        "`ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`, "
+        "`library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do "
+        "`normalize_user_input` and `security_clean`, on the 68. If you stored a key built with "
+        "`search_index` or `library_catalog_key_eu` from text that can hold a character new in "
+        "Unicode 18, recompute it."
+    ) in flat
+
+
+def test_the_fixture_readme_says_what_the_counter_speaks_for() -> None:
+    flat = " ".join(
+        (ROOT / "tests/fixtures/key_stability/README.md").read_text(encoding="utf-8").split()
+    )
+    assert "`KEY_SCHEMA_VERSION` speaks for the eight functions this fixture tracks" in flat
+    assert "not for a profile" in flat
+
+
+def test_a_profile_moved_on_the_change_the_note_describes() -> None:
+    assert disarm.get_pipeline("normalize_web_input")("a\u209db") == "awb"
+    assert disarm.canonicalize("\u209d") == "w"
+
+
 # --- Named boundaries a reader looks for (#1159, #1167, #1168) -----------------
 
 _SENTENCE = "the quick brown fox"

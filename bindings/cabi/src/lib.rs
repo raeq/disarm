@@ -646,6 +646,16 @@ fn disarm_analyze_hostname_opts(host: char_p::Ref<'_>, contractions: bool) -> ch
     )
 }
 
+/// The level a finding of this kind carries, by the name a report holds: `"error"` or
+/// `"warning"`, which are SARIF's names (#946). An unknown name is an error.
+#[ffi_export]
+fn disarm_anomaly_severity(kind: char_p::Ref<'_>) -> DisarmResult {
+    match arg(kind).parse::<api::AnomalyKind>() {
+        Ok(kind) => ok(kind.severity().as_str().to_owned()),
+        Err(e) => err(&e),
+    }
+}
+
 /// Structural anomaly report for `text` as a JSON object (`anomalous`, `kinds`,
 /// `findings` [each `kind`/`token`/`start`/`end`/`detail`/`reason`], `reason`).
 ///

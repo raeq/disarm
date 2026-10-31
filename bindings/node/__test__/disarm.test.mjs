@@ -649,6 +649,14 @@ describe('anomaly detection', () => {
     expect(r.anomalous).toBe(true)
   })
 
+  test('anomalySeverity: a decoded payload is the one error (#946)', () => {
+    expect(disarm.anomalySeverity('smuggled')).toBe('error')
+    expect(disarm.anomalySeverity('deletion')).toBe('warning')
+    const r = disarm.inspectAnomalies('hi\u200bthere', [])
+    expect(disarm.anomalySeverity(r.findings[0].kind)).toBe('warning')
+    expect(() => disarm.anomalySeverity('nope')).toThrow(/anomaly kind/)
+  })
+
   test('reports nothing for clean text', () => {
     const r = disarm.inspectAnomalies('nothing to see here', [])
     expect(r.anomalous).toBe(false)

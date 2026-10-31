@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, TextIO
 
-from disarm import inspect_anomalies
+from disarm import anomaly_severity, inspect_anomalies
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -342,33 +342,6 @@ def scan_paths(
     return ScanResult(findings=findings, scanned=scanned, unreadable=unreadable)
 
 
-#: SARIF `level` per anomaly kind (#705).
-#:
-#: A decoded payload is the one finding that needs no threshold to interpret, so it is the
-#: one `error`. The rest are `warning`: each reports a technical fact and leaves the
-#: judgement to the caller, which is the library's stated stance. Hard-coded HERE rather
-#: than on `AnomalyKind`: #705 item 4 says a severity on the enum is a public API addition
-#: and should be its own change, so this writer carries the map and a test asserts it
-#: covers every kind the library can produce — the map cannot fall behind the enum.
-SARIF_LEVELS: dict[str, str] = {
-    "smuggled": "error",
-    "invisible": "warning",
-    "bidi": "warning",
-    "bidi_mixed": "warning",
-    "control": "warning",
-    "deletion": "warning",
-    "mixed_script": "warning",
-    "confusable": "warning",
-    "compat_fold": "warning",
-    "zalgo": "warning",
-    "enclosing_mark": "warning",
-    "duplicate_mark": "warning",
-    "mixed_numbers": "warning",
-    "leet": "warning",
-    "segmentation": "warning",
-}
-
-
 def to_sarif(result: ScanResult, *, version: str) -> dict[str, object]:
     """A SARIF 2.1.0 document, so findings land in a Security tab and as PR annotations.
 
@@ -391,7 +364,7 @@ def to_sarif(result: ScanResult, *, version: str) -> dict[str, object]:
                             {
                                 "id": k,
                                 "shortDescription": {"text": f"disarm anomaly kind `{k}`"},
-                                "defaultConfiguration": {"level": SARIF_LEVELS.get(k, "warning")},
+                                "defaultConfiguration": {"level": anomaly_severity(k)},
                             }
                             for k in kinds
                         ],
@@ -400,7 +373,7 @@ def to_sarif(result: ScanResult, *, version: str) -> dict[str, object]:
                 "results": [
                     {
                         "ruleId": f.kind,
-                        "level": SARIF_LEVELS.get(f.kind, "warning"),
+                        "level": anomaly_severity(f.kind),
                         "message": {"text": f.reason},
                         "locations": [
                             {

@@ -926,6 +926,18 @@ export function hasAnomalies(
   return call(() => native.hasAnomalies(text, Array.isArray(lexicon) ? lexicon : [...lexicon]))
 }
 
+/** The level a finding carries. These are SARIF's level names. */
+export type AnomalySeverity = 'error' | 'warning'
+
+/**
+ * The level a finding of this kind carries, by the name a report holds. `smuggled` is the one
+ * `'error'`, because it fires only on a run that decodes to readable text. Throws on a name that
+ * is no kind.
+ */
+export function anomalySeverity(kind: AnomalyKind | string): AnomalySeverity {
+  return call(() => native.anomalySeverity(kind)) as AnomalySeverity
+}
+
 /**
  * Full anomaly analysis: an `AnomalyReport` with `anomalous`, `kinds` (in
  * first-appearance order), `findings` (each `{ kind, token, start, end, detail,

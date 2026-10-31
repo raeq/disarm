@@ -964,6 +964,14 @@ pub fn has_anomalies(text: String, lexicon: Either<Vec<String>, ClassInstance<Le
     }
 }
 
+/// `anomalySeverity(kind)` — the level a finding of this kind carries, `"error"` or
+/// `"warning"` (#946). `kind` is the name a report holds.
+#[napi]
+pub fn anomaly_severity(kind: String) -> Result<String, NapiError> {
+    let kind: api::AnomalyKind = kind.parse().map_err(|e| map_err(&e))?;
+    Ok(kind.severity().as_str().to_owned())
+}
+
 /// `inspectAnomalies(text, lexicon)` — full analysis with per-token findings.
 /// `lexicon` is either an array of common words or a prebuilt `Lexicon` handle.
 #[napi]

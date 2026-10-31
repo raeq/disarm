@@ -343,6 +343,9 @@ policy. They are:
 | `U+17B4`–`U+17B5` | Khmer inherent vowels |
 | `U+180B`–`U+180D`, `U+180F` | Mongolian free variation selectors |
 
+A pipeline composed with `strip_invisible_marks=True` removes the Mongolian selectors everywhere
+except directly after a Mongolian letter, where they spell the word (#1137).
+
 (`U+180E`, between them, is the Mongolian vowel separator, which the zero-width strip
 removes. The Duployan and musical format controls, `U+1BCA0`–`U+1BCA3` and
 `U+1D173`–`U+1D17A`, were on this list until #813 added them to that strip.)

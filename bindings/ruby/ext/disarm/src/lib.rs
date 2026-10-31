@@ -916,6 +916,12 @@ fn inspect_anomalies_impl(text: &str, lex: &HashSet<String>) -> AnomalyReportTup
     (r.anomalous, kinds, findings, r.reason)
 }
 
+/// `Disarm._anomaly_severity(kind)` — the level a finding of this kind carries (#946).
+fn anomaly_severity(kind: String) -> Result<String, Error> {
+    let kind: api::AnomalyKind = kind.parse().map_err(|e| map_err(&e))?;
+    Ok(kind.severity().as_str().to_owned())
+}
+
 /// `Disarm._inspect_anomalies(text, lexicon)` — `[anomalous, kinds, findings,
 /// reason]` where each finding is `[kind, token, start, end, detail, reason]` (the
 /// Ruby layer maps it to a hash).
@@ -1078,6 +1084,7 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_singleton_method("_list_context_langs", function!(list_context_langs, 0))?;
 
     module.define_singleton_method("_has_anomalies?", function!(has_anomalies, 2))?;
+    module.define_singleton_method("_anomaly_severity", function!(anomaly_severity, 1))?;
     module.define_singleton_method("_inspect_anomalies", function!(inspect_anomalies, 2))?;
 
     // Reusable lexicon handle (HAI-SDLC 6.1): build the HashSet once, reuse it

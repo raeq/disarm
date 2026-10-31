@@ -62,6 +62,14 @@ typedef struct DisarmResult {
 } DisarmResult_t;
 
 /** \brief
+ *  The level a finding of this kind carries, by the name a report holds: `"error"` or
+ *  `"warning"`, which are SARIF's names (#946). An unknown name is an error.
+ */
+DisarmResult_t
+disarm_anomaly_severity (
+    char const * kind);
+
+/** \brief
  *  The strongest security-canonicalization preset.
  *
  *  Two steps introduce ASCII, not one (#719): the leading NFKC, and the confusable fold,

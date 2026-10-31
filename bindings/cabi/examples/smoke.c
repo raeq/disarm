@@ -73,6 +73,22 @@ int main(void) {
     if (!anom0_ok) failures++;
     disarm_string_free(anom0);
 
+    /* A level per kind (#946): a decoded payload is the one error. */
+    DisarmResult_t sev = disarm_anomaly_severity("smuggled");
+    int sev_ok = sev.value && strcmp(sev.value, "error") == 0;
+    disarm_string_free(sev.value);
+    disarm_string_free(sev.error);
+    DisarmResult_t sev_warn = disarm_anomaly_severity("deletion");
+    sev_ok = sev_ok && sev_warn.value && strcmp(sev_warn.value, "warning") == 0;
+    disarm_string_free(sev_warn.value);
+    disarm_string_free(sev_warn.error);
+    DisarmResult_t sev_bad = disarm_anomaly_severity("nope");
+    sev_ok = sev_ok && !sev_bad.value && sev_bad.error;
+    disarm_string_free(sev_bad.value);
+    disarm_string_free(sev_bad.error);
+    printf("%-28s %-6s\n", "anomaly_severity", sev_ok ? "OK" : "FAIL");
+    if (!sev_ok) failures++;
+
     /* Bundled data version (#560): a dotted numeric string, not the crate version. */
     char *cv = disarm_confusables_version();
     int cv_ok = cv && cv[0] >= '0' && cv[0] <= '9' && strchr(cv, '.') != NULL;

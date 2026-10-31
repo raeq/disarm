@@ -19,7 +19,7 @@ import pytest
 
 from benchmarks.meta import damage, fetch, leaderboard, registry, subjects
 from benchmarks.meta import report as report_module
-from benchmarks.meta.base import SuiteBase, surfaces, thin
+from benchmarks.meta.base import REPO_ROOT, SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
 from benchmarks.meta.report import load_outcomes, render_json, render_markdown
@@ -2980,6 +2980,7 @@ def test_every_composable_step_is_declared_or_deliberately_declined():
         "strip_zalgo",
         "strip_pua",
         "strip_plane14",
+        "strip_invisible_marks",
         "resolve_deletions",
     ):
         try:
@@ -3047,3 +3048,82 @@ def test_the_control_check_covers_every_aggregate_not_only_the_composite():
     assert "Bradley-Terry" in text
     assert "refuses the job" in text
     assert not board.supported
+
+
+# --- detectors built for smuggling (#1164) ----------------------------------
+
+
+RIVAL_DETECTORS = {
+    "unicode-smuggling-guard": ("unicode_smuggling_guard", "scan"),
+    "glyphguard": ("glyphguard", "detect"),
+}
+TAGS = "".join(chr(0xE0000 + ord(c)) for c in "hidden")
+
+
+@pytest.mark.parametrize(
+    ("name", "module", "surface"), [(n, *v) for n, v in RIVAL_DETECTORS.items()]
+)
+def test_a_rival_detector_declares_the_surface_it_ships(name, module, surface):
+    subject = subjects.by_name(name)
+    assert subject is not None, name
+    assert subject.ROLES[subjects.Role.DETECTOR] == surface
+    pytest.importorskip(module)
+    assert surface in subject.detectors()
+    assert subjects.Capability.DETECT in subject.capabilities()
+
+
+@pytest.mark.parametrize(
+    ("name", "module", "surface"), [(n, *v) for n, v in RIVAL_DETECTORS.items()]
+)
+def test_a_rival_detector_reads_a_tag_run_and_leaves_clean_text_alone(name, module, surface):
+    pytest.importorskip(module)
+    detector = subjects.by_name(name).detectors()[surface]
+    assert detector("cover" + TAGS) is True
+    assert detector("the quick brown fox") is False
+
+
+@pytest.mark.parametrize("name", RIVAL_DETECTORS)
+def test_a_rival_detector_that_is_not_installed_has_no_capabilities(name, monkeypatch):
+    subject = subjects.by_name(name)
+    monkeypatch.setattr(subjects, "_import", lambda _module: None)
+    assert subject.available()[0] is False
+    assert subject.capabilities() == set()
+
+
+def test_glyphguard_answers_the_prompt_hygiene_job_with_the_profile_it_names_for_it():
+    pytest.importorskip("glyphguard")
+    subject = subjects.by_name("glyphguard")
+    assert subject.ROLES[subjects.Role.SANITIZER] == "sanitize"
+    fn = subject.role(subjects.Role.SANITIZER, job=subjects.Job.PROMPT_HYGIENE)["sanitize"]
+    assert fn("cover" + TAGS) == "cover"
+
+
+def test_unicode_smuggling_guard_ships_no_sanitizer_and_is_not_given_one():
+    subject = subjects.by_name("unicode-smuggling-guard")
+    assert subjects.Role.SANITIZER not in subject.ROLES
+    assert subject.transforms() == {}
+
+
+def test_the_wrong_palisade_is_not_pinned_and_the_collision_is_recorded():
+    bench = (REPO_ROOT / "requirements/bench.txt").read_text(encoding="utf-8")
+    pins = {line.split("==")[0].strip().lower() for line in bench.splitlines() if "==" in line}
+    assert "palisade" not in pins
+    assert {"unicode-smuggling-guard", "glyphguard"} <= pins
+    manifest = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "palisade" in manifest
+    assert "llm-guard" not in pins
+
+
+def test_the_readme_says_which_detectors_were_considered():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    section = readme.split("## More than one tool", 1)[1].split("\n## ", 1)[0]
+    for project in (
+        "unicode-smuggling-guard",
+        "glyphguard",
+        "llm-guard",
+        "palisade",
+        "ghostchars",
+        "unsmuggle",
+        "smugglecheck",
+    ):
+        assert project in section, project

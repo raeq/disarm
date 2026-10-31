@@ -102,6 +102,19 @@ bitflags! {
         /// nothing, but after transliteration it is `shc` + `BS` and erases to `sh`.
         const RESOLVE_DELETIONS = 0b1000_0000_0000_0000;
 
+        /// Remove variation selectors and `U+034F`, and leave every other mark (#1137).
+        ///
+        /// `STRIP_ZALGO` at zero and `STRIP_ACCENTS` both do this and both take every diacritic,
+        /// so a pipeline that must keep accents had no step for it. See
+        /// [`crate::invisibles::strip_invisible_marks_into`] for what stays.
+        const STRIP_INVISIBLE_MARKS = 0b1_0000_0000_0000_0000;
+
+        /// The normalization that runs AFTER [`Self::STRIP_INVISIBLE_MARKS`] (#1137).
+        ///
+        /// `a` `U+034F` `U+0301` is in normal form because the joiner holds the mark away from
+        /// its base, and removing the joiner leaves `a` `U+0301`, which is not. Set by
+        /// `Pipeline::new` only where both steps run, and displayed as `normalize`.
+        const NORMALIZE_POST = 0b10_0000_0000_0000_0000;
     }
 }
 
@@ -126,6 +139,14 @@ const STEP_ORDER: &[(PipelineSteps, &str)] = &[
     // `collapse_whitespace`, which folds the CR this step may need to read.
     (PipelineSteps::RESOLVE_DELETIONS, "resolve_deletions"),
     (PipelineSteps::NORMALIZE, "normalize"),
+    // After `normalize`, because NFKC can replace a registered base and leave its selector
+    // after a letter (`U+2122` becomes `TM`). Before `strip_zalgo`, so that a mark count does
+    // not include what this removes.
+    (
+        PipelineSteps::STRIP_INVISIBLE_MARKS,
+        "strip_invisible_marks",
+    ),
+    (PipelineSteps::NORMALIZE_POST, "normalize"),
     (PipelineSteps::STRIP_ZALGO, "strip_zalgo"),
     (PipelineSteps::STRIP_BIDI, "strip_bidi"),
     // Before `demojize`, deliberately: the TAG block is a concealment carrier, and a
@@ -308,6 +329,9 @@ impl Pipeline {
         // #914, the same shape and for the same reason: reachable only as a side effect
         // of `demojize` or `transliterate` before this.
         strip_plane14: bool,
+        // #1137: the same shape again. No profile sets it: those that want these marks gone
+        // take them with `strip_zalgo(0)` or `strip_accents`.
+        strip_invisible_marks: bool,
         // #937: resolve the deletion class rather than only reporting it. `resolve_cr`
         // widens the same step; it does nothing on its own.
         resolve_deletions: bool,
@@ -366,6 +390,12 @@ impl Pipeline {
         }
         if strip_plane14 {
             steps |= PipelineSteps::STRIP_PLANE14;
+        }
+        if strip_invisible_marks {
+            steps |= PipelineSteps::STRIP_INVISIBLE_MARKS;
+            if normalize.is_some() {
+                steps |= PipelineSteps::NORMALIZE_POST;
+            }
         }
         if strip_bidi {
             steps |= PipelineSteps::STRIP_BIDI;
@@ -551,7 +581,7 @@ impl Pipeline {
         input: &str,
         out: &mut String,
     ) -> Result<bool, ErrorRepr> {
-        if step == PipelineSteps::NORMALIZE {
+        if step == PipelineSteps::NORMALIZE || step == PipelineSteps::NORMALIZE_POST {
             match self.normalize_form {
                 Some(ref form) => {
                     normalize::normalize_into(input, form, out)?;
@@ -559,6 +589,9 @@ impl Pipeline {
                 }
                 None => Ok(false),
             }
+        } else if step == PipelineSteps::STRIP_INVISIBLE_MARKS {
+            crate::invisibles::strip_invisible_marks_into(input, out);
+            Ok(true)
         } else if step == PipelineSteps::STRIP_ZALGO {
             zalgo::strip_zalgo_into(input, self.zalgo_max_marks.unwrap_or(0), out);
             Ok(true)
@@ -722,7 +755,7 @@ impl Pipeline {
 
     /// The parameter shown for `step` in `steps()` / `__repr__`, or `None`.
     fn step_param(&self, step: PipelineSteps) -> Option<String> {
-        if step == PipelineSteps::NORMALIZE {
+        if step == PipelineSteps::NORMALIZE || step == PipelineSteps::NORMALIZE_POST {
             self.normalize_form.clone()
         } else if step == PipelineSteps::STRIP_ZALGO {
             self.zalgo_max_marks.map(|m| m.to_string())
@@ -843,6 +876,7 @@ impl ProfileSpec {
             self.strip_zalgo,
             self.strip_pua,
             self.strip_plane14,
+            false, // strip_invisible_marks: see the parameter on `Pipeline::new` (#1137)
             self.resolve_deletions,
             self.resolve_cr,
         )?;
@@ -1176,8 +1210,13 @@ mod tests {
         // step added to STEP_ORDER without a witness here panics, forcing the
         // author to exercise its apply_step branch.
         for (flag, name) in STEP_ORDER {
-            let (form, input): (Option<&str>, &str) = if *flag == PipelineSteps::NORMALIZE {
+            let (form, input): (Option<&str>, &str) = if *flag == PipelineSteps::NORMALIZE
+                || *flag == PipelineSteps::NORMALIZE_POST
+            {
+                // Both run the same normalization; `NORMALIZE_POST` differs only in when.
                 (Some("NFC"), "e\u{0301}") // e + combining acute → é
+            } else if *flag == PipelineSteps::STRIP_INVISIBLE_MARKS {
+                (None, "a\u{FE01}b")
             } else if *flag == PipelineSteps::STRIP_ZALGO {
                 (None, "a\u{0301}\u{0301}\u{0301}\u{0301}b")
             } else if *flag == PipelineSteps::STRIP_BIDI {
@@ -1540,6 +1579,8 @@ mod tests {
                 // written, so NFKC would change what the preceding cell is (#937).
                 "resolve_deletions",
                 "normalize",
+                "strip_invisible_marks",
+                "normalize",
                 "strip_zalgo",
                 "strip_bidi",
                 "strip_plane14",
@@ -1597,6 +1638,7 @@ mod tests {
             None,  // strip_zalgo
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // strip_invisible_marks (#1137)
             false, // resolve_deletions (#937)
             false, // resolve_cr (#937)
         )
@@ -1627,6 +1669,7 @@ mod tests {
             None,        // strip_zalgo
             false,       // strip_pua (#911)
             false,       // strip_plane14 (#914)
+            false,       // strip_invisible_marks (#1137)
             false,       // resolve_deletions (#937)
             false,       // resolve_cr (#937)
         )
@@ -1657,6 +1700,7 @@ mod tests {
             None,       // strip_zalgo
             false,      // strip_pua (#911)
             false,      // strip_plane14 (#914)
+            false,      // strip_invisible_marks (#1137)
             false,      // resolve_deletions (#937)
             false,      // resolve_cr (#937)
         )
@@ -1674,6 +1718,7 @@ mod tests {
             None, // demojize_replacement (#972)
             false, None, false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // strip_invisible_marks (#1137)
             false, // resolve_deletions (#937)
             false, // resolve_cr (#937)
         )
@@ -1702,6 +1747,7 @@ mod tests {
             None,
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // strip_invisible_marks (#1137)
             false, // resolve_deletions (#937)
             false, // resolve_cr (#937)
         );
@@ -1731,6 +1777,7 @@ mod tests {
             None,
             false, // strip_pua (#911)
             false, // strip_plane14 (#914)
+            false, // strip_invisible_marks (#1137)
             false, // resolve_deletions (#937)
             false, // resolve_cr (#937)
         );
@@ -1835,6 +1882,7 @@ mod tests {
             Some("\u{1F600}\u{1F600}".to_owned()),
             false,
             None,
+            false,
             false,
             false,
             false,

@@ -39,6 +39,7 @@ impl _TextPipeline {
         strip_zalgo=None,
         strip_pua=false,
         strip_plane14=false,
+        strip_invisible_marks=false,
         resolve_deletions=false,
         resolve_cr=false,
         digit_policy="numeric",
@@ -65,6 +66,7 @@ impl _TextPipeline {
         strip_zalgo: Option<i64>,
         strip_pua: bool,
         strip_plane14: bool,
+        strip_invisible_marks: bool,
         resolve_deletions: bool,
         resolve_cr: bool,
         digit_policy: &str,
@@ -102,6 +104,7 @@ impl _TextPipeline {
             zalgo_max_marks,
             strip_pua,
             strip_plane14,
+            strip_invisible_marks,
             resolve_deletions,
             resolve_cr,
         )?

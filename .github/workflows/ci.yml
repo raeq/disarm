@@ -130,6 +130,7 @@ jobs:
               - 'codegen/**'
               - 'Cargo.toml'
               - 'scripts/build_*_dict.py'
+              - 'scripts/context_words.py'
               - 'scripts/bootstrap_dicts.sh'
               - 'tests/conftest.py'
               - 'tests/test_context_*.py'
@@ -584,7 +585,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: data/hebrew_dict.bin
-          key: hebrew-dict-${{ hashFiles('scripts/bootstrap_dicts.sh', 'scripts/build_hebrew_dict.py') }}
+          key: hebrew-dict-${{ hashFiles('scripts/bootstrap_dicts.sh', 'scripts/build_hebrew_dict.py', 'scripts/context_words.py') }}
 
       - name: Build the dictionaries
         env:

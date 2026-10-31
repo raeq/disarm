@@ -156,6 +156,17 @@ def test_the_neighbours_keep_their_own_policy() -> None:
     assert code("a\U000e01f0b") == "ab"
 
 
+def test_the_guide_states_the_size_of_the_zero_width_set() -> None:
+    """Measured, then read off the page: the heading said 22 above a list of 3,760."""
+    removed = sum(
+        1
+        for cp in range(0x110000)
+        if not 0xD800 <= cp <= 0xDFFF and disarm.strip_zero_width_chars(f"a{chr(cp)}b") == "ab"
+    )
+    page = (ROOT / "docs" / "user-guide" / "text-cleaning.md").read_text(encoding="utf-8")
+    assert f"The {removed:,} zero-width code points handled by" in page
+
+
 def test_the_limitations_page_says_so() -> None:
     page = " ".join((ROOT / "docs" / "limitations.md").read_text(encoding="utf-8").split())
     assert "`U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF` and `U+E01F0`–`U+E0FFF`" in page

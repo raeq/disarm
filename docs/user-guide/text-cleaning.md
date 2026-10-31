@@ -284,7 +284,7 @@ yourself, build a [`TextPipeline`](../api/pipelines.md) with the `strip_control`
 `strip_control_chars` / `strip_zero_width_chars` primitives, which every binding
 exposes.
 
-The 22 zero-width characters handled by the `strip_zero_width` step:
+The 3,760 zero-width code points handled by the `strip_zero_width` step:
 
 - U+200B Zero Width Space (ZWSP)
 - U+200C Zero Width Non-Joiner (ZWNJ)

@@ -163,12 +163,11 @@ def test_the_page_records_it() -> None:
 
 # --- Named boundaries a reader looks for (#1159, #1167, #1168) -----------------
 
-_ROOT = Path(__file__).resolve().parent.parent
 _SENTENCE = "the quick brown fox"
 
 
 def _flat(relative: str) -> str:
-    return " ".join((_ROOT / relative).read_text(encoding="utf-8").split())
+    return " ".join((ROOT / relative).read_text(encoding="utf-8").split())
 
 
 def _surfaces():
@@ -263,7 +262,7 @@ def test_the_threat_model_names_the_four_attacks() -> None:
 def test_the_source_ledger_records_each_as_read_and_left_out(name: str) -> None:
     rows = [
         line
-        for line in (_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8").splitlines()
+        for line in (ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8").splitlines()
         if line.startswith(f"| {name}")
     ]
     assert rows, name

@@ -301,6 +301,56 @@ pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String
     out
 }
 
+/// Mongolian free variation selectors. Kept out of [`is_variation_selector`] because the
+/// comparison presets keep them: they spell a Mongolian word (`docs/limitations.md`).
+#[inline]
+fn is_mongolian_selector(ch: char) -> bool {
+    matches!(ch, '\u{180B}'..='\u{180D}' | '\u{180F}')
+}
+
+/// Remove the marks that show nothing and carry data between letters, and no other (#1137).
+///
+/// `strip_zalgo(0)` and `strip_accents` remove these too, and take every diacritic with them, so
+/// a pipeline that has to keep accents had no way to do it. Three of them stay, directly after a
+/// base where they mean something:
+/// * `U+FE0E` and `U+FE0F` after a base Unicode registers them for, the rule #1135 gave
+///   `strip_format`;
+/// * a Mongolian selector after a Mongolian letter, which is the reason the comparison presets
+///   give for keeping them everywhere.
+///
+/// An ideographic selector goes even after an ideograph. The IVD is not shipped, so nothing here
+/// can say which sequences are registered, and a caller naming this step gives up the variant.
+/// Reading the base from `out` is what makes this a fixed point: a removed selector is not a base,
+/// and a selector that stayed is not one either.
+pub(crate) fn strip_invisible_marks_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+        return;
+    }
+    out.reserve(text.len());
+    for ch in text.chars() {
+        let keep = if ch == CGJ {
+            false
+        } else if is_mongolian_selector(ch) {
+            out.chars().next_back().is_some_and(|base| {
+                base.is_alphabetic() && crate::scripts::detect_char_script(base) == "Mongolian"
+            })
+        } else if is_variation_selector(ch) {
+            matches!(ch, '\u{FE0E}' | '\u{FE0F}')
+                && out
+                    .chars()
+                    .next_back()
+                    .is_some_and(|base| crate::tables::is_registered_variation(base, ch))
+        } else {
+            true
+        };
+        if keep {
+            out.push(ch);
+        }
+    }
+}
+
 /// `strip_invisible_classes`, writing into a caller-owned buffer (ping-pong form).
 /// Clears `out` first, like every other `*_into` leaf.
 pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out: &mut String) {
@@ -416,6 +466,33 @@ mod tests {
             ("1\u{FE0F}\u{20E3}", "1\u{FE0F}\u{20E3}"),
         ] {
             assert_eq!(strip_invisible_classes(text, rendering()), want, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn invisible_marks_go_and_other_marks_stay() {
+        // #1137: `want` is what stays. The first group is the point of the step, the second
+        // what it must not touch, the third the bases that keep a selector.
+        for (text, want) in [
+            ("a\u{FE01}b", "ab"),
+            ("a\u{E0100}b", "ab"),
+            ("a\u{34F}b", "ab"),
+            ("a\u{180B}b", "ab"),
+            ("a\u{FE0F}b", "ab"),
+            ("e\u{301}", "e\u{301}"),
+            ("a\u{E0041}b", "a\u{E0041}b"),
+            ("plain", "plain"),
+            ("\u{2764}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{2764}\u{FE01}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{2764}\u{FE0F}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("0\u{FE00}", "0"),
+            ("\u{1820}\u{180B}", "\u{1820}\u{180B}"),
+            ("\u{1820}\u{180B}\u{180B}", "\u{1820}\u{180B}"),
+            ("\u{1810}\u{180B}", "\u{1810}"),
+        ] {
+            let mut out = String::new();
+            strip_invisible_marks_into(text, &mut out);
+            assert_eq!(out, want, "{text:?}");
         }
     }
 

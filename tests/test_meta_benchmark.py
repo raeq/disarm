@@ -2980,6 +2980,7 @@ def test_every_composable_step_is_declared_or_deliberately_declined():
         "strip_zalgo",
         "strip_pua",
         "strip_plane14",
+        "strip_invisible_marks",
         "resolve_deletions",
     ):
         try:

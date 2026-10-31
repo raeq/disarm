@@ -53,7 +53,8 @@ A configured resource limit was exceeded.
 
 - A batch larger than the maximum batch size.
 - The registered-languages or replacements cap.
-- A `regex_pattern` over the byte limit, or `UniqueSlugifier` exhausting its attempts.
+- A `regex_pattern` over the byte limit, or the `check` of a `UniqueSlugifier` refusing
+  10,001 candidates in one call.
 - **Output** that grows past a limit — registered replacements expanding the input past
   10 MiB, or any step of a preset leaving the text more than 10 MiB **longer than the
   input** the preset was given. NFKC widens some code points by up to 18×, and

@@ -314,15 +314,73 @@ class TestUniqueSlugifierCheckWalk:
             unique("Total")
         assert asked[10_001:] == asked[:10_001]
 
-    def test_call_10_002_for_one_base_raises_with_and_without_a_check(self) -> None:
-        from disarm import ResourceLimitError, UniqueSlugifier
+    def test_a_base_has_no_capacity_with_or_without_a_check(self) -> None:
+        """#1102: call 10,002 raised, with nothing tried and nothing refused."""
+        from disarm import UniqueSlugifier
 
         for options in ({}, {"check": lambda slug: False}):
             unique = UniqueSlugifier(**options)
-            slugs = [unique("Total") for _ in range(10_001)]
-            assert slugs[-1] == "total-10000"
-            with pytest.raises(ResourceLimitError):
-                unique("Total")
+            slugs = [unique("Total") for _ in range(20_000)]
+            assert slugs[0] == "total"
+            assert slugs[10_001] == "total-10001"
+            assert slugs[-1] == "total-19999"
+            assert len(set(slugs)) == 20_000
+
+    def test_past_the_old_limit_a_call_asks_check_once(self) -> None:
+        from disarm import UniqueSlugifier
+
+        asked: list[str] = []
+        unique = UniqueSlugifier(check=lambda slug: asked.append(slug) or False)
+        for _ in range(10_003):
+            unique("Total")
+        assert len(asked) == 10_003
+        assert asked[-1] == "total-10002"
+
+    def test_the_limit_counts_the_refusals_of_the_call_not_the_suffix(self) -> None:
+        from disarm import ResourceLimitError, UniqueSlugifier
+
+        refusing = [False]
+        asked: list[str] = []
+
+        def check(slug: str) -> bool:
+            asked.append(slug)
+            return refusing[0]
+
+        unique = UniqueSlugifier(check=check)
+        for _ in range(15_000):
+            unique("Total")
+        asked.clear()
+        refusing[0] = True
+        with pytest.raises(ResourceLimitError):
+            unique("Total")
+        assert len(asked) == 10_001
+        assert (asked[0], asked[-1]) == ("total-15000", "total-25000")
+        # The next call asks about the same ones again and goes no further: `refused`
+        # cannot grow past what one call may ask.
+        asked.clear()
+        with pytest.raises(ResourceLimitError):
+            unique("Total")
+        assert (len(asked), asked[-1]) == (10_001, "total-25000")
+        # What check refused it may accept later, lowest first.
+        refusing[0] = False
+        assert unique("Total") == "total-15000"
+
+    def test_the_last_attempt_of_a_call_can_still_succeed(self) -> None:
+        from disarm import UniqueSlugifier
+
+        unique = UniqueSlugifier(check=lambda slug: slug != "total-10000")
+        assert unique("Total") == "total-10000"
+
+    def test_slugs_the_instance_has_given_are_not_attempts(self) -> None:
+        """Another base holds 12,000 suffixes in a row, and the walk passes them all."""
+        from disarm import UniqueSlugifier
+
+        for options in ({}, {"check": lambda slug: False}):
+            unique = UniqueSlugifier(**options)
+            for n in range(1, 12_001):
+                assert unique(f"total {n}") == f"total-{n}"
+            assert unique("total") == "total"
+            assert unique("total") == "total-12001"
 
     def test_max_length_cuts_the_base_as_before(self) -> None:
         from disarm import UniqueSlugifier

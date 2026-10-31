@@ -77,7 +77,7 @@ def runCase (fields : List String) : String :=
     match slugCfg sep ml wb so lc stops, decodeList texts with
     | some cfg, some ts =>
       let cur := ",".intercalate ((Unique.run cfg 10000 ts).map encodeRes)
-      let fixed := ",".intercalate ((Unique.runFixed cfg 10000 ts).map encodeRes)
+      let fixed := ",".intercalate ((Unique.runFixed cfg ts).map encodeRes)
       s!"{cur}\t{fixed}"
     | _, _ => "ERR parse"
   | ["L", t, rep, kt] =>

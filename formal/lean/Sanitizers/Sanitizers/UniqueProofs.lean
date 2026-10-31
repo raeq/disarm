@@ -123,33 +123,31 @@ theorem candidateFixed_zero (sep base : List Char) (ml : Nat) :
     candidateFixed sep base ml 0 = some base := by
   simp [candidateFixed]
 
-theorem walkFixed_fresh (sep base : List Char) (ml ma : Nat) (seen : List (List Char)) :
+theorem walkFixed_fresh (sep base : List Char) (ml : Nat) (seen : List (List Char)) :
     ∀ (fuel counter k : Nat) (c : List Char),
-      walkFixed sep base ml ma seen fuel counter = .ok (k, c) → c = [] ∨ c ∉ seen
+      walkFixed sep base ml seen fuel counter = .ok (k, c) → c = [] ∨ c ∉ seen
   | 0, _, _, _, h => by simp [walkFixed] at h
   | fuel + 1, counter, k, c, h => by
     unfold walkFixed at h
     split at h
-    · simp at h
-    · split at h
-      · rename_i hnone
-        split at h
-        · rename_i h0
-          have : counter = 0 := by simpa using h0
-          subst this
-          rw [candidateFixed_zero] at hnone
-          simp at hnone
-        · simp at h
-      · rename_i cand _
-        split at h
-        · rename_i hb
+    · rename_i hnone
+      split at h
+      · rename_i h0
+        have : counter = 0 := by simpa using h0
+        subst this
+        rw [candidateFixed_zero] at hnone
+        simp at hnone
+      · simp at h
+    · rename_i cand _
+      split at h
+      · rename_i hb
+        simp at h; obtain ⟨_, rfl⟩ := h
+        left; simpa using hb
+      · split at h
+        · rename_i hfree
           simp at h; obtain ⟨_, rfl⟩ := h
-          left; simpa using hb
-        · split at h
-          · rename_i hfree
-            simp at h; obtain ⟨_, rfl⟩ := h
-            right; simpa using hfree
-          · exact walkFixed_fresh sep base ml ma seen fuel _ k c h
+          right; simpa using hfree
+        · exact walkFixed_fresh sep base ml seen fuel _ k c h
 
 /-- The fixed contract: a non-empty slug is fresh and recorded; the empty slug and errors
 leave the state alone. -/
@@ -196,11 +194,11 @@ theorem runAll_nodup_ne (f : St → List Char → Except Err (List Char) × St) 
       simp only [oks]
       exact ⟨ih1, ih2⟩
 
-theorem stepFixed_fresh (cfg : Config) (ma : Nat) : FreshNE (stepFixed cfg ma) := by
+theorem stepFixed_fresh (cfg : Config) : FreshNE (stepFixed cfg) := by
   intro st t
   unfold stepFixed
   simp only
-  generalize hw : walkFixed cfg.sep (slugifyFixed cfg t) cfg.maxLen ma st.seen (ma + 2)
+  generalize hw : walkFixed cfg.sep (slugifyFixed cfg t) cfg.maxLen st.seen (st.seen.length + 1)
     (hintOf st.hint (slugifyFixed cfg t)) = w
   cases w with
   | ok kc =>
@@ -213,13 +211,13 @@ theorem stepFixed_fresh (cfg : Config) (ma : Nat) : FreshNE (stepFixed cfg ma) :
       left
       have hne : c ≠ [] := by intro e; subst e; exact he rfl
       refine ⟨hne, rfl, ?_⟩
-      rcases walkFixed_fresh _ _ _ _ _ _ _ k c hw with h | h
+      rcases walkFixed_fresh _ _ _ _ _ _ k c hw with h | h
       · exact absurd h hne
       · exact h
   | error e => rfl
 
-theorem runFixed_nodup (cfg : Config) (ma : Nat) (ts : List (List Char)) :
-    ((oks (runFixed cfg ma ts)).filter (· ≠ [])).Nodup :=
-  (runAll_nodup_ne _ (stepFixed_fresh cfg ma) St.empty ts).1
+theorem runFixed_nodup (cfg : Config) (ts : List (List Char)) :
+    ((oks (runFixed cfg ts)).filter (· ≠ [])).Nodup :=
+  (runAll_nodup_ne _ (stepFixed_fresh cfg) St.empty ts).1
 
 end Sanitizers.Unique

@@ -212,6 +212,8 @@ public final class Native {
     public static native List<Untranslatable> findUntranslatable(
             String text, String scheme, String lang);
 
+    public static native String anomalySeverity(String kind);
+
     public static native AnomalyReport inspectAnomalies(String text, long lexicon);
 
     public static native AnomalyReport inspectAnomaliesWords(String text, String[] words);

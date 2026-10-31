@@ -11,6 +11,15 @@ operations:
       java: null
       kotlin: null
       cabi: analyze_hostname_opts
+  - id: anomaly_severity
+    names:
+      rust: anomaly_severity
+      python: anomaly_severity
+      ruby: anomaly_severity
+      node: anomalySeverity
+      java: anomalySeverity
+      kotlin: anomalySeverity
+      cabi: anomaly_severity
   - id: canonicalize
     names:
       rust: canonicalize

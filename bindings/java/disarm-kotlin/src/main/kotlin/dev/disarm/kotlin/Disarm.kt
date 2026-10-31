@@ -311,6 +311,9 @@ fun String.hasAnomalies(words: List<String> = emptyList()): Boolean = JDisarm.ha
 
 fun String.hasAnomalies(lexicon: Lexicon): Boolean = JDisarm.hasAnomalies(this, lexicon)
 
+/** The level a finding of this kind carries, by the name a report holds. */
+fun anomalySeverity(kind: String): String = JDisarm.anomalySeverity(kind)
+
 @JvmOverloads
 fun String.inspectAnomalies(words: List<String> = emptyList()): AnomalyReport =
     JDisarm.inspectAnomalies(this, words)

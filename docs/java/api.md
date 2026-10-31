@@ -31,8 +31,8 @@ import dev.disarm.kotlin.*              // functions
 
 ## What the JVM surface does not have
 
-Measured against the 112 canonical operations in `generated/parity.yaml`, the JVM
-covers 65. Some of the remainder are deprecated aliases or Python-only
+Measured against the 113 canonical operations in `generated/parity.yaml`, the JVM
+covers 66. Some of the remainder are deprecated aliases or Python-only
 conveniences and are not gaps at all. These are the ones that are:
 
 | absent | what it is | reach it with |

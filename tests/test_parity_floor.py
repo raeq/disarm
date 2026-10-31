@@ -58,6 +58,7 @@ FLOOR = frozenset(
         "grapheme_len",
         "has_bidi_conflict",
         "inspect_anomalies",
+        "anomaly_severity",
         "inspect_auto_lang",
         # #730 §5: the verification-path predicate, added complete on all seven.
         "is_canonical",

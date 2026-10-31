@@ -525,6 +525,7 @@ class ComposedPromptHygiene(_ComposedBase):
     #: Steps deliberately not taken, with the reason. A step absent from both
     #: this and `STEPS` is an oversight, and the test says so.
     DECLINED: ClassVar[dict[str, str]] = {
+        "strip_invisible_marks": "`strip_zalgo=0` runs first here and already takes them",
         "transliterate": "romanizing untrusted text destroys it for the reader it is being screened for; the guardrail's job is to remove the disguise, not to rewrite the language",
         "lang": "a per-language override, meaningful only under transliterate",
         "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
@@ -571,6 +572,7 @@ class ComposedRetrievalKey(_ComposedBase):
     #: Steps deliberately not taken, with the reason. A step absent from both
     #: this and `STEPS` is an oversight, and the test says so.
     DECLINED: ClassVar[dict[str, str]] = {
+        "strip_invisible_marks": "`strip_accents` runs here and already takes them",
         "lang": "a per-language override, meaningful only under transliterate",
         "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
         "gost7034": "a GOST romanization variant, meaningful only under transliterate",
@@ -628,6 +630,9 @@ class ComposedReviewDisplay(_ComposedBase):
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFC",
         "strip_zalgo": None,
+        # What this composition needed and had no step for: the carriers go and the accents
+        # stay (#958 recorded the gap, #1137 closed it).
+        "strip_invisible_marks": True,
         "strip_bidi": True,
         "strip_zero_width": True,
         "strip_control": True,

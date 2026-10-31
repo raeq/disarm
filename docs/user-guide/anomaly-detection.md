@@ -71,6 +71,29 @@ The three predicates are disjoint answers to different questions: `has_bidi_cont
 raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
 strong-direction **letters** and is structurally blind to controls altogether.
 
+### Shapes other detectors answer differently (#1165)
+
+A leading `U+FEFF` reports `invisible`. It is what a file read as `utf-8` and not `utf-8-sig`
+begins with, and two other detectors read it as a byte order mark. disarm keeps reporting it
+because `<BOM>paypal` is not `paypal` to an exact match. Open a file with `utf-8-sig` if the mark
+is expected.
+
+A ZWJ at the end of a text, after an emoji, reports nothing. One joiner cannot spell a byte, and a
+truncated message leaves one by accident, so this is a broken emoji sequence and not a carrier. The
+same goes for a lone zero-width character beside an emoji, with no letter to split or hide. Beside
+a letter, both report.
+
+`tests/test_rival_vectors.py` holds every string other detectors' test suites state a verdict on,
+and says for each one whether disarm agrees, differs by decision, or differs with an issue open.
+
+### Levels (#946)
+
+`anomaly_severity(kind)` gives the level a finding of that kind carries, by the name a report holds:
+`"error"` or `"warning"`, which are SARIF's names. `smuggled` is the one `"error"`, because it fires
+only on a run that decodes to readable text. Every other kind reports a technical fact and leaves the
+judgement to the caller, and that includes `deletion`, whose presence is not a matter of degree: a
+classic Mac OS file with `CR` line endings is a known false positive. The Node, Ruby, Java and C ABI
+bindings take the same name. The scanner's SARIF output reads these levels.
 
 ### One verdict for every canonically equivalent spelling
 

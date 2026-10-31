@@ -91,6 +91,7 @@ EXPECTED_ALL = {
     # Anomaly detection (#389)
     "has_anomalies",
     "inspect_anomalies",
+    "anomaly_severity",
     "AnomalyReport",
     "Finding",
     # Reusable anomaly lexicon handle (HAI-SDLC 6.1)
@@ -426,6 +427,7 @@ CORE_FUNCTION_PARAMS = {
     # Anomaly detection (#389)
     "has_anomalies": ["text", "lexicon"],
     "inspect_anomalies": ["text", "lexicon"],
+    "anomaly_severity": ["kind"],
     # Output encoders
     "escape_html": ["text"],
     "percent_encode": ["text", "component"],
@@ -589,6 +591,7 @@ CLASS_METHODS = {
             "strip_zalgo",
             "strip_pua",
             "strip_plane14",
+            "strip_invisible_marks",
             "resolve_deletions",
             "resolve_cr",
             "digit_policy",

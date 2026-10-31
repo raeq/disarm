@@ -97,3 +97,10 @@ def test_only_ordinary_selectors_are_in_the_table() -> None:
 def test_the_other_two_comparison_surfaces_still_remove_all_of_them() -> None:
     text = f"\u2764{EMOJI}"
     assert disarm.canonicalize(text) == "\u2764"
+
+
+def test_provenance_records_the_table_and_its_version() -> None:
+    """Consumers pin against that page for the byte-stable behaviour of a preset."""
+    page = (ROOT / "docs" / "provenance.md").read_text(encoding="utf-8")
+    row = next((line for line in page.splitlines() if "variation_sequences.tsv" in line), "")
+    assert "18.0.0" in row

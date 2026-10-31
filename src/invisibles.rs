@@ -405,6 +405,21 @@ mod tests {
     }
 
     #[test]
+    fn a_presentation_selector_stays_only_after_a_registered_base() {
+        // #1135: after `a` the selector changes no glyph, which is what makes it a channel.
+        for (text, want) in [
+            ("a\u{FE0F}x", "ax"),
+            ("a\u{FE0E}x", "ax"),
+            ("\u{430}\u{FE0F}x", "\u{430}x"),
+            ("\u{2764}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{A9}\u{FE0E}", "\u{A9}\u{FE0E}"),
+            ("1\u{FE0F}\u{20E3}", "1\u{FE0F}\u{20E3}"),
+        ] {
+            assert_eq!(strip_invisible_classes(text, rendering()), want, "{text:?}");
+        }
+    }
+
+    #[test]
     fn classifiers_cover_the_ranges() {
         assert!(is_tag('\u{E0001}') && is_tag('\u{E0050}') && is_tag('\u{E007F}'));
         assert!(!is_tag('\u{1F3F4}')); // the flag base is not a tag char

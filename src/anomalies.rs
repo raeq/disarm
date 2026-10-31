@@ -321,8 +321,9 @@ pub enum AnomalyKind {
     Invisible,
     /// A bidi override, or a bidi control inside a majority-Latin token (Trojan Source).
     Bidi,
-    /// Excessive stacked combining marks, an overlay on every letter of a word, or three marks
-    /// on every letter of a Latin word.
+    /// Excessive stacked combining marks, an overlay across a word, or three marks on half the
+    /// letters of a Latin word. A strike counts from half a word, an underline from all letters
+    /// but one (#1194).
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
@@ -1191,59 +1192,103 @@ fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
     ) && detect_scripts(word).iter().any(|s| CJK_SCRIPTS.contains(s))
 }
 
-/// Whether a mark draws over or under a letter: strikethrough, a slash, an underline (#1156).
-fn is_overlay_mark(c: char) -> bool {
-    matches!(c, '\u{0332}'..='\u{0338}')
+/// Whether a mark draws through a letter: a strikethrough or a slash (#1156, #1194).
+///
+/// `U+0334` to `U+0338`, and the overlays in the block for symbols. That is every mark in
+/// combining class 1 but those a script writes for itself: Vedic tones, Kharoshthi, Bassa Vah,
+/// Duployan and the musical tremolos.
+fn is_strike_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0334}'..='\u{0338}'
+            | '\u{20D2}'
+            | '\u{20D3}'
+            | '\u{20D8}'..='\u{20DA}'
+            | '\u{20E5}'
+            | '\u{20E6}'
+            | '\u{20EA}'
+            | '\u{20EB}'
+    )
 }
 
-/// The overlay on a word with one on every letter, or `None` (#1156).
+/// Whether a mark draws under a letter (#1156). Not `U+0331`, which is a letter in Kwak'wala
+/// and Tlingit, and not the overline `U+0305`, a vinculum and an active-low signal (#1194).
+fn is_underline_mark(c: char) -> bool {
+    matches!(c, '\u{0332}' | '\u{0333}')
+}
+
+/// The first overlay on a word covering enough of it, with how many letters of how many
+/// carry one, or `None` (#1156, #1194).
 ///
 /// One mark per base is below every count, the same blind spot #724 closed for enclosing
-/// marks, and these are `Mn` so that rule did not reach them. The shape is what no orthography
-/// does. Two letters at least, since one slashed letter is linguistic or math notation, and
-/// letters only, so `a=\u{338}b` stays the negation it is (#749).
-fn overlaid_word(word: &str) -> Option<char> {
+/// marks, and these are `Mn` so that rule did not reach them. Requiring every letter let one
+/// bare letter switch the rule off, and writing the mark before each letter does that without
+/// leaving one out on purpose. So:
+///
+/// * a strike reports on two letters and at least half the word. Nobody writes one on every
+///   other letter, and one struck letter is linguistic or math notation;
+/// * an underline reports on all letters but one, three at the least. Scholarly romanization of
+///   Arabic underlines digraphs, so `S\u{332}h\u{332}ayk\u{332}h\u{332}` is four of six.
+///
+/// A mark on a symbol counts for no letter, so `a=\u{338}b` stays the negation it is (#749).
+fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
     let (mut letters, mut overlaid) = (0usize, 0usize);
-    let mut this_letter = false;
+    let mut open_letter = false;
+    let mut struck = false;
     let mut found = None;
     for c in word.chars() {
-        if is_overlay_mark(c) {
-            if letters > 0 && !this_letter {
-                this_letter = true;
+        if unicode_normalization::char::is_combining_mark(c) {
+            let strike = is_strike_mark(c);
+            if open_letter && (strike || is_underline_mark(c)) {
+                open_letter = false;
                 overlaid += 1;
+                struck |= strike;
                 found.get_or_insert(c);
             }
-        } else if c.is_alphabetic() && !unicode_normalization::char::is_combining_mark(c) {
-            letters += 1;
-            this_letter = false;
+        } else {
+            open_letter = c.is_alphabetic();
+            letters += usize::from(open_letter);
         }
     }
-    (letters >= 2 && overlaid == letters)
+    let enough = if struck {
+        overlaid >= 2 && overlaid * 2 >= letters
+    } else {
+        letters >= 2 && (overlaid == letters || (overlaid >= 3 && overlaid + 1 == letters))
+    };
+    enough
         .then_some(found)
         .flatten()
+        .map(|mark| (mark, overlaid, letters))
 }
 
-/// The marks on a Latin word carrying three or more per letter, or `None` (#1156).
+/// The marks on a Latin word with three or more on half its letters, or `None` (#1156, #1194).
 ///
 /// The cap is per combining class, so four marks in four classes pass it, and it has to stay
 /// that way: counting every mark on a base flagged 142 Burmese place names (#842). Those are
 /// not Latin, and the discriminator here is exactly that. No orthography written in Latin
-/// letters carries three marks on every letter of a word, and Vietnamese, the heaviest, tops
-/// out at two.
+/// letters carries three marks on a letter, and Vietnamese, the heaviest, tops out at two. The
+/// bar is the one a strike answers to, since one bare letter switched the rule off here too.
 fn heavily_marked_latin_word(word: &str) -> Option<usize> {
-    let (mut letters, mut marks) = (0usize, 0usize);
+    let (mut letters, mut marks, mut heavy) = (0usize, 0usize, 0usize);
+    let mut on_this_letter = None;
     // Decomposed, or `e` + `U+0301` + two more counts as `\u{e9}` + two (Finding 3).
     for c in word.nfd() {
         if unicode_normalization::char::is_combining_mark(c) {
             marks += 1;
+            on_this_letter = on_this_letter.map(|count: usize| count + 1);
+            heavy += usize::from(on_this_letter == Some(3));
         } else if c.is_alphabetic() {
             if !is_ascii_letter_base(c) {
                 return None;
             }
             letters += 1;
+            on_this_letter = Some(0);
+        } else {
+            on_this_letter = None;
         }
     }
-    (letters >= 3 && marks >= 3 * letters).then_some(marks)
+    (letters >= 3 && (marks >= 3 * letters || (heavy >= 2 && heavy * 2 >= letters)))
+        .then_some(marks)
 }
 
 /// The first stacking mark that appears twice in a row on one base (#835).
@@ -1703,10 +1748,10 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             ));
         }
         for part in word_parts(tok) {
-            if let Some(mark) = overlaid_word(part) {
+            if let Some((mark, overlaid, letters)) = overlaid_word(part) {
                 return Some(mk(
                     AnomalyKind::Zalgo,
-                    format!("{} on every letter", codepoint(mark)),
+                    format!("{} on {overlaid} of {letters} letters", codepoint(mark)),
                 ));
             }
             if let Some(marks) = heavily_marked_latin_word(part) {

@@ -110,6 +110,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           SEED: ${{ steps.hypothesis.outputs.seed }}
+          HYPOTHESIS_OUTCOME: ${{ steps.hypothesis.outcome }}
         with:
           script: |
             const fs = require('fs');
@@ -119,10 +120,26 @@ jobs:
             } catch (e) {
               log = '(log unavailable)';
             }
-            const title = 'Nightly Hypothesis run failed';
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                         `/actions/runs/${context.runId}`;
-            const body = [
+            // `failure()` is true when any step failed, and only the test step can produce
+            // a counterexample. #1120 was a rustup download that timed out: no test ran,
+            // and the issue still called it a real counterexample.
+            const outcome = process.env.HYPOTHESIS_OUTCOME;
+            const ranTheTests = outcome === 'failure';
+            const title = ranTheTests
+              ? 'Nightly Hypothesis run failed'
+              : 'Nightly Hypothesis run did not reach a verdict';
+            const body = !ranTheTests ? [
+              `The nightly Tier-2 (Hypothesis) run on \`${context.sha.slice(0, 7)}\` failed in a`,
+              `step other than the tests (the test step's outcome is \`${outcome}\`).`,
+              '',
+              'There is no falsifying example, so there is nothing to reproduce. That night\'s',
+              'input space went unexplored. Find the failed step in the run, and treat it as a',
+              'bug in the workflow if it repeats.',
+              '',
+              `[Full run](${url})`,
+            ].join('\n') : [
               `The nightly Tier-2 (Hypothesis) run failed on \`${context.sha.slice(0, 7)}\`.`,
               '',
               'Hypothesis prints a **falsifying example** for each failure — that example is',
@@ -147,19 +164,21 @@ jobs:
               'like any other bug report.',
             ].join('\n');
 
-            // One rolling issue rather than a new one every night: a repeatedly-failing
-            // property would otherwise bury the tracker.
+            // One rolling issue of each kind rather than a new one every night: a
+            // repeatedly-failing property would otherwise bury the tracker. Kept apart by
+            // title, so a counterexample is not filed as a comment under a setup failure.
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'nightly-hypothesis',
             });
-            if (existing.data.length > 0) {
+            const rolling = existing.data.find((issue) => issue.title === title);
+            if (rolling) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: existing.data[0].number,
+                issue_number: rolling.number,
                 body,
               });
             } else {
@@ -167,7 +186,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title,
-                labels: ['bug', 'nightly-hypothesis'],
+                labels: [ranTheTests ? 'bug' : 'ci', 'nightly-hypothesis'],
                 body,
               });
             }

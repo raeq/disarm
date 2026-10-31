@@ -117,6 +117,11 @@ the `ci` settings minus `derandomize`. To reproduce a nightly failure:
 pytest -m hypothesis --hypothesis-profile=nightly --hypothesis-seed=<seed from the log>
 ```
 
+The workflow files one of two rolling issues. *Nightly Hypothesis run failed* means the
+test step failed, so a falsifying example is in the log. *Nightly Hypothesis run did not
+reach a verdict* means another step failed, such as the toolchain download behind #1120,
+and there is no example to reproduce.
+
 ## Tier 2b — Expensive, opt-in (`slow`)
 
 ```bash

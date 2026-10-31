@@ -76,7 +76,7 @@ assert pipe("Città di Firenze") == "citta di firenze"
 
 ### normalize_web_input
 
-**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)). It is intentionally lighter than `canonicalize_strict()` (no bidi/zero-width/control/zalgo stripping); use that function for adversarial input.
+**Use case:** Lightweight Unicode normalization of web form input (NFKC + confusable-folding). This is *input* normalization, **not** output sanitization — it performs no escaping and is not an XSS/HTML/SQL defense (see [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md)). It is intentionally lighter than `canonicalize_strict()`: it strips control and zero-width characters and the Private Use Area, and keeps bidi controls, zalgo marks, the TAG block and variation selectors. Use that function for adversarial input.
 
 ```python
 pipe = get_pipeline("normalize_web_input")
@@ -91,7 +91,7 @@ assert pipe("  Hello   World  ") == "Hello World"
 | Confusables | Folds TR39 confusable homoglyphs (not an output/injection defense) |
 
 !!! note
-    To also handle zalgo text and bidi injection, use the `canonicalize_strict()` precompiled pipeline instead — it includes `strip_zalgo` and `strip_bidi` steps that `TextPipeline` does not support.
+    To also handle zalgo text and bidi injection, use the `canonicalize_strict()` precompiled pipeline, or pass `strip_zalgo` and `strip_bidi` to a composed `TextPipeline`. [`strip_zalgo` is a cap, and `0` removes every diacritic](api/classes.md#strip_zalgo-is-a-cap-and-0-is-not-off).
 
 ### ml_corpus_normalize
 
@@ -135,8 +135,9 @@ which folds a line break to a space by design — measured over 465 files of thi
 all thirteen other surfaces collapse every file to a single line. It also applies no
 confusable fold, and that is the design point: exactly three ASCII characters are TR39
 sources (`"`, `` ` ``, `|`), all three are load-bearing syntax, and folding them breaks 287
-of 287 Python files. So this profile neutralizes the invisible, bidi and control classes in
-the text and leaves the homoglyph class to `inspect_anomalies`, `is_confusable` and
+of 287 Python files. So this profile neutralizes bidi controls and most zero-width and
+control characters in the text, keeps the Private Use Area, the TAG block and variation
+selectors, and leaves the homoglyph class to `inspect_anomalies`, `is_confusable` and
 `is_mixed_script` to report.
 
 ```python

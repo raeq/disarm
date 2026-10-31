@@ -262,6 +262,11 @@ assert ingest("Café déjà vu") == "Cafe deja vu"
 assert ingest("Привет, мир!") == "Privet, mir!"
 ```
 
+`rag_ingest` works on characters, so it keeps an HTML comment or Markdown alt text as ordinary
+words: see *Text a renderer hides* in
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) if what your index
+holds has to match the page a person reads.
+
 ## A composed entry point
 
 If you want one function, compose the two paths and keep transliteration

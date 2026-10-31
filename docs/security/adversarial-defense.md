@@ -245,6 +245,13 @@ A cell reporting total loss is measuring `strip_obfuscation`, and the
 recovery-versus-fidelity trade-off it implies was taken on a configuration this page
 does not recommend when diacritics carry meaning.
 
+A registered variation sequence is the same trade. `U+0030 U+FE00` is a slashed zero and
+`U+2205 U+FE00` an empty-set variant, and [ghostchars' `standardized-variants`
+study](https://github.com/antonsoo/ghostchars/tree/6ea70c64c0a01092e8243f71da1ded2c62cb2e7a/studies/standardized-variants) lists these with `U+3001 U+FE01` and `U+1000 U+FE00` as
+pairs a repair should not touch. `canonicalize` and `strip_format` remove the selector and keep the
+base, because neither has a reason to tell two glyphs of one character apart when comparing.
+`code_context` keeps the pair.
+
 ### Threat model → entry point → cost
 
 | Your threat model | Reach for | It costs you |
@@ -290,6 +297,36 @@ assert normalize_confusables("fuСk") == "fuCk"
 
 Combine them when a model needs both: `normalize_confusables` first, then
 `ml_normalize`.
+
+## Reported in the field
+
+Three outside reports, with what disarm does on the same construction. Each vector is rebuilt in
+`tests/test_security_citations.py`, and none of these says how common the attack is.
+
+**Tag characters in phishing mail.** [Microsoft Security
+Research](https://www.microsoft.com/en-us/security/blog/2026/09/03/ascii-smuggling/) (2026-09-03)
+describes a finance-themed campaign that put `U+E0020` between the letters of lure words, as in `fun`
+`U+E0020` `ding`, to get past keyword, signature and ML filters. No hidden message was encoded. Its
+signature hits rose from about 21,000 on February 8, 2026 to more than 1.3 million the next day. The
+report's advice is to normalize before matching, and that is what this does: `canonicalize` and
+`llm_guardrail` both return `funding`. `has_anomalies` reports `invisible`, and also `smuggled`,
+because `decode_smuggled` reads the tag as a one-space payload.
+
+**Variation selectors in VS Code extensions.** [Endor
+Labs](https://www.endorlabs.com/learn/invisible-threats-glassworm-unicode-vscode) describes GlassWorm,
+whose extensions carried a payload of 6,492 invisible characters in `U+FE00`-`U+FE0F` and
+`U+E0100`-`U+E01EF`, decoded to Base64 and run through `eval()`. A selector run spelled the way the
+`variation_bytes` scheme reads it reports `smuggled`, and `decode_smuggled` returns its text.
+`canonicalize` removes the run. `code_context` keeps it on purpose (#1122), so in source code the
+report is what catches this.
+
+**Homoglyphs against AI-text detectors.** Creo and Pudasaini, [SilverSpeak
+(arXiv:2406.11239)](https://arxiv.org/abs/2406.11239), Workshop on Detecting AI Generated Content at
+COLING 2025, replaced characters with their UTS #39 homoglyphs. Average MCC across seven detectors
+fell from 0.64 to -0.01 when every replaceable character was swapped (their Table 2). The paper covers
+English and measures no defense. On its Figure 2 example, `canonicalize` returns `I love cats` and
+`has_anomalies` reports `mixed_script`. Whether a detector recovers after that fold has not been
+measured here.
 
 ## See also
 

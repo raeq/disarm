@@ -465,6 +465,33 @@ Read so far, so the next search starts from here:
 | ArtPrompt at `6eb86644` | MIT | read and left out | ASCII art, whose 16,424 ViTC rows hold no non-ASCII; named in the same entry |
 | BitBypass at `9dcdba5a` | MIT | read and left out | binary spelled in ASCII; named in the same entry |
 
+Audited on 2026-10-31: 67 repositories, each measured and not judged from its description. An
+earlier summary said most of these added little, and that was wrong: `antonsoo/ghostchars` has no
+stars and turned out to be the most useful of them. [The dataset](https://gist.github.com/raeq/1d1c2c3c354e390693a225ff0b879d0c)
+holds all 67 with commit, licence line and counts, and a commit pin goes stale, so check the date
+before trusting a row.
+
+| group | repositories | where they went |
+|---|---|---|
+| controls | `verazuo/jailbreak_llms`, `cyberark/FuzzyAI`, `RootVandal/palisade`, `ReversecLabs/spikee` | `benign-controls`, `palisade-labels`, `spikee-seed-census` |
+| labelled | `Arcanum-Sec/arc_pi_taxonomy`, `antonsoo/ghostchars` | `arcanum-taxonomy`, `ghostchars-labels` |
+| known answers | `praetorian-inc/augustus` | `augustus-known-answers` |
+| rival detectors | `raulkivi/unicode-smuggling-guard`, `NicPWNs/GlyphGuard`, `protectai/llm-guard` and others in the dataset | subjects, under `## More than one tool`, and `tests/test_rival_vectors.py` |
+| boundary | `yueliu1999/FlipAttack`, `RobustNLP/CipherChat`, `uw-nsl/ArtPrompt`, `kalyan-nakka/BitBypass` | `THREAT_MODEL.md`'s out-of-scope entry |
+| homoglyph maps that already agree | `ReversecLabs/spikee` 30 of 30, `QData/TextAttack` 35 of 35, `TarzEH/janus` 37 of 37 | no suite, since a map that agrees scores nothing new |
+| the rest | listed in the dataset | no suite. A row there says what it holds and how often `has_anomalies` fired on 0.18.0 |
+
+Four rules from that audit, for the next one:
+
+- An unlabelled corpus is data for `label-free-invariants` and not of no use, so measure a project
+  before dismissing it.
+- Narrow search terms missed `cyberark/FuzzyAI`, `ReversecLabs/spikee` and
+  `praetorian-inc/augustus`, all of them large. Search for the tool's job as well as the technique.
+- A TypeScript regular expression read three zero-width variables as map rows in `TarzEH/janus`.
+  Check what a pattern caught.
+- Count these corpora and do not print them. Some hide text addressed to a reader, including an
+  LLM reading the file.
+
 ## Adding a benchmark
 
 A suite is one class: set `name`, `family`, `availability` and a `Provenance`, then

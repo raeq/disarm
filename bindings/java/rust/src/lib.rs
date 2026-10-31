@@ -1687,6 +1687,23 @@ pub fn inspectAnomaliesWords<'l>(
     .resolve::<Policy>()
 }
 
+/// The level a finding of this kind carries, by the name a report holds (#946).
+#[jni_mangle("dev.disarm.internal.Native")]
+pub fn anomalySeverity<'l>(
+    mut env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    kind: JString<'l>,
+) -> JObject<'l> {
+    env.with_env(|env| -> JniResult<JObject> {
+        let kind = read_str(env, &kind)?;
+        match kind.parse::<api::AnomalyKind>() {
+            Ok(kind) => Ok(env.new_string(kind.severity().as_str())?.into()),
+            Err(e) => Err(throw_core(env, &e)),
+        }
+    })
+    .resolve::<Policy>()
+}
+
 /// Construct a `dev.disarm.Finding` record.
 fn new_finding<'l>(env: &mut Env<'l>, f: &api::Finding) -> JniResult<JObject<'l>> {
     let kind = env.new_string(f.kind.as_str())?;

@@ -1353,8 +1353,15 @@ pub fn find_key_collisions<S: AsRef<str>>(
 // ── Anomaly detection ───────────────────────────────────────────────────────
 
 pub use crate::anomalies::{
-    has_anomalies, inspect_anomalies, lexicon, AnomalyKind, AnomalyReport, Finding,
+    has_anomalies, inspect_anomalies, lexicon, AnomalyKind, AnomalyReport, AnomalySeverity, Finding,
 };
+
+/// The level a finding of `kind` carries (#946). The same as [`AnomalyKind::severity`], beside the
+/// other free functions so that every binding's row reads the same.
+#[must_use]
+pub fn anomaly_severity(kind: AnomalyKind) -> AnomalySeverity {
+    kind.severity()
+}
 
 /// Decode what a smuggled run *spells*, rather than reporting that one is present (#701).
 ///

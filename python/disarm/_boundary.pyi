@@ -63,6 +63,9 @@ from disarm._core import (
     UnsupportedError as UnsupportedError,
 )
 from disarm._core import (
+    _anomaly_severity as _anomaly_severity,
+)
+from disarm._core import (
     _canonicalize as _canonicalize,
 )
 from disarm._core import (

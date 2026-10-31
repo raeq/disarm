@@ -525,6 +525,7 @@ class ComposedPromptHygiene(_ComposedBase):
     #: Steps deliberately not taken, with the reason. A step absent from both
     #: this and `STEPS` is an oversight, and the test says so.
     DECLINED: ClassVar[dict[str, str]] = {
+        "strip_invisible_marks": "`strip_zalgo=0` runs first here and already takes them",
         "transliterate": "romanizing untrusted text destroys it for the reader it is being screened for; the guardrail's job is to remove the disguise, not to rewrite the language",
         "lang": "a per-language override, meaningful only under transliterate",
         "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
@@ -571,6 +572,7 @@ class ComposedRetrievalKey(_ComposedBase):
     #: Steps deliberately not taken, with the reason. A step absent from both
     #: this and `STEPS` is an oversight, and the test says so.
     DECLINED: ClassVar[dict[str, str]] = {
+        "strip_invisible_marks": "`strip_accents` runs here and already takes them",
         "lang": "a per-language override, meaningful only under transliterate",
         "strict_iso9": "an ISO 9 romanization variant, meaningful only under transliterate",
         "gost7034": "a GOST romanization variant, meaningful only under transliterate",
@@ -628,6 +630,9 @@ class ComposedReviewDisplay(_ComposedBase):
     STEPS: ClassVar[dict[str, object]] = {
         "normalize": "NFC",
         "strip_zalgo": None,
+        # What this composition needed and had no step for: the carriers go and the accents
+        # stay (#958 recorded the gap, #1137 closed it).
+        "strip_invisible_marks": True,
         "strip_bidi": True,
         "strip_zero_width": True,
         "strip_control": True,
@@ -815,6 +820,65 @@ class ConfusableHomoglyphsSubject(_Base):
         }
 
 
+class UnicodeSmugglingGuardSubject(_Base):
+    """A detector built for the smuggling question, with no sanitizer to compare.
+
+    `tokens.scan_control_tokens` also ships, and is left out: chat-template tokens are
+    visible text, and this surface answers whether a text holds hidden characters.
+    """
+
+    info = SubjectInfo(
+        name="unicode-smuggling-guard",
+        version=_version("unicode-smuggling-guard"),
+        origin="Raul Kivi",
+        url="https://github.com/raulkivi/unicode-smuggling-guard",
+        role="detects hidden characters used to smuggle a payload",
+    )
+    ROLES: ClassVar[dict[str, str]] = {Role.DETECTOR: "scan"}
+
+    def available(self) -> tuple[bool, str]:
+        return (
+            (True, "")
+            if _import("unicode_smuggling_guard")
+            else (False, "pip install unicode-smuggling-guard")
+        )
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        from unicode_smuggling_guard.scanner import scan
+
+        return {"scan": lambda s: bool(scan(s))}
+
+
+class GlyphGuardSubject(_Base):
+    """A detector and a sanitizer built for this question, on their default settings.
+
+    `sanitize` defaults to the `llm-input` profile, which upstream describes as text going
+    into a language model, so it answers every job as a tool with one entry point does.
+    """
+
+    info = SubjectInfo(
+        name="glyphguard",
+        version=_version("glyphguard"),
+        origin="NicPWNs",
+        url="https://github.com/NicPWNs/GlyphGuard",
+        role="detects and neutralizes smuggling, bidi, stacked marks and lookalikes",
+    )
+    ROLES: ClassVar[dict[str, str]] = {Role.DETECTOR: "detect", Role.SANITIZER: "sanitize"}
+
+    def available(self) -> tuple[bool, str]:
+        return (True, "") if _import("glyphguard") else (False, "pip install glyphguard")
+
+    def transforms(self) -> dict[str, Callable[[str], str]]:
+        import glyphguard
+
+        return {"sanitize": lambda s: glyphguard.sanitize(s).text}
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        import glyphguard
+
+        return {"detect": lambda s: bool(glyphguard.detect(s))}
+
+
 class PyUnormalizeSubject(_Base):
     """Normalization against a different UCD than the interpreter's.
 
@@ -962,6 +1026,8 @@ ALL: tuple[type[_Base], ...] = (
     TextUnidecodeSubject,
     AnyAsciiSubject,
     ConfusableHomoglyphsSubject,
+    UnicodeSmugglingGuardSubject,
+    GlyphGuardSubject,
     PyUnormalizeSubject,
     ICUSubject,
     NullBaselineSubject,

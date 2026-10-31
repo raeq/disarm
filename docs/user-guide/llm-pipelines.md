@@ -262,6 +262,11 @@ assert ingest("Café déjà vu") == "Cafe deja vu"
 assert ingest("Привет, мир!") == "Privet, mir!"
 ```
 
+`rag_ingest` works on characters, so it keeps an HTML comment or Markdown alt text as ordinary
+words: see *Text a renderer hides* in
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) if what your index
+holds has to match the page a person reads.
+
 ## A composed entry point
 
 If you want one function, compose the two paths and keep transliteration
@@ -436,7 +441,9 @@ for the selectors and `U+034F`. `U+FE0F` on an emoji in a string literal and an 
 variation sequence in a UI string are source text, so removing them would rewrite the file.
 They are also a concealment channel, and that half is what the detector is for: a run of
 tags or selectors is reported as `smuggled`, and `decode_smuggled` reads it back. One
-selector alone is not a run, and [is not reported](../limitations.md).
+selector alone is not a run, and [is not reported](../limitations.md). Selectors spread one per
+letter, with none touching, report `invisible` from eight on and decode to nothing, since a bit
+pattern across letters is not one of its schemes.
 
 ```python
 from disarm import decode_smuggled, get_pipeline, has_anomalies, inspect_anomalies
@@ -504,7 +511,7 @@ Being explicit about the path is what earns credibility with this audience —
 the wrong path actively destroys signal:
 
 ```python
-from disarm import get_pipeline
+from disarm import get_pipeline, has_anomalies
 
 # WRONG: the guardrail fold mangles legitimate Cyrillic — its confusable step
 # rewrites real letters to Latin look-alikes, here producing the plausible-but-
@@ -513,6 +520,13 @@ assert get_pipeline("llm_guardrail")("Москва") == "mockba"
 
 # RIGHT: the ingestion path romanises the same input cleanly:
 assert get_pipeline("rag_ingest")("Москва") == "Moskva"
+
+# More often the word folds only in part, and that is what a seam check sees: a clean
+# word came back as a mix, so the output reports `mixed_script` and the input did not.
+assert get_pipeline("llm_guardrail")("привет") == "npиbet"
+assert not has_anomalies("привет")
+assert has_anomalies("npиbet")
+assert not has_anomalies(get_pipeline("rag_ingest")("привет"))
 ```
 
 Do **not** reach for disarm when:

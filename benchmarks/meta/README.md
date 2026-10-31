@@ -68,6 +68,19 @@ has no answer, so those pairs report SKIPPED with the reason rather than a zero;
 zeros read as results. Suites that measure a disarm-specific surface set
 `MULTI_SUBJECT = False`.
 
+Detectors built for the smuggling question, considered in #1164. Each is code the bench
+venv runs, so each was read before it was pinned.
+
+| detector | decision | why |
+|---|---|---|
+| `unicode-smuggling-guard` 1.3.0 | a subject | MIT, no dependencies. Its one `subprocess` call lists a repository's files and is not on the `scan` path |
+| `glyphguard` 0.3.0 | a subject | Apache-2.0, no dependencies, and it ships a sanitizer too. The same is true of its `subprocess` call |
+| `llm-guard` 0.3.16 | left out | `torch`, `transformers` and `presidio-*` for one `InvisibleText` scanner, which is too much installed code for one column |
+| `RootVandal/palisade` | left out | git only, and its labelled rows are already `palisade-labels`. PyPI's `palisade` is a different project under a commercial licence, so that name is never pinned |
+| `ghostchars` | left out | Node, which needs its own sandboxed path. npm's package names `ghostchars/ghostchars`, and the studies in `ghostchars-labels` live at `antonsoo/ghostchars`, and the two have not been shown to be one project |
+| `unsmuggle` | left out | Node, for the same reason |
+| `smugglecheck` | not a candidate | 404 on npm under that name |
+
 Two subjects are **controls**, not candidates:
 
 `null-baseline` deletes everything. It scores perfectly on any naive coverage
@@ -439,9 +452,45 @@ Read so far, so the next search starts from here:
 | garak `badchars` | Apache-2.0 | not a suite | follows the Bad Characters paper, already wired as `bad-characters` |
 | garak `encoding`, `smuggling` at `4b7761c2` | Apache-2.0 | `token-smuggling-constructions` | rebuilt and not imported: Python has no sandbox like Node's and the constructions are short; its zalgo and homoglyph probes repeat `p4rs3lt0ngv3-transforms` |
 | PyRIT at `d3446e04` | MIT | `token-smuggling-constructions` | about 100 converters behind about 50 dependencies, so seven are rebuilt from their docstrings and none is imported |
-| promptfoo | MIT | not read | |
+| promptfoo at `5582f347` | MIT | `promptfoo-literal-maps` | two object literals with a known answer per row, read without running them; the rest holds no answer a suite can score |
+| Augustus at `84487332` | Apache-2.0 | `augustus-known-answers` | Go test tables read as data: 121 pairs and 12 rebuilt zalgo rows, each table classed in the source before a score. No Go runs. The sneaky-bits framing is the unpadded one, and `leet` ran with no lexicon. |
+| palisade at `4d1728ac` | MIT | `palisade-labels` | 56 labelled rows: its three Unicode attacks are the score, its 29 ASCII attacks a census in no rate |
+| spikee at `8f8e9ad3` | Apache-2.0 | `spikee-seed-census` | 640 seed rows in seven sets, counted per file and never printed. The recorded guardrail results under `results/v0.1` are not comparable; the suite's notes say why |
+| pikit at `6a90c063` | MIT | no suite | 13 attack classes beside its channels. Recorded so that the next reader starts here, and not scored |
+| AI-Infra-Guard at `851e3f29` | Apache-2.0 | no suite | 13 encoder functions in `skills/aig-agent-redteam/modules/mutation-attack/scripts/encodings.py`, and a scenario set at `Research/forge_bench/scenarios/v0.3_intact_control` not yet read. Recorded and not scored |
 | ST3GG `examples/` at `35f8b2b8` | AGPL-3.0 | `st3gg-text-examples` | eleven text techniques with a cover its generator fixes; its `README.md` hides 122 zero-width characters and no suite reads it |
 | CL4R1T4S | none checked | not read | holds system prompts, judged from its description only |
+| FlipAttack at `c53880b4` | MIT | read and left out | reordered words and letters: ordinary ASCII, named in `THREAT_MODEL.md`'s out-of-scope entry |
+| CipherChat at `6fce7891` | MIT | read and left out | classical ciphers and character codes: ordinary ASCII, named in the same entry |
+| ArtPrompt at `6eb86644` | MIT | read and left out | ASCII art, whose 16,424 ViTC rows hold no non-ASCII; named in the same entry |
+| BitBypass at `9dcdba5a` | MIT | read and left out | binary spelled in ASCII; named in the same entry |
+
+Audited on 2026-10-31: 67 repositories, each measured and not judged from its description. An
+earlier summary said most of these added little, and that was wrong: `antonsoo/ghostchars` has no
+stars and turned out to be the most useful of them. [The dataset](https://gist.github.com/raeq/1d1c2c3c354e390693a225ff0b879d0c)
+holds all 67 with commit, licence line and counts, and a commit pin goes stale, so check the date
+before trusting a row.
+
+| group | repositories | where they went |
+|---|---|---|
+| controls | `verazuo/jailbreak_llms`, `cyberark/FuzzyAI`, `RootVandal/palisade`, `ReversecLabs/spikee` | `benign-controls`, `palisade-labels`, `spikee-seed-census` |
+| labelled | `Arcanum-Sec/arc_pi_taxonomy`, `antonsoo/ghostchars` | `arcanum-taxonomy`, `ghostchars-labels` |
+| known answers | `praetorian-inc/augustus` | `augustus-known-answers` |
+| rival detectors | `raulkivi/unicode-smuggling-guard`, `NicPWNs/GlyphGuard`, `protectai/llm-guard` and others in the dataset | subjects, under `## More than one tool`, and `tests/test_rival_vectors.py` |
+| boundary | `yueliu1999/FlipAttack`, `RobustNLP/CipherChat`, `uw-nsl/ArtPrompt`, `kalyan-nakka/BitBypass` | `THREAT_MODEL.md`'s out-of-scope entry |
+| homoglyph maps that already agree | `ReversecLabs/spikee` 30 of 30, `QData/TextAttack` 35 of 35, `TarzEH/janus` 37 of 37 | no suite, since a map that agrees scores nothing new |
+| the rest | listed in the dataset | no suite. A row there says what it holds and how often `has_anomalies` fired on 0.18.0 |
+
+Four rules from that audit, for the next one:
+
+- An unlabelled corpus is data for `label-free-invariants` and not of no use, so measure a project
+  before dismissing it.
+- Narrow search terms missed `cyberark/FuzzyAI`, `ReversecLabs/spikee` and
+  `praetorian-inc/augustus`, all of them large. Search for the tool's job as well as the technique.
+- A TypeScript regular expression read three zero-width variables as map rows in `TarzEH/janus`.
+  Check what a pattern caught.
+- Count these corpora and do not print them. Some hide text addressed to a reader, including an
+  LLM reading the file.
 
 ## Adding a benchmark
 

@@ -36,7 +36,7 @@ const COMPARISON_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
 
 /// #413 strip policy for the rendering preset (`strip_format`): preserve the
 /// Private Use Area (icon fonts) and keep the VS15/VS16 presentation selectors
-/// after a base character.
+/// after a base Unicode registers for them (#1135).
 const RENDERING_STRIP: invisibles::StripPolicy = invisibles::StripPolicy {
     strip_pua: false,
     keep_presentation_vs: true,

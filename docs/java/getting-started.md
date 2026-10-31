@@ -169,6 +169,11 @@ A `Cleaner` frees a handle you forget, so a leak is not fatal. Try-with-resource
 (or `use { }`) is still the intended idiom: the `Cleaner` runs whenever the
 collector gets round to it, which is not a schedule you want native memory on.
 
+## A level for each finding
+
+`Disarm.anomalySeverity(kind)` takes the name a report holds and returns `"error"` or `"warning"`.
+`smuggled` is the one `"error"`. See [the anomaly guide](../user-guide/anomaly-detection.md).
+
 ## The anomaly detectors take a word list
 
 `hasAnomalies` and `inspectAnomalies` have no single-argument form on the JVM.

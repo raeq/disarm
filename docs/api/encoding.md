@@ -72,6 +72,11 @@ assert decode_to_utf8(b"\xef\xbb\xbfA", "utf-8") == ("A", False)  # its own BOM 
 
 Supports all WHATWG encodings: UTF-8, windows-1252, ISO-8859-1, Shift_JIS, EUC-JP, EUC-KR, Big5, GB18030, and more.
 
+UTF-7 is not one of them. WHATWG has no UTF-7, so its bytes are read as the ASCII they are, and a
+downstream UTF-7 decoder can read the same bytes as something else: `+ADw-b+AD4-` is ASCII here and
+`<b>` there. See *Charset confusion between two decoders* in
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
+
 ## Malformed `str` input (lone surrogates)
 
 `decode_to_utf8` handles raw *bytes*. A separate, always-on contract covers a `str` that

@@ -61,6 +61,13 @@ def _documented(path: Path, pattern: str) -> int:
 
 
 CASES = [
+    # #1150: said 51 from the day it was written, when the table already had 63 rows.
+    pytest.param(
+        Path("docs/user-guide/abjad-transliteration.md"),
+        r"`translit_lang_fa\.tsv` has ([\d,]+) rows",
+        "translit_lang_fa.tsv",
+        id="abjad-persian-rows",
+    ),
     pytest.param(
         Path("docs/architecture/data-tables.md"),
         r"Confusables \(Latin\)[^|]*\|[^|]*\|\s*~?([\d,]+)",
@@ -277,3 +284,24 @@ def test_grapheme_table_row_matches_the_library(text: str, published: tuple) -> 
         f"{GRAPHEMES} publishes {published} for {text!r} but the library measures "
         f"{measured}. The table is the input to this test, so correct the page."
     )
+
+
+def _tsv_values(name: str) -> dict[str, str]:
+    rows = {}
+    for line in (DATA / name).read_text(encoding="utf-8").splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            key, *value = line.split("\t")
+            rows[key] = value[0] if value else ""
+    return rows
+
+
+def test_the_abjad_guide_says_how_many_persian_rows_change_the_output() -> None:
+    """A row that restates the default overrides nothing, which is 54 of the 63 (#1150)."""
+    persian = _tsv_values("translit_lang_fa.tsv")
+    default = _tsv_values("translit_default.tsv")
+    changing = {cp for cp, value in persian.items() if default.get(cp) != value}
+    page = (ROOT / "docs/user-guide/abjad-transliteration.md").read_text(encoding="utf-8")
+    assert f"{len(changing)} of them change the output" in page
+    table = page[page.index("of them change the output") :].split("### ")[0]
+    for cp in sorted(changing):
+        assert f"U+{cp}" in table, f"U+{cp} changes the output and is not in the guide's table"

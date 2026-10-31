@@ -55,6 +55,9 @@ checks this table.
 | Homoglyph | `greek substitution` | yes | yes |
 | Homoglyph | `mathematical alphanumerics` | yes | yes |
 | Homoglyph | `small capitals` | yes | yes |
+| Homoglyph | `parenthesized letters` | yes | yes |
+| Homoglyph | `regional indicators` | no | no |
+| Homoglyph | `turned letters` | yes | yes |
 | Structural | `bracket nesting` | no | no |
 | Structural | `character deletion` | no | no |
 | Structural | `fragmentation` | yes | no |
@@ -151,6 +154,22 @@ exist when the issue was measured.
 Whether the two-call composition deserves an entry point of its own — the shape
 `is_suspicious_hostname` gives the hostname case, with the corpus's benign-precomposed and
 benign-combining rows to keep a graded signal honest (#545) — is #736's open question.
+
+## What one census of public text found
+
+The corpora above are constructed. [ghostchars' `prompt-census`
+study](https://github.com/antonsoo/ghostchars/tree/6ea70c64c0a01092e8243f71da1ded2c62cb2e7a/studies/prompt-census) reads public prompts and agent-instruction files instead, and
+reports that 3 of 83,494 documents carry text hidden in tag characters or variation selectors, all of
+them files of one jailbreak repository. None of the 5,718 rules, skill and sub-agent files does. Of the
+22 documents where its author judged that a person hid or disguised text on purpose, the other 19 use
+homoglyph swaps, styled alphabets, zero-width characters, soft hyphens or control bytes. These are one
+reader's labels, and the study says of its own figures: "It is not an estimate of how common these
+attacks are."
+
+One of those three files spells each bit with one `U+FE0E` or `U+FE0F`. A reconstruction of that shape
+reports `invisible` and decodes to nothing, since a bit pattern across letters is not one of
+`decode_smuggled`'s schemes. `ghostchars-labels` in `benchmarks/meta` runs the study's labelled
+excerpts.
 
 ## Reproducing
 

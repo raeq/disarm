@@ -633,6 +633,14 @@ module Disarm
       end
     end
 
+    # The level a finding of this kind carries, by the name a report holds: "error" or
+    # "warning", which are SARIF's names. `smuggled` is the one "error", because it fires
+    # only on a run that decodes to readable text. Raises Disarm::InvalidArgument on a
+    # name that is no kind.
+    def anomaly_severity(kind)
+      translate_errors { _anomaly_severity(kind.to_s) }
+    end
+
     # Full anomaly analysis: a hash with `:anomalous`, `:kinds` (in first-appearance
     # order), `:findings` (each `{ kind:, token:, start:, end:, detail:, reason: }`,
     # with byte offsets), and `:reason` (the first finding's reason, or nil).

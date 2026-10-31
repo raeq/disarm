@@ -103,6 +103,19 @@ const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
 const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
 const RUN_THRESHOLD_PRIVATE_USE: usize = 4;
 const RUN_THRESHOLD_NONCHARACTER: usize = 1;
+/// How many carriers spread through a text report, with none touching (#1134).
+///
+/// The run floors above see only marks that touch, and a selector or `U+034F` after each
+/// letter touches nothing. Eight is the zero-width floor's reasoning again: enough to spell
+/// one byte, and more than ordinary text holds by accident. [`spread_carriers`] says what
+/// counts. One selector after an unregistered base stays unreported, as it was.
+const SPREAD_CARRIER_FLOOR: usize = 8;
+/// How many *different* ideographic selectors a text must use before they report (#1134).
+///
+/// The IVD registers tens of thousands of sequences and is not shipped, so a selector after
+/// an ideograph cannot be checked against it. What separates the two is variety: a text
+/// repeats the registered variants of its words, and a message's bytes do not repeat.
+const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -308,7 +321,8 @@ pub enum AnomalyKind {
     Invisible,
     /// A bidi override, or a bidi control inside a majority-Latin token (Trojan Source).
     Bidi,
-    /// Excessive stacked combining marks.
+    /// Excessive stacked combining marks, an overlay on every letter of a word, or three marks
+    /// on every letter of a Latin word.
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
@@ -459,6 +473,61 @@ pub enum AnomalyKind {
 }
 
 impl AnomalyKind {
+    /// Every kind, for a caller that builds a table of them.
+    pub const ALL: &'static [AnomalyKind] = &[
+        AnomalyKind::Invisible,
+        AnomalyKind::Bidi,
+        AnomalyKind::Zalgo,
+        AnomalyKind::MixedScript,
+        AnomalyKind::BidiMixed,
+        AnomalyKind::Leet,
+        AnomalyKind::Segmentation,
+        AnomalyKind::Control,
+        AnomalyKind::Deletion,
+        AnomalyKind::Smuggled,
+        AnomalyKind::CompatFold,
+        AnomalyKind::Confusable,
+        AnomalyKind::EnclosingMark,
+        AnomalyKind::MixedNumbers,
+        AnomalyKind::DuplicateMark,
+    ];
+
+    /// The accepted names, quoted and comma-joined, for the `InvalidAnomalyKind` message.
+    pub(crate) fn accepted_tokens() -> String {
+        Self::ALL
+            .iter()
+            .map(|k| format!("'{}'", k.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// How much a finding of this kind asks of the reader (#946).
+    ///
+    /// `Smuggled` is the one [`AnomalySeverity::Error`], because it fires only on a run that
+    /// decodes to readable text. `Deletion` stays a warning even though its presence is not a
+    /// matter of degree: a classic Mac OS file with `CR` line endings is a known false positive,
+    /// so it is not proof in the way a decode is.
+    #[must_use]
+    pub fn severity(self) -> AnomalySeverity {
+        match self {
+            AnomalyKind::Smuggled => AnomalySeverity::Error,
+            AnomalyKind::Invisible
+            | AnomalyKind::Bidi
+            | AnomalyKind::Zalgo
+            | AnomalyKind::MixedScript
+            | AnomalyKind::BidiMixed
+            | AnomalyKind::Leet
+            | AnomalyKind::Segmentation
+            | AnomalyKind::Control
+            | AnomalyKind::Deletion
+            | AnomalyKind::CompatFold
+            | AnomalyKind::Confusable
+            | AnomalyKind::EnclosingMark
+            | AnomalyKind::MixedNumbers
+            | AnomalyKind::DuplicateMark => AnomalySeverity::Warning,
+        }
+    }
+
     /// The lowercase token name.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -479,6 +548,50 @@ impl AnomalyKind {
             AnomalyKind::MixedNumbers => "mixed_numbers",
             AnomalyKind::DuplicateMark => "duplicate_mark",
         }
+    }
+}
+
+/// How much a finding of some [`AnomalyKind`] asks of the reader (#946).
+///
+/// These are SARIF's level names. A consumer that writes SARIF can use [`Self::as_str`] as it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum AnomalySeverity {
+    /// The finding needs no threshold to interpret.
+    Error,
+    /// A technical fact, with the judgement left to the caller.
+    Warning,
+}
+
+impl AnomalySeverity {
+    /// The lowercase level name.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AnomalySeverity::Error => "error",
+            AnomalySeverity::Warning => "warning",
+        }
+    }
+}
+
+impl std::fmt::Display for AnomalySeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for AnomalyKind {
+    type Err = crate::Error;
+
+    /// Parse the name [`AnomalyKind::as_str`] gives, which is what every binding reports.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.as_str() == s)
+            .ok_or_else(|| {
+                crate::Error::from(crate::ErrorRepr::InvalidAnomalyKind { got: s.to_owned() })
+            })
     }
 }
 
@@ -736,6 +849,53 @@ fn paints_over(line: &str, after: &str) -> bool {
         return cells > 0 && painted.chars().count() >= cells;
     }
     true
+}
+
+/// Carriers spread through a text, as `(first carrier's byte offset and length, count)`, once
+/// there are enough to report (#1134).
+///
+/// Counts a selector after a base no sequence registers, and `U+034F` before a non-mark,
+/// since its legitimate use holds a mark away from its base. A selector touching another is
+/// the run rule's, and an ideographic selector after an ideograph answers to variety alone.
+fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
+    if text.is_ascii() {
+        return None;
+    }
+    let mut first = None;
+    let mut count = 0usize;
+    let mut ideographic_first = None;
+    let mut ideographic_count = 0usize;
+    let mut ideographic = HashSet::new();
+    let mut previous = None;
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        let next = chars.peek().map(|&(_, n)| n);
+        if c == CGJ {
+            if next.is_none_or(|n| !unicode_normalization::char::is_combining_mark(n)) {
+                first.get_or_insert_with(|| (i, c.len_utf8()));
+                count += 1;
+            }
+        } else if crate::invisibles::is_variation_selector(c) {
+            let base = previous.filter(|b| !crate::invisibles::is_variation_selector(*b));
+            let ideograph = base.is_some_and(|b| crate::scripts::detect_char_script(b) == "Han");
+            if ideograph && c >= '\u{E0100}' {
+                ideographic_first.get_or_insert_with(|| (i, c.len_utf8()));
+                ideographic_count += 1;
+                ideographic.insert(c);
+            } else if base.is_some_and(|b| !crate::tables::is_registered_variation(b, c)) {
+                first.get_or_insert_with(|| (i, c.len_utf8()));
+                count += 1;
+            }
+        }
+        previous = Some(c);
+    }
+    if ideographic.len() >= SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR {
+        count += ideographic_count;
+        first = first.or(ideographic_first);
+    }
+    (count >= SPREAD_CARRIER_FLOOR)
+        .then(|| first.map(|at| (at, count)))
+        .flatten()
 }
 
 fn codepoint(c: char) -> String {
@@ -1029,6 +1189,61 @@ fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
         c,
         '\u{FF01}' | '\u{FF08}' | '\u{FF09}' | '\u{FF0C}' | '\u{FF1A}' | '\u{FF1B}' | '\u{FF1F}'
     ) && detect_scripts(word).iter().any(|s| CJK_SCRIPTS.contains(s))
+}
+
+/// Whether a mark draws over or under a letter: strikethrough, a slash, an underline (#1156).
+fn is_overlay_mark(c: char) -> bool {
+    matches!(c, '\u{0332}'..='\u{0338}')
+}
+
+/// The overlay on a word with one on every letter, or `None` (#1156).
+///
+/// One mark per base is below every count, the same blind spot #724 closed for enclosing
+/// marks, and these are `Mn` so that rule did not reach them. The shape is what no orthography
+/// does. Two letters at least, since one slashed letter is linguistic or math notation, and
+/// letters only, so `a=\u{338}b` stays the negation it is (#749).
+fn overlaid_word(word: &str) -> Option<char> {
+    let (mut letters, mut overlaid) = (0usize, 0usize);
+    let mut this_letter = false;
+    let mut found = None;
+    for c in word.chars() {
+        if is_overlay_mark(c) {
+            if letters > 0 && !this_letter {
+                this_letter = true;
+                overlaid += 1;
+                found.get_or_insert(c);
+            }
+        } else if c.is_alphabetic() && !unicode_normalization::char::is_combining_mark(c) {
+            letters += 1;
+            this_letter = false;
+        }
+    }
+    (letters >= 2 && overlaid == letters)
+        .then_some(found)
+        .flatten()
+}
+
+/// The marks on a Latin word carrying three or more per letter, or `None` (#1156).
+///
+/// The cap is per combining class, so four marks in four classes pass it, and it has to stay
+/// that way: counting every mark on a base flagged 142 Burmese place names (#842). Those are
+/// not Latin, and the discriminator here is exactly that. No orthography written in Latin
+/// letters carries three marks on every letter of a word, and Vietnamese, the heaviest, tops
+/// out at two.
+fn heavily_marked_latin_word(word: &str) -> Option<usize> {
+    let (mut letters, mut marks) = (0usize, 0usize);
+    // Decomposed, or `e` + `U+0301` + two more counts as `\u{e9}` + two (Finding 3).
+    for c in word.nfd() {
+        if unicode_normalization::char::is_combining_mark(c) {
+            marks += 1;
+        } else if c.is_alphabetic() {
+            if !is_ascii_letter_base(c) {
+                return None;
+            }
+            letters += 1;
+        }
+    }
+    (letters >= 3 && marks >= 3 * letters).then_some(marks)
 }
 
 /// The first stacking mark that appears twice in a row on one base (#835).
@@ -1487,6 +1702,20 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 format!("{} \u{d7}{}", codepoint(enclosing[0]), enclosing.len()),
             ));
         }
+        for part in word_parts(tok) {
+            if let Some(mark) = overlaid_word(part) {
+                return Some(mk(
+                    AnomalyKind::Zalgo,
+                    format!("{} on every letter", codepoint(mark)),
+                ));
+            }
+            if let Some(marks) = heavily_marked_latin_word(part) {
+                return Some(mk(
+                    AnomalyKind::Zalgo,
+                    format!("{marks} marks across combining classes"),
+                ));
+            }
+        }
         if is_zalgo(tok, ZALGO_THRESHOLD) {
             return Some(mk(
                 AnomalyKind::Zalgo,
@@ -1850,6 +2079,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     // it *splits* the tokens either side of it and both halves are clean on their own
     // (#739). `split_tokens` can never present it to `classify`.
     overwriting_cr(text).is_some()
+        || spread_carriers(text).is_some()
         || decoded_payloads(text).next().is_some()
         || split_tokens(text)
             .into_iter()
@@ -1887,6 +2117,26 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
         .collect();
     for f in smuggled.into_iter().rev() {
         findings.insert(0, f);
+    }
+
+    // Text-level for the reason the CR rule below is: the carriers sit in different tokens,
+    // and each token on its own holds one and is clean (#1134).
+    if let Some(((start, len), count)) = spread_carriers(text) {
+        let at = findings.partition_point(|f: &Finding| f.start < start);
+        let carrier = &text[start..start + len];
+        findings.insert(
+            at,
+            Finding {
+                kind: AnomalyKind::Invisible,
+                token: carrier.to_owned(),
+                start,
+                end: start + len,
+                detail: format!(
+                    "{count} spread through the text, first {}",
+                    carrier.chars().next().map_or_else(String::new, codepoint)
+                ),
+            },
+        );
     }
 
     // Spliced in at its byte offset rather than pushed, so `findings` stays in
@@ -1931,6 +2181,32 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
 
 #[cfg(test)]
 mod tests {
+    use super::{AnomalyKind, AnomalySeverity};
+
+    #[test]
+    fn a_decoded_payload_is_the_one_error() {
+        // #946.
+        for kind in AnomalyKind::ALL {
+            let want = if *kind == AnomalyKind::Smuggled {
+                AnomalySeverity::Error
+            } else {
+                AnomalySeverity::Warning
+            };
+            assert_eq!(kind.severity(), want, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn every_kind_round_trips_through_its_name() {
+        for kind in AnomalyKind::ALL {
+            assert_eq!(kind.as_str().parse::<AnomalyKind>().unwrap(), *kind);
+        }
+        let error = "nope".parse::<AnomalyKind>().unwrap_err();
+        assert_eq!(error.kind(), crate::ErrorKind::InvalidArgument);
+        assert!(error.to_string().contains("'smuggled'"), "{error}");
+        assert!(error.to_string().contains("nope"), "{error}");
+    }
+
     use super::*;
 
     /// `is_wholly_confusable_word` must hold on its own terms, not only where it is called.

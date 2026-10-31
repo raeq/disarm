@@ -56,6 +56,7 @@ from disarm._api_scripts import has_bidi_conflict as has_bidi_conflict
 from disarm._api_scripts import has_bidi_control as has_bidi_control
 from disarm._api_scripts import inspect_auto_lang as inspect_auto_lang
 from disarm._api_scripts import is_mixed_script as is_mixed_script
+from disarm._api_security import anomaly_severity as anomaly_severity
 from disarm._api_security import has_anomalies as has_anomalies
 from disarm._api_security import inspect_anomalies as inspect_anomalies
 from disarm._api_security import is_suspicious_hostname as is_suspicious_hostname
@@ -1023,6 +1024,7 @@ class TextPipeline:
         strip_zalgo: int | None = None,
         strip_pua: bool = False,
         strip_plane14: bool = False,
+        strip_invisible_marks: bool = False,
         resolve_deletions: bool = False,
         resolve_cr: bool = False,
         digit_policy: str = "numeric",
@@ -1062,6 +1064,7 @@ class TextPipeline:
             strip_zalgo=strip_zalgo,
             strip_pua=strip_pua,
             strip_plane14=strip_plane14,
+            strip_invisible_marks=strip_invisible_marks,
             resolve_deletions=resolve_deletions,
             resolve_cr=resolve_cr,
             digit_policy=digit_policy,

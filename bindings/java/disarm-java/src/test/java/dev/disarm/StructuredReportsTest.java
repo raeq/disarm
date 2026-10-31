@@ -114,6 +114,19 @@ class StructuredReportsTest {
     }
 
     @Test
+    void aDecodedPayloadIsTheOneError() {
+        assertEquals("error", Disarm.anomalySeverity("smuggled"));
+        assertEquals("warning", Disarm.anomalySeverity("deletion"));
+        Finding f = Disarm.inspectAnomalies("hi\u200bthere", List.of()).findings().get(0);
+        assertEquals("warning", Disarm.anomalySeverity(f.kind()));
+    }
+
+    @Test
+    void anomalySeverityRejectsANameThatIsNoKind() {
+        assertThrows(DisarmInvalidArgumentException.class, () -> Disarm.anomalySeverity("nope"));
+    }
+
+    @Test
     void inspectAnomaliesCleanTextIsNotAnomalous() {
         AnomalyReport r = Disarm.inspectAnomalies("hello world", List.of());
         assertFalse(r.anomalous());

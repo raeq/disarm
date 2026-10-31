@@ -246,20 +246,6 @@ fn consume_flag_tail(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Op
     }
 }
 
-/// A character that a presentation selector may legitimately follow in the
-/// rendering carve-out: a base that survives **every** downstream strip
-/// `strip_format` runs after this one (control, zero-width, and the
-/// whitespace/blank-render fold). Keeping a VS after a base that a later stage
-/// removes orphans the selector, so a second pass strips it and the preset is
-/// not idempotent (post-0.11 review D-2). Reject those bases here.
-#[inline]
-fn is_presentation_base(ch: char) -> bool {
-    !ch.is_whitespace()
-        && !ch.is_control()
-        && !crate::whitespace::is_blank_render(ch)
-        && !crate::whitespace::is_zero_width(ch)
-}
-
 /// Public helper: strip the Unicode Tags block, **preserving** well-formed emoji
 /// subdivision flag sequences (`U+1F3F4` … `U+E007F`).
 pub(crate) fn strip_tags(text: &str) -> String {
@@ -315,6 +301,56 @@ pub(crate) fn strip_invisible_classes(text: &str, policy: StripPolicy) -> String
     out
 }
 
+/// Mongolian free variation selectors. Kept out of [`is_variation_selector`] because the
+/// comparison presets keep them: they spell a Mongolian word (`docs/limitations.md`).
+#[inline]
+fn is_mongolian_selector(ch: char) -> bool {
+    matches!(ch, '\u{180B}'..='\u{180D}' | '\u{180F}')
+}
+
+/// Remove the marks that show nothing and carry data between letters, and no other (#1137).
+///
+/// `strip_zalgo(0)` and `strip_accents` remove these too, and take every diacritic with them, so
+/// a pipeline that has to keep accents had no way to do it. Three of them stay, directly after a
+/// base where they mean something:
+/// * `U+FE0E` and `U+FE0F` after a base Unicode registers them for, the rule #1135 gave
+///   `strip_format`;
+/// * a Mongolian selector after a Mongolian letter, which is the reason the comparison presets
+///   give for keeping them everywhere.
+///
+/// An ideographic selector goes even after an ideograph. The IVD is not shipped, so nothing here
+/// can say which sequences are registered, and a caller naming this step gives up the variant.
+/// Reading the base from `out` is what makes this a fixed point: a removed selector is not a base,
+/// and a selector that stayed is not one either.
+pub(crate) fn strip_invisible_marks_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+        return;
+    }
+    out.reserve(text.len());
+    for ch in text.chars() {
+        let keep = if ch == CGJ {
+            false
+        } else if is_mongolian_selector(ch) {
+            out.chars().next_back().is_some_and(|base| {
+                base.is_alphabetic() && crate::scripts::detect_char_script(base) == "Mongolian"
+            })
+        } else if is_variation_selector(ch) {
+            matches!(ch, '\u{FE0E}' | '\u{FE0F}')
+                && out
+                    .chars()
+                    .next_back()
+                    .is_some_and(|base| crate::tables::is_registered_variation(base, ch))
+        } else {
+            true
+        };
+        if keep {
+            out.push(ch);
+        }
+    }
+}
+
 /// `strip_invisible_classes`, writing into a caller-owned buffer (ping-pong form).
 /// Clears `out` first, like every other `*_into` leaf.
 pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out: &mut String) {
@@ -344,12 +380,27 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
             continue;
         }
         if is_variation_selector(ch) {
-            // Rendering carve-out: keep VS15/VS16 directly after a base.
+            // Rendering carve-out: keep VS15/VS16 directly after a base Unicode registers for
+            // it, where it changes the glyph. After `a` it changes nothing, which is what makes
+            // it a free channel (#1135). No registered base is removed by a later strip, so
+            // the selector is never orphaned and the preset stays a fixed point.
             let keep = policy.keep_presentation_vs
                 && matches!(ch, '\u{FE0E}' | '\u{FE0F}')
-                && out.chars().next_back().is_some_and(is_presentation_base);
+                && out
+                    .chars()
+                    .next_back()
+                    .is_some_and(|base| crate::tables::is_registered_variation(base, ch));
             if keep {
                 out.push(ch);
+            } else if !policy.keep_presentation_vs
+                && chars.peek() == Some(&crate::emoji::KEYCAP)
+                && ch == '\u{FE0F}'
+                && out.ends_with(|base| matches!(base, '0'..='9' | '#' | '*'))
+            {
+                // A keycap's selector and mark go together (#1158). Removing the selector
+                // alone left `1` + `U+20E3`, a bare enclosing mark, so the output of a
+                // sanitizer reported what its input did not.
+                chars.next();
             }
             continue;
         }
@@ -409,6 +460,71 @@ mod tests {
         StripPolicy {
             strip_pua: false,
             keep_presentation_vs: true,
+        }
+    }
+
+    #[test]
+    fn a_keycap_selector_and_mark_go_together_under_the_comparison_policy() {
+        // #1158: the selector alone left a bare enclosing mark, which the detector reports.
+        for (text, want) in [
+            ("1\u{FE0F}\u{20E3}", "1"),
+            ("#\u{FE0F}\u{20E3}", "#"),
+            ("1\u{FE0F}\u{20E3}2\u{FE0F}\u{20E3}", "12"),
+            ("x\u{FE0F}\u{20E3}", "x\u{20E3}"),
+            ("1\u{20E3}", "1\u{20E3}"),
+            ("\u{FE0F}\u{20E3}", "\u{20E3}"),
+        ] {
+            assert_eq!(
+                strip_invisible_classes(text, comparison()),
+                want,
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            strip_invisible_classes("1\u{FE0F}\u{20E3}", rendering()),
+            "1\u{FE0F}\u{20E3}"
+        );
+    }
+
+    #[test]
+    fn a_presentation_selector_stays_only_after_a_registered_base() {
+        // #1135: after `a` the selector changes no glyph, which is what makes it a channel.
+        for (text, want) in [
+            ("a\u{FE0F}x", "ax"),
+            ("a\u{FE0E}x", "ax"),
+            ("\u{430}\u{FE0F}x", "\u{430}x"),
+            ("\u{2764}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{A9}\u{FE0E}", "\u{A9}\u{FE0E}"),
+            ("1\u{FE0F}\u{20E3}", "1\u{FE0F}\u{20E3}"),
+        ] {
+            assert_eq!(strip_invisible_classes(text, rendering()), want, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn invisible_marks_go_and_other_marks_stay() {
+        // #1137: `want` is what stays. The first group is the point of the step, the second
+        // what it must not touch, the third the bases that keep a selector.
+        for (text, want) in [
+            ("a\u{FE01}b", "ab"),
+            ("a\u{E0100}b", "ab"),
+            ("a\u{34F}b", "ab"),
+            ("a\u{180B}b", "ab"),
+            ("a\u{FE0F}b", "ab"),
+            ("e\u{301}", "e\u{301}"),
+            ("a\u{E0041}b", "a\u{E0041}b"),
+            ("plain", "plain"),
+            ("\u{2764}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{2764}\u{FE01}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("\u{2764}\u{FE0F}\u{FE0F}", "\u{2764}\u{FE0F}"),
+            ("0\u{FE00}", "0"),
+            ("\u{1820}\u{180B}", "\u{1820}\u{180B}"),
+            ("\u{1820}\u{180B}\u{180B}", "\u{1820}\u{180B}"),
+            ("\u{1810}\u{180B}", "\u{1810}"),
+        ] {
+            let mut out = String::new();
+            strip_invisible_marks_into(text, &mut out);
+            assert_eq!(out, want, "{text:?}");
         }
     }
 

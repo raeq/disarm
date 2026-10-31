@@ -1,0 +1,5 @@
+# Written for #1151 from common phrases, so CI needs no Kaggle credentials. Nothing here comes from Tashkeela.
+كَتَبَ
+السَّلامُ عَلَيْكُمْ
+بِسْمِ اللَّهِ
+مَرْحَبًا

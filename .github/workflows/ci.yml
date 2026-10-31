@@ -34,6 +34,7 @@ jobs:
       java: ${{ steps.filter.outputs.java }}
       cabi: ${{ steps.filter.outputs.cabi }}
       sandbox: ${{ steps.filter.outputs.sandbox }}
+      context: ${{ steps.filter.outputs.context }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -120,6 +121,20 @@ jobs:
             sandbox:
               - 'benchmarks/meta/**'
               - 'tests/test_meta_benchmark_practitioner.py'
+              - '.github/workflows/ci.yml'
+            # What a context dictionary's tests depend on (#1151). `code` has no `*.sh`, so
+            # a change to a checksum pin alone would start nothing that checks it.
+            context:
+              - 'src/**'
+              - 'build.rs'
+              - 'codegen/**'
+              - 'Cargo.toml'
+              - 'scripts/build_*_dict.py'
+              - 'scripts/bootstrap_dicts.sh'
+              - 'tests/conftest.py'
+              - 'tests/test_context_*.py'
+              - 'tests/test_register_replacements.py'
+              - 'tests/fixtures/context_dicts/**'
               - '.github/workflows/ci.yml'
 
 
@@ -528,6 +543,66 @@ jobs:
         env:
           DISARM_REQUIRE_NODE: "1"
         run: pytest tests/test_meta_benchmark_practitioner.py -q --tb=short -rs
+
+
+  # ── The context dictionaries (#1151) ────────────────────────────
+  # The dictionaries are gitignored and nothing built them here, so every test that
+  # needs one skipped on every run and Hebrew's ran nowhere. Persian needs no corpus and
+  # Hebrew's is a pinned public commit, so both come from the real builders and are held
+  # to their pins. Arabic's corpus needs Kaggle credentials, which never reach a pull
+  # request from a fork, so its dictionary comes from a small committed fixture.
+  #
+  # Hebrew costs a 3.1 GB corpus and six minutes, so the output is cached. The weekly
+  # run is what saves it where a pull request can read it: a pull request reads the
+  # default branch's cache and never another pull request's.
+  context-dictionaries:
+    name: Context dictionaries
+    needs: changes
+    if: needs.changes.outputs.context == 'true' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+
+      - name: Build wheel and install
+        run: |
+          pip install maturin[patchelf]
+          maturin build --release --out dist
+          pip install dist/*.whl
+          pip install ".[test]"
+
+      - name: Restore the Hebrew dictionary
+        id: hebrew
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: data/hebrew_dict.bin
+          key: hebrew-dict-${{ hashFiles('scripts/bootstrap_dicts.sh', 'scripts/build_hebrew_dict.py') }}
+
+      - name: Build the dictionaries
+        env:
+          HEBREW_CACHED: ${{ steps.hebrew.outputs.cache-hit }}
+        run: |
+          bash scripts/bootstrap_dicts.sh persian
+          if [[ "$HEBREW_CACHED" == "true" ]]; then
+            grep -q "^HEBREW_DICT_SHA256=\"$(sha256sum data/hebrew_dict.bin | cut -d' ' -f1)\"$" scripts/bootstrap_dicts.sh
+          else
+            bash scripts/bootstrap_dicts.sh hebrew
+          fi
+          python scripts/build_arabic_dict.py tests/fixtures/context_dicts/arabic.txt -o data/arabic_dict.bin --min-freq 1
+
+      - name: Run the modules, with a missing dictionary as a failure
+        env:
+          DISARM_DICT_DIR: ${{ github.workspace }}/data
+          DISARM_REQUIRE_CONTEXT_DICTS: "1"
+        run: pytest tests/test_context_arabic.py tests/test_context_hebrew.py tests/test_context_persian.py tests/test_register_replacements.py -q --tb=short -rs
 
 
   # ── Cookbook doc-tests (#154: executable, asserted recipes) ─────
@@ -992,7 +1067,7 @@ jobs:
   all-ok:
     name: All checks passed
     if: always()
-    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi, practitioner-sandbox]
+    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi, practitioner-sandbox, context-dictionaries]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate every language gate
@@ -1067,6 +1142,14 @@ jobs:
             [[ "$SANDBOX" == "success" ]] || fail "practitioner sandbox" "the sandbox tests failed ($SANDBOX)"
           else
             echo "practitioner sandbox: nothing it covers changed — not required"
+          fi
+
+          # ── The context dictionaries (#1151) ───────────────────────────────
+          if [[ "${{ needs.changes.outputs.context }}" == "true" || "$EVENT" == "schedule" ]]; then
+            CONTEXT="${{ needs['context-dictionaries'].result }}"
+            [[ "$CONTEXT" == "success" ]] || fail "context dictionaries" "the dictionary tests failed ($CONTEXT)"
+          else
+            echo "context dictionaries: nothing they depend on changed — not required"
           fi
 
           exit "$failed"

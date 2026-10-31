@@ -10,6 +10,7 @@ context paths (forward direction only).
 from __future__ import annotations
 
 import pytest
+from conftest import has_context_dict
 
 from disarm import (
     clear_replacements,
@@ -91,20 +92,8 @@ def test_merge_overwrites_existing_key() -> None:
     assert transliterate("@") == "AT"
 
 
-def _arabic_context_available() -> bool:
-    # Context dicts are not shipped/tracked (#53); CI has none, so skip rather
-    # than fail. Only "dictionary not found" is a skip condition.
-    try:
-        transliterate("كتب", lang="ar", context=True)
-        return True
-    except Exception as e:
-        if "not found" in str(e).lower():
-            return False
-        raise
-
-
 @pytest.mark.skipif(
-    not _arabic_context_available(),
+    not has_context_dict("كتب"),
     reason="Arabic context dictionary not available (build via bootstrap_dicts.sh)",
 )
 def test_context_path_parity() -> None:

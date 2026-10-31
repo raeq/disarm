@@ -8,6 +8,7 @@ rediscovering or redeclaring them per file.
 from __future__ import annotations
 
 import functools
+import os
 import re
 from pathlib import Path
 
@@ -15,7 +16,29 @@ import pytest
 from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 
+from disarm import transliterate
 from disarm._enums import Script
+
+# ---------------------------------------------------------------------------
+# Context dictionaries
+# ---------------------------------------------------------------------------
+
+#: Set in CI's `context-dictionaries` job, where a missing dictionary is a defect (#1151).
+REQUIRE_CONTEXT_DICTS = "DISARM_REQUIRE_CONTEXT_DICTS"
+
+
+def has_context_dict(word: str, lang: str = "ar") -> bool:
+    """Whether `transliterate(word, lang=lang, context=True)` finds its dictionary."""
+    try:
+        transliterate(word, lang=lang, context=True)
+    except Exception as e:
+        # Only a missing dictionary is a skip condition; re-raise real bugs so they
+        # fail loudly instead of silently skipping a whole module.
+        if "not found" in str(e).lower() and not os.environ.get(REQUIRE_CONTEXT_DICTS):
+            return False
+        raise
+    return True
+
 
 # ---------------------------------------------------------------------------
 # Repository corpora

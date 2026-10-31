@@ -6,24 +6,12 @@ Requires: data/hebrew_dict.bin (built from Project Ben Yehuda corpus)
 from __future__ import annotations
 
 import pytest
+from conftest import has_context_dict
 
 from disarm import transliterate
 
-
-def _has_hebrew_dict() -> bool:
-    try:
-        transliterate("\u05e9\u05dc\u05d5\u05dd", lang="he", context=True)
-        return True
-    except Exception as e:
-        # Only a missing dictionary is a skip condition; re-raise real bugs so
-        # they fail loudly instead of silently skipping the whole module.
-        if "not found" in str(e).lower():
-            return False
-        raise
-
-
 needs_hebrew_dict = pytest.mark.skipif(
-    not _has_hebrew_dict(),
+    not has_context_dict("\u05e9\u05dc\u05d5\u05dd", lang="he"),
     reason="Hebrew context dictionary not installed",
 )
 

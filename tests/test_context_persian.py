@@ -6,23 +6,12 @@ Requires: data/persian_dict.bin (built from curated vocabulary)
 from __future__ import annotations
 
 import pytest
+from conftest import has_context_dict
 
 from disarm import transliterate
 
-
-def _has_persian_dict() -> bool:
-    try:
-        transliterate("\u0633\u0644\u0627\u0645", lang="fa", context=True)
-        return True
-    except Exception as e:
-        # Only a missing dictionary is a skip condition; re-raise real bugs.
-        if "not found" in str(e).lower():
-            return False
-        raise
-
-
 needs_persian_dict = pytest.mark.skipif(
-    not _has_persian_dict(),
+    not has_context_dict("\u0633\u0644\u0627\u0645", lang="fa"),
     reason="Persian context dictionary not installed",
 )
 

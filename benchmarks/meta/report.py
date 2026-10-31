@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .baseline import Drift
 from .leaderboard import ALPHA_FLOOR, Leaderboard, is_control, pareto
-from .protocol import Family, Measurement, Outcome, Provenance, Status
+from .protocol import Evidence, Family, Measurement, Outcome, Provenance, Status
 from .runner import RunReport
 
 _FAMILY_TITLE = {
@@ -24,6 +24,7 @@ _FAMILY_TITLE = {
     Family.DATASET: "Public datasets",
     Family.MODEL_ARTIFACT: "Released model artifacts",
     Family.COMPARATOR: "Third-party labelled benchmarks and rival implementations",
+    Family.PRACTITIONER: "Practitioner tools and corpora: known answers score, fixtures do not",
     Family.INTROSPECTIVE: "Introspective sweeps — no external oracle, excluded from totals",
 }
 
@@ -489,6 +490,8 @@ def _render_outcome(out: Outcome) -> list[str]:
     if p.issues:
         refs = ", ".join(f"[#{n}](https://github.com/raeq/disarm/issues/{n})" for n in p.issues)
         lines.append(f"**Identified.** {refs}")
+    if p.evidence:
+        lines.append(f"**Evidence.** {p.evidence.value}")
     lines.append("")
     if p.finding:
         # Historical, and labelled as such. The gap between this paragraph and the
@@ -620,6 +623,7 @@ def load_outcomes(path: str) -> list[Outcome]:
                 issues=tuple(prov.get("issues", ())),
                 finding=prov.get("finding", ""),
                 notes=prov.get("notes", ""),
+                evidence=Evidence(prov["evidence"]) if prov.get("evidence") else None,
             ),
             status=Status(row.get("status", "ok")),
             population=row.get("population", 0),
@@ -704,6 +708,7 @@ def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
                     "issues": list(o.provenance.issues),
                     "finding": o.provenance.finding,
                     "notes": o.provenance.notes,
+                    "evidence": o.provenance.evidence,
                 },
                 "measurements": [
                     {

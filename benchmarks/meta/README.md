@@ -19,7 +19,8 @@ python -m benchmarks.meta --run --family cve academic --report out.md --json out
 A library that writes its own benchmark grades its own homework. Every suite here
 is anchored to an artifact produced outside this repository — a corpus released
 with a paper, a public dataset, a normative Unicode/IETF/ICANN table, a published
-CVE, a released tokenizer, or a third-party labelled benchmark. The harness
+CVE, a released tokenizer, a third-party labelled benchmark, or a practitioner's
+published tool. The harness
 supplies the runner, the selection, the provenance record and the report. It
 supplies no vectors.
 
@@ -107,7 +108,7 @@ of one thing compare equal — so they are reported apart from text surfaces.
 Scoring them together would make a library look destructive for doing its job,
 and would rank a tool with no key builder at all as the safer one.
 
-## The five external families, and the sixth tier
+## The seven external families, and the introspective tier
 
 | family | anchor | examples |
 |---|---|---|
@@ -117,6 +118,7 @@ and would rank a tool with no key builder at all as the safer one.
 | `dataset` | a public corpus | BitAbuse, YouTube-Spam, TREC-2007, MeAJOR, benign Gutenberg prose |
 | `model` | a released model artifact | chat-template delimiters read from published `tokenizer.json` files |
 | `comparator` | a third-party labelled benchmark or rival tool | `confusable-bench.v1`, confusable-vision, untrace |
+| `practitioner` | a tool or repository published outside the literature | P4RS3LT0NGV3's transforms, garak's escape payloads, L1B3RT4S as fixtures |
 
 Tools differ in what they can be asked. A key-builder question put to a
 transliterator has no answer, and a suite asking two separable questions — is it
@@ -125,7 +127,7 @@ cannot answer is omitted, never reported as zero: `confusable-homoglyphs` detect
 and does not transform, and `recovered: 0` for it would read as total failure
 rather than as a question it was never asked.
 
-`introspective` is the sixth tier and is not a benchmark. Its sweeps run over the
+`introspective` is a separate tier and is not a benchmark. Its sweeps run over the
 UCD code-point domain, which is external, but disarm is the only oracle for what
 the answer should be — so a number moving there proves nothing on its own. They
 are registered because dropping them would leave a hole in the 0.15.0 record, and
@@ -373,6 +375,59 @@ Rejected so far, with the reason:
 | arXiv:2509.11141 (When 😊 Turns Hostile) | supplementary code is claimed but no URL is given; the craft step needs the target model's gradients |
 | arXiv:2502.17392 (Emoti-Attack) | no artifact, and the sequence generator is a trained component — reimplementing it means retraining it |
 
+## Practitioner sources
+
+The paper lists above left a blind spot. People who publish attack tooling on GitHub
+mostly do not write papers, so a search of the literature never reaches them, and this
+registry named none of them until this tier existed. When you look for a benchmark,
+search offensive tools and repositories as well as arXiv, and say which you searched.
+
+A large following does not make a source a benchmark, so the tier has four rules.
+
+**A known answer scores.** A published transform applied to text we chose, or a payload
+placed inside a known cover, fixes the answer before the subject runs. `_KnownAnswerSuite`
+is the base class for these.
+
+**An unlabelled corpus stays a fixture.** Nothing outside disarm says what the right output
+is, so every number is a census. It can catch a regression and it cannot reach a ranking.
+`_FixtureSuite` turns a directed measurement into an error.
+
+**The delete-everything control runs on every run**, including a run that scores only
+disarm, rather than only when `--subject all` happens to include `null-baseline`. A
+known-answer suite whose control scores anything reports an error in place of its numbers.
+A fixture reports the control beside its own figures, because there it does score: deleting
+everything leaves no carriers and makes every line converge, which is the reason it is a
+fixture.
+
+**A copyleft source is cached from a pinned commit and never vendored.** No text from a
+corpus reaches a report, an issue or a `Provenance` field. These suites print counts and the
+names of transforms.
+
+`p4rs3lt0ngv3-transforms` is the one suite here that executes third-party code, and it does
+so only after three checks. The tree under `src/transformers` must match a pinned digest,
+which is held against the extracted files because GitHub does not promise a stable tarball.
+Node must be 25 or later, the first release whose permission model also denies the network.
+The code then runs under `node --permission`, with read access to that tree and nothing else:
+no other file, no write, no child process and no network. The `vm` context in
+`suites/practitioner_driver.js` only keeps the loader simple and is not the boundary, and
+`tests/test_meta_benchmark_practitioner.py` escapes from it on purpose to show that. If a check
+fails, the suite reports SKIPPED with the reason. Its classes come from upstream's directory
+names and were fixed before any score was read; do not move one to improve a number.
+
+Read so far, so the next search starts from here:
+
+| source | licence | status | why |
+|---|---|---|---|
+| P4RS3LT0NGV3 | AGPL-3.0 per `LICENSE` | `p4rs3lt0ngv3-transforms` | a generator: of 222 transforms, 35 are scored, 143 are counted and 44 are text utilities left out |
+| garak `resources/ansi.py` | Apache-2.0 | `garak-ansi-escapes` | a payload list that ships the tokens to detect it by |
+| L1B3RT4S | AGPL-3.0 | `l1b3rt4s-fixtures` | unlabelled: 169 of 182 sections carry no Unicode obfuscation |
+| garak `badchars` | Apache-2.0 | not a suite | follows the Bad Characters paper, already wired as `bad-characters` |
+| garak `encoding`, `smuggling` | Apache-2.0 | not a suite yet | zalgo, tag, variant-selector, sneaky-bits and homoglyph probes have known answers, and they are code: Python has no sandbox like Node's, and garak's package is heavy to pin |
+| PyRIT | MIT | not read | its converters were not at the path its older layout used |
+| promptfoo | MIT | not read | |
+| ST3GG | AGPL-3.0 | not read | a steganography suite, and text channels would be the part in scope |
+| CL4R1T4S | none checked | not read | holds system prompts, judged from its description only |
+
 ## Adding a benchmark
 
 A suite is one class: set `name`, `family`, `availability` and a `Provenance`, then
@@ -382,4 +437,5 @@ handling, or `AttackCorpusSuite` if the artifact is a corpus of perturbed text.
 The `Provenance` is the part that matters. It carries the citation, the pinned
 version, the licence, the issues the benchmark identified, and `external`. A suite
 whose right answer only disarm can supply belongs in `introspective` with
-`external=False`.
+`external=False`. A practitioner suite also declares its `evidence`, and subclasses
+`_KnownAnswerSuite` or `_FixtureSuite` to match.

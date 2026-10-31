@@ -17,6 +17,7 @@
 
 /// Which carrier a [`Payload`] was hidden in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PayloadScheme {
     /// `U+E0020`–`U+E007E`: subtract `0xE0000`, one byte per character.
     TagAscii,
@@ -37,6 +38,14 @@ pub enum PayloadScheme {
     /// spells readable text is ordinary in any URL. `decode_smuggled` reports it;
     /// `inspect_anomalies` does not.
     PercentEscape,
+    /// `U+2062` = 0, `U+2064` = 1, Johann Rehberger's "sneaky bits" (#1136).
+    ///
+    /// Tools publish it in two framings, and both are read. PyRIT writes each UTF-8 byte as a
+    /// fixed eight bits. garak and Augustus write each character's bits unpadded, with
+    /// `U+200B` for a space, so a letter takes seven bits and a digit six. A mix of the two
+    /// lengths can split more than one way, and then `text` is `None`, as for an ambiguous
+    /// zero-width frame.
+    SneakyBits,
 }
 
 impl PayloadScheme {
@@ -48,6 +57,7 @@ impl PayloadScheme {
             Self::VariationBytes => "variation_bytes",
             Self::ZeroWidthBinary => "zero_width_binary",
             Self::PercentEscape => "percent_escape",
+            Self::SneakyBits => "sneaky_bits",
         }
     }
 }
@@ -170,6 +180,13 @@ fn decode(text: &str, with_percent: bool) -> Vec<Carried> {
                 out.push(Carried::plain(p));
                 continue;
             }
+        }
+        if let Some((p, consumed)) = scan_sneaky_bits(&chars, i, offset) {
+            i += consumed;
+            if let Some(p) = p {
+                out.push(p);
+            }
+            continue;
         }
         if let Some((p, consumed)) = scan_zero_width(&chars, i, offset) {
             i += consumed;
@@ -381,6 +398,128 @@ fn scan_percent(chars: &[(usize, char)], i: usize, offset: usize) -> Option<Payl
         j - i,
         bytes,
     ))
+}
+
+/// How many characters a sneaky-bits run must spell. One byte cannot spell anything, and a
+/// lone `U+2062` is the invisible times of an ordinary formula.
+const MIN_SNEAKY_CHARS: usize = 2;
+
+/// The readings of one unpadded sneaky-bits segment, capped at two.
+///
+/// A printable ASCII character takes six bits (`0x20`–`0x3F`) or seven (`0x40`–`0x7E`), each
+/// with a leading 1, and nothing marks where one ends. Splits multiply, so this counts them
+/// from the end of the run in one pass and walks the counts forward, which keeps it linear
+/// however long the run is.
+fn unpadded_readings(bits: &[u8]) -> Vec<String> {
+    let value = |chunk: &[u8]| chunk.iter().fold(0u8, |acc, &bit| (acc << 1) | bit);
+    let valid = |at: usize, len: usize| {
+        bits.get(at..at + len).is_some_and(|chunk| match len {
+            6 => (0x20..=0x3F).contains(&value(chunk)),
+            _ => (0x40..=0x7E).contains(&value(chunk)),
+        })
+    };
+    let mut ways = vec![0u8; bits.len() + 1];
+    ways[bits.len()] = 1;
+    for at in (0..bits.len()).rev() {
+        let mut count = 0;
+        for len in [7, 6] {
+            if valid(at, len) {
+                count += ways[at + len];
+            }
+        }
+        ways[at] = count.min(2);
+    }
+    let walk = |mut skip_first_choice: bool| {
+        let mut out = String::new();
+        let mut at = 0;
+        while at < bits.len() {
+            let mut lengths = [7, 6]
+                .into_iter()
+                .filter(|&len| valid(at, len) && ways[at + len] > 0);
+            let first = lengths.next()?;
+            let len = match (skip_first_choice, lengths.next()) {
+                (true, Some(other)) => {
+                    skip_first_choice = false;
+                    other
+                }
+                _ => first,
+            };
+            out.push(char::from(value(&bits[at..at + len])));
+            at += len;
+        }
+        Some(out)
+    };
+    match ways[0] {
+        0 => Vec::new(),
+        1 => walk(false).into_iter().collect(),
+        _ => [walk(false), walk(true)].into_iter().flatten().collect(),
+    }
+}
+
+fn scan_sneaky_bits(
+    chars: &[(usize, char)],
+    i: usize,
+    offset: usize,
+) -> Option<(Option<Carried>, usize)> {
+    let is_bit = |c: char| matches!(c, '\u{2062}' | '\u{2064}');
+    if !is_bit(chars[i].1) {
+        return None;
+    }
+    let mut segments: Vec<Vec<u8>> = vec![Vec::new()];
+    let mut j = i;
+    while let Some(&(_, c)) = chars.get(j) {
+        if is_bit(c) {
+            segments.last_mut()?.push(u8::from(c == '\u{2064}'));
+        } else if c == '\u{200B}' && chars.get(j + 1).is_some_and(|&(_, n)| is_bit(n)) {
+            segments.push(Vec::new());
+        } else {
+            break;
+        }
+        j += 1;
+    }
+    let units = j - i;
+    let end = chars
+        .get(j)
+        .map_or_else(|| offset + tail_len(chars, i, j), |&(o, _)| o);
+    let payload = |bytes: Vec<u8>| finish(PayloadScheme::SneakyBits, offset, end, units, bytes);
+    // Fixed eight bits first: an ASCII byte starts with a 0 here and with a 1 unpadded, so
+    // the two framings do not compete on the same run.
+    if let [bits] = segments.as_slice() {
+        if bits.len() % 8 == 0 {
+            let bytes = pack_bits(bits);
+            let spelled = printable(&bytes).map_or(0, |text| text.chars().count());
+            if spelled >= MIN_SNEAKY_CHARS {
+                return Some((Some(Carried::plain(payload(bytes))), units));
+            }
+        }
+    }
+    let per_segment: Vec<Vec<String>> = segments
+        .iter()
+        .map(|bits| unpadded_readings(bits))
+        .collect();
+    if per_segment.iter().any(Vec::is_empty) {
+        return Some((None, units));
+    }
+    let first = per_segment
+        .iter()
+        .map(|readings| readings[0].as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if first.chars().count() < MIN_SNEAKY_CHARS {
+        return Some((None, units));
+    }
+    if per_segment.iter().all(|readings| readings.len() == 1) {
+        return Some((Some(Carried::plain(payload(first.into_bytes()))), units));
+    }
+    let second = per_segment
+        .iter()
+        .map(|readings| readings[readings.len() - 1].as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
+    let mut carried = Carried::plain(payload(first.clone().into_bytes()));
+    carried.payload.text = None;
+    carried.reading = Some(format!("{first}{AMBIGUOUS_READINGS_SEPARATOR}{second}"));
+    Some((Some(carried), units))
 }
 
 fn is_zw_separator(ch: char) -> bool {

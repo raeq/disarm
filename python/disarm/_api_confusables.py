@@ -315,13 +315,14 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     successful decode needs no threshold and no policy to interpret, which is why it
     is worth reporting separately from the ``invisible`` kind.
 
-    Three schemes, all arithmetic on code point values with no table behind them:
+    Five schemes, all arithmetic on code point values with no table behind them:
 
     | scheme | carrier | encoding |
     |---|---|---|
     | ``tag_ascii`` | ``U+E0020``–``U+E007E`` | subtract ``0xE0000``, one byte each |
     | ``variation_bytes`` | ``U+FE00``–``U+FE0F``, ``U+E0100``–``U+E01EF`` | index 0–255 |
     | ``zero_width_binary`` | ``U+200B`` = 0, ``U+200C`` = 1 | MSB first; ZWJ/WJ/BOM separate |
+    | ``sneaky_bits`` | ``U+2062`` = 0, ``U+2064`` = 1 | eight bits per byte, or unpadded with ``U+200B`` for a space |
     | ``percent_escape`` | ``%XX``, two hex digits | one byte per triple, decoded once (#727) |
 
     ``text`` is populated **only** when the bytes are valid UTF-8 and wholly

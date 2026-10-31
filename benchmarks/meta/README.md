@@ -68,6 +68,19 @@ has no answer, so those pairs report SKIPPED with the reason rather than a zero;
 zeros read as results. Suites that measure a disarm-specific surface set
 `MULTI_SUBJECT = False`.
 
+Detectors built for the smuggling question, considered in #1164. Each is code the bench
+venv runs, so each was read before it was pinned.
+
+| detector | decision | why |
+|---|---|---|
+| `unicode-smuggling-guard` 1.3.0 | a subject | MIT, no dependencies. Its one `subprocess` call lists a repository's files and is not on the `scan` path |
+| `glyphguard` 0.3.0 | a subject | Apache-2.0, no dependencies, and it ships a sanitizer too. The same is true of its `subprocess` call |
+| `llm-guard` 0.3.16 | left out | `torch`, `transformers` and `presidio-*` for one `InvisibleText` scanner, which is too much installed code for one column |
+| `RootVandal/palisade` | left out | git only, and its labelled rows are already `palisade-labels`. PyPI's `palisade` is a different project under a commercial licence, so that name is never pinned |
+| `ghostchars` | left out | Node, which needs its own sandboxed path. npm's package names `ghostchars/ghostchars`, and the studies in `ghostchars-labels` live at `antonsoo/ghostchars`, and the two have not been shown to be one project |
+| `unsmuggle` | left out | Node, for the same reason |
+| `smugglecheck` | not a candidate | 404 on npm under that name |
+
 Two subjects are **controls**, not candidates:
 
 `null-baseline` deletes everything. It scores perfectly on any naive coverage
@@ -439,7 +452,12 @@ Read so far, so the next search starts from here:
 | garak `badchars` | Apache-2.0 | not a suite | follows the Bad Characters paper, already wired as `bad-characters` |
 | garak `encoding`, `smuggling` at `4b7761c2` | Apache-2.0 | `token-smuggling-constructions` | rebuilt and not imported: Python has no sandbox like Node's and the constructions are short; its zalgo and homoglyph probes repeat `p4rs3lt0ngv3-transforms` |
 | PyRIT at `d3446e04` | MIT | `token-smuggling-constructions` | about 100 converters behind about 50 dependencies, so seven are rebuilt from their docstrings and none is imported |
-| promptfoo | MIT | not read | |
+| promptfoo at `5582f347` | MIT | `promptfoo-literal-maps` | two object literals with a known answer per row, read without running them; the rest holds no answer a suite can score |
+| Augustus at `84487332` | Apache-2.0 | `augustus-known-answers` | Go test tables read as data: 121 pairs and 12 rebuilt zalgo rows, each table classed in the source before a score. No Go runs. The sneaky-bits framing is the unpadded one, and `leet` ran with no lexicon. |
+| palisade at `4d1728ac` | MIT | `palisade-labels` | 56 labelled rows: its three Unicode attacks are the score, its 29 ASCII attacks a census in no rate |
+| spikee at `8f8e9ad3` | Apache-2.0 | `spikee-seed-census` | 640 seed rows in seven sets, counted per file and never printed. The recorded guardrail results under `results/v0.1` are not comparable; the suite's notes say why |
+| pikit at `6a90c063` | MIT | no suite | 13 attack classes beside its channels. Recorded so that the next reader starts here, and not scored |
+| AI-Infra-Guard at `851e3f29` | Apache-2.0 | no suite | 13 encoder functions in `skills/aig-agent-redteam/modules/mutation-attack/scripts/encodings.py`, and a scenario set at `Research/forge_bench/scenarios/v0.3_intact_control` not yet read. Recorded and not scored |
 | ST3GG `examples/` at `35f8b2b8` | AGPL-3.0 | `st3gg-text-examples` | eleven text techniques with a cover its generator fixes; its `README.md` hides 122 zero-width characters and no suite reads it |
 | CL4R1T4S | none checked | not read | holds system prompts, judged from its description only |
 | FlipAttack at `c53880b4` | MIT | read and left out | reordered words and letters: ordinary ASCII, named in `THREAT_MODEL.md`'s out-of-scope entry |

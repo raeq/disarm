@@ -36,6 +36,7 @@ from __future__ import annotations
 import pathlib
 import random
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -133,3 +134,97 @@ def test_the_scripts_788_covered_are_still_covered(name: str, text: str) -> None
     """This change generalises #788 rather than replacing it."""
     assert not disarm.is_zalgo(text), name
     assert marks(disarm.strip_zalgo(text)) == marks(text), name
+
+
+# --- Overlay marks and stacks under the per-class floor (#1156) -----------------
+
+_WORD = "please read"
+
+
+def _spread(*marks: int) -> str:
+    suffix = "".join(map(chr, marks))
+    return "".join(c + suffix if c != " " else c for c in _WORD)
+
+
+@pytest.mark.parametrize("mark", [0x336, 0x335, 0x334, 0x337, 0x338, 0x332, 0x333])
+def test_an_overlay_on_every_letter_of_a_word_reports(mark: int) -> None:
+    """One mark per base is below every count, and the marks are what the word looks like."""
+    text = _spread(mark)
+    assert disarm.has_anomalies(text), f"U+{mark:04X}"
+    assert disarm.inspect_anomalies(text).kinds == ["zalgo"]
+
+
+def test_an_overlay_on_some_letters_of_a_word_does_not_report() -> None:
+    assert not disarm.has_anomalies("re\u0336ad please")
+
+
+def test_one_overlaid_letter_alone_does_not_report() -> None:
+    assert not disarm.has_anomalies("x\u0338 is not y")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a=\u0338b",
+        "a\u2260b",
+        "\u2203\u0338x",
+        "x=\u0338y and a<\u0338b",
+    ],
+    ids=["negated-equals", "precomposed", "negated-exists", "two-negations"],
+)
+def test_a_negation_on_a_symbol_is_ordinary(text: str) -> None:
+    """#749: `U+0338` on a symbol is how a negation is written."""
+    assert not disarm.has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize(
+    "marks",
+    [
+        (0x301, 0x323, 0x336),
+        (0x301, 0x323, 0x336, 0x334),
+        (0x301, 0x323, 0x304),
+        (0x300, 0x316, 0x342),
+    ],
+    ids=lambda m: "-".join(f"{cp:04X}" for cp in m),
+)
+def test_three_marks_per_latin_letter_report_across_classes(marks: tuple[int, ...]) -> None:
+    assert disarm.has_anomalies(_spread(*marks))
+
+
+def test_two_marks_per_letter_stay_below_it() -> None:
+    assert not disarm.has_anomalies(_spread(0x301, 0x323))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        unicodedata.normalize("NFD", "Vi\u1ec7t Nam ti\u1ebfng Vi\u1ec7t"),
+        unicodedata.normalize("NFD", "\u1ea5m \u1ee7 \u1eadt"),
+        "\u0928\u092e\u0938\u094d\u0924\u0947",
+        "\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd",
+        "\u1019\u103c\u102d\u102f\u1037",
+        "\u0e01\u0e33\u0e41\u0e1e\u0e07",
+    ],
+    ids=["vietnamese", "vietnamese-heavy", "hindi", "pointed-hebrew", "burmese", "thai"],
+)
+def test_ordinary_orthography_stays_clean(text: str) -> None:
+    assert not disarm.has_anomalies(text), ascii(text)
+
+
+def test_many_marks_on_a_non_latin_base_stay_where_they_were() -> None:
+    """The count across classes is gated on Latin, for the Burmese evidence behind #842."""
+    assert not disarm.has_anomalies("\u1019\u103b\u103c\u102d\u102f\u1037\u1038")
+
+
+def test_guardrail_recovers_what_canonicalize_keeps() -> None:
+    text = _spread(0x336)
+    assert disarm.get_pipeline("llm_guardrail")(text) == _WORD
+    assert disarm.strip_obfuscation(text) == _WORD
+    assert "\u0336" in disarm.canonicalize(text)
+
+
+def test_the_guide_says_what_keeps_an_overlay_and_what_removes_it() -> None:
+    root = Path(__file__).resolve().parent.parent
+    flat = " ".join((root / "docs/limitations.md").read_text(encoding="utf-8").split())
+    assert "overlay" in flat
+    assert "`canonicalize` keeps" in flat

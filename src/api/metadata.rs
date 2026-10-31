@@ -355,7 +355,15 @@ pub fn unicode_version() -> &'static str {
 /// through the fixture's eight functions, `skeleton_key` and `ml_normalize`: only these
 /// 3,738 move. A key moves only where its text holds one of them. The corpus held none, so
 /// 12 rows were added.
-pub const KEY_SCHEMA_VERSION: u32 = 12;
+///
+/// Bumped to 13 by #1158: a keycap's selector and mark now go together, because removing the
+/// selector alone left a bare enclosing mark that the detector reports, so a sanitizer's output
+/// reported what its input did not. `canonicalize("1\u{FE0F}\u{20E3}")` was `1\u{20E3}` and is
+/// `1`. Measured over the 12 keycap bases in 60 strings against the tree before it, through the
+/// fixture's eight functions, `skeleton_key`, `ml_normalize`, `strip_format` and every profile:
+/// `canonicalize`, `canonicalize_strict`, `sort_key` and `skeleton_key` move on all 60, and
+/// nothing else moves. The corpus held no keycap, so 6 rows were added.
+pub const KEY_SCHEMA_VERSION: u32 = 13;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -390,7 +398,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 12;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "060237301fc7eba13c625a127f844bc431cab5154c36d16c559f2dab591ffdbe";
+    "bea408f01370b62eba69c2d107f26379c00e32e7b6fc7186b475df6d6f7cb562";
 
 /// The key-schema counter, as a function (#645).
 ///

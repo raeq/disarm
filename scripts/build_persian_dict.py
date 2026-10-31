@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Build Persian context dictionary from common word lists + rules.
+"""Build Persian context dictionary from a curated word list.
 
-Persian lacks a large diacritized corpus like Arabic's Tashkeela. Instead,
-this builder creates a dictionary from:
+Persian lacks a large diacritized corpus like Arabic's Tashkeela. Instead, this
+builder creates a dictionary from:
 
 1. A curated list of common Persian words with their known romanizations
-2. Persian words that appear in the Arabic Tashkeela corpus (Arabic loanwords)
-3. Rule-based expansion for common morphological patterns
+2. An optional TSV harvested from Wiktionary, with `--wiktionary`
+
+A word it lacks falls back to the Arabic dictionary at runtime, when one is
+installed, which is what covers Arabic-origin loanwords (#1148).
 
 The output format is identical to the Arabic dictionary (TRLD v1) so the
 same Rust ContextDict reader handles both.

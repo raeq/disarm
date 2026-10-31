@@ -210,10 +210,13 @@ glyph was meant, and a key built from it cannot distinguish two registered varia
 ideograph. For a comparison key that is usually what you want — the variants *are* the same
 character. For anything that round-trips text it is not.
 
-The other direction is the security-relevant one and is not covered either: `A` +
-`U+E0100` is a base carrying an ignorable selector that no registration justifies, which
-is the shape of a smuggling carrier. `canonicalize` removes it, so it does not survive into
-a key; nothing *reports* it, so a caller inspecting rather than transforming sees nothing.
+The other direction is the security-relevant one: `A` + `U+E0100` is a base carrying an
+ignorable selector that no registration justifies, which is the shape of a smuggling carrier.
+`canonicalize` removes it, so it does not survive into a key. One of them reports nothing, so a
+caller inspecting rather than transforming sees nothing. Eight spread through a text report
+`invisible`, and so do eight `U+034F` before a non-mark (#1134). A selector in the ideographic
+range after an ideograph reports only when a text uses eight different ones, because the IVD is
+not shipped and registered variants repeat.
 
 Every other CJK fidelity loss on this page is documented — the single-reading pinyin
 mapping, the missing tone marks, the character-level word boundaries. This one was not.
@@ -281,6 +284,13 @@ where four stacked marks is ordinary, pass a higher `max_marks` — the paramete
 exactly that, and `is_zalgo`'s `threshold` is its counterpart. Note that a base can carry
 more than `max_marks` in total, because the cap applies at each position: a mark above and
 a mark below are two positions, not one.
+
+The detector adds two shapes the cap cannot see, both under `zalgo` (#1156). A word with an
+overlay on every letter, a strikethrough, slash or underline, carries one mark per letter and no
+stack at all. A Latin word with three marks on every letter passes the cap by spreading them
+across classes, and the gate on Latin is what keeps the Burmese evidence above out of it. Neither
+changes what the surfaces do: `canonicalize` keeps an overlay and at most three marks at each
+position, and `llm_guardrail` and `strip_obfuscation` remove them.
 
 The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
 unaffected by the default.
@@ -471,6 +481,25 @@ corrupts prose. Nothing is filtered out of the report: a coverage number that qu
 drops rows reads as coverage it does not have. See
 [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
 [Provenance](provenance.md).
+
+### Three ways of restyling letters have no answer in Unicode (#1138)
+
+These are not fold defects. In each case disarm follows Unicode, or the construction has no
+Unicode answer, and a word filter after the fold still does not match.
+
+Parenthesized letters fold to `(a)`, because NFKC and UTS #39 define them that way. `the` written
+in `U+24AF U+24A3 U+24A0` becomes `(t)(h)(e)`, so a word filter after the fold does not match it.
+`has_anomalies` reports `compat_fold`.
+
+Regional indicators have no compatibility mapping and no confusable row. `canonicalize`,
+`search_key` and `llm_guardrail` keep them, `rag_ingest` deletes them, and `has_anomalies` is
+False. A run of them that forms no flag is not reported either: nothing in it disguises anything
+a reader or a comparison would otherwise take at face value, and flags share the block.
+
+Turned letters such as `U+0250` and `U+0287` are distinct letters with no decomposition. They are
+kept, and a transliterating surface may give a different letter. A text reversed as well as
+turned has no recoverable form. Beside ASCII letters a turned letter the fold reaches, such as
+`U+01DD`, reports `confusable`.
 
 ### 65 table rows are shadowed by the preceding NFKC (#834)
 

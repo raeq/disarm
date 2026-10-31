@@ -392,6 +392,15 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
                     .is_some_and(|base| crate::tables::is_registered_variation(base, ch));
             if keep {
                 out.push(ch);
+            } else if !policy.keep_presentation_vs
+                && chars.peek() == Some(&crate::emoji::KEYCAP)
+                && ch == '\u{FE0F}'
+                && out.ends_with(|base| matches!(base, '0'..='9' | '#' | '*'))
+            {
+                // A keycap's selector and mark go together (#1158). Removing the selector
+                // alone left `1` + `U+20E3`, a bare enclosing mark, so the output of a
+                // sanitizer reported what its input did not.
+                chars.next();
             }
             continue;
         }
@@ -452,6 +461,29 @@ mod tests {
             strip_pua: false,
             keep_presentation_vs: true,
         }
+    }
+
+    #[test]
+    fn a_keycap_selector_and_mark_go_together_under_the_comparison_policy() {
+        // #1158: the selector alone left a bare enclosing mark, which the detector reports.
+        for (text, want) in [
+            ("1\u{FE0F}\u{20E3}", "1"),
+            ("#\u{FE0F}\u{20E3}", "#"),
+            ("1\u{FE0F}\u{20E3}2\u{FE0F}\u{20E3}", "12"),
+            ("x\u{FE0F}\u{20E3}", "x\u{20E3}"),
+            ("1\u{20E3}", "1\u{20E3}"),
+            ("\u{FE0F}\u{20E3}", "\u{20E3}"),
+        ] {
+            assert_eq!(
+                strip_invisible_classes(text, comparison()),
+                want,
+                "{text:?}"
+            );
+        }
+        assert_eq!(
+            strip_invisible_classes("1\u{FE0F}\u{20E3}", rendering()),
+            "1\u{FE0F}\u{20E3}"
+        );
     }
 
     #[test]

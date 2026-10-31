@@ -820,6 +820,65 @@ class ConfusableHomoglyphsSubject(_Base):
         }
 
 
+class UnicodeSmugglingGuardSubject(_Base):
+    """A detector built for the smuggling question, with no sanitizer to compare.
+
+    `tokens.scan_control_tokens` also ships, and is left out: chat-template tokens are
+    visible text, and this surface answers whether a text holds hidden characters.
+    """
+
+    info = SubjectInfo(
+        name="unicode-smuggling-guard",
+        version=_version("unicode-smuggling-guard"),
+        origin="Raul Kivi",
+        url="https://github.com/raulkivi/unicode-smuggling-guard",
+        role="detects hidden characters used to smuggle a payload",
+    )
+    ROLES: ClassVar[dict[str, str]] = {Role.DETECTOR: "scan"}
+
+    def available(self) -> tuple[bool, str]:
+        return (
+            (True, "")
+            if _import("unicode_smuggling_guard")
+            else (False, "pip install unicode-smuggling-guard")
+        )
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        from unicode_smuggling_guard.scanner import scan
+
+        return {"scan": lambda s: bool(scan(s))}
+
+
+class GlyphGuardSubject(_Base):
+    """A detector and a sanitizer built for this question, on their default settings.
+
+    `sanitize` defaults to the `llm-input` profile, which upstream describes as text going
+    into a language model, so it answers every job as a tool with one entry point does.
+    """
+
+    info = SubjectInfo(
+        name="glyphguard",
+        version=_version("glyphguard"),
+        origin="NicPWNs",
+        url="https://github.com/NicPWNs/GlyphGuard",
+        role="detects and neutralizes smuggling, bidi, stacked marks and lookalikes",
+    )
+    ROLES: ClassVar[dict[str, str]] = {Role.DETECTOR: "detect", Role.SANITIZER: "sanitize"}
+
+    def available(self) -> tuple[bool, str]:
+        return (True, "") if _import("glyphguard") else (False, "pip install glyphguard")
+
+    def transforms(self) -> dict[str, Callable[[str], str]]:
+        import glyphguard
+
+        return {"sanitize": lambda s: glyphguard.sanitize(s).text}
+
+    def detectors(self) -> dict[str, Callable[[str], bool]]:
+        import glyphguard
+
+        return {"detect": lambda s: bool(glyphguard.detect(s))}
+
+
 class PyUnormalizeSubject(_Base):
     """Normalization against a different UCD than the interpreter's.
 
@@ -967,6 +1026,8 @@ ALL: tuple[type[_Base], ...] = (
     TextUnidecodeSubject,
     AnyAsciiSubject,
     ConfusableHomoglyphsSubject,
+    UnicodeSmugglingGuardSubject,
+    GlyphGuardSubject,
     PyUnormalizeSubject,
     ICUSubject,
     NullBaselineSubject,

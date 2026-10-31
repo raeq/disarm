@@ -116,7 +116,7 @@ The system uses a three-tier fallback for each word:
 |---|---|---|---|
 | Arabic | [Tashkeela](https://www.kaggle.com/datasets/linuxscout/tashkeela) — 65.7M diacritized words from 97 books | 173K unigrams, 200K bigrams | CC-BY |
 | Hebrew | [Project Ben Yehuda](https://github.com/projectbenyehuda/public_domain_dump) — 11.6M niqqud-pointed words from 26K literary texts | 168K unigrams, 200K bigrams | Public domain |
-| Persian | Curated vocabulary — 266 common words with diacritics applied per BGN/PCGN 1958 | 257 unigrams | Hand-curated |
+| Persian | Curated vocabulary — 258 common words with diacritics applied per BGN/PCGN 1958 | 257 unigrams | Hand-curated |
 
 The builders and `context=True` read a word the same way: a run of script letters and marks, with punctuation outside it, so `(كتاب).` is looked up as `كتاب`. The Arabic comma, semicolon, question mark and full stop are punctuation too, and the last two end the previous word's context as `.` and `?` do. A dictionary built before 0.19.0 holds keys with their punctuation attached, which `context=True` no longer asks for, so run `bash scripts/bootstrap_dicts.sh` again after upgrading.
 
@@ -204,17 +204,19 @@ transliterate("السلام عليكم", context=True)  # "alsalaamu 'alaykum"
 
 ### How disarm handles Persian
 
-The `lang="fa"` profile overrides 51 character mappings from the Arabic default:
+`translit_lang_fa.tsv` has 63 rows, and 54 of them restate the Arabic default. 9 of them change the output:
 
-| Character | Arabic default | Persian override | Reason |
-|---|---|---|---|
-| ث (thā) | th | **s** | Persian pronunciation |
-| ذ (dhāl) | dh | **z** | Persian pronunciation |
-| ض (ḍād) | d | **z** | Persian pronunciation |
-| و (wāw) | w | **v** | Persian pronunciation |
-| kasra (ِ) | i | **e** | Persian 6-vowel system |
-| damma (ُ) | u | **o** | Persian 6-vowel system |
-| tāʾ marbūṭa | h | **e** | Persian feminine ending |
+| Code point | Character | Arabic default | Persian override | Reason |
+|---|---|---|---|---|
+| U+062B | ث (thā) | th | **s** | Persian pronunciation |
+| U+0630 | ذ (dhāl) | dh | **z** | Persian pronunciation |
+| U+0636 | ض (ḍād) | d | **z** | Persian pronunciation |
+| U+0648 | و (wāw) | w | **v** | Persian pronunciation |
+| U+0650 | kasra (ِ) | i | **e** | Persian 6-vowel system |
+| U+064F | damma (ُ) | u | **o** | Persian 6-vowel system |
+| U+0629 | tāʾ marbūṭa | h | **e** | Persian feminine ending |
+| U+0625 | alef with hamza below (إ) | a | **e** | Persian 6-vowel system |
+| U+06C0 | heh with yeh above (ۀ) | h | **-e** | The ezafe on a word ending in heh |
 
 ### Context-aware Persian
 
@@ -259,11 +261,11 @@ Unlike Arabic and Hebrew, no large diacritized Persian corpus exists. Persian ra
 transliterate("کتاب فارسی", lang="fa", context=True)  # "ketab farsy"
 ```
 
-For words not in the curated vocabulary, the system falls back to the Arabic context dictionary. Since approximately 40% of Persian vocabulary is Arabic-origin, many loanwords benefit from the Arabic dictionary automatically.
+For words not in the curated vocabulary, the system falls back to the Arabic context dictionary when one is installed, and a word in both takes its Persian reading. Since approximately 40% of Persian vocabulary is Arabic-origin, many loanwords benefit from the Arabic dictionary automatically.
 
 ### Limitations specific to Persian
 
-- **Smaller dictionary**: 266 curated entries vs Arabic's 173K corpus-derived entries. Common words are covered; rare words fall back to context-free.
+- **Smaller dictionary**: 258 curated entries vs Arabic's 173K corpus-derived entries. Common words are covered; rare words fall back to the Arabic dictionary, and then to context-free.
 - **No ezafe prediction**: The ezafe construction (-e/-ye connecting nouns to adjectives/possessors) is not predicted. It would require syntactic analysis beyond dictionary lookup.
 - **Waw ambiguity**: و serves as both consonant (/v/) and vowel (/o, u/). The `lang="fa"` override maps it to v; the context dictionary provides the correct vowel form for known words.
 

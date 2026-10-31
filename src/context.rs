@@ -498,6 +498,7 @@ pub fn transliterate_context(
     text: &str,
     lang: Option<&str>,
     dict: &ContextDict,
+    fallback: Option<&ContextDict>,
     transliterate_fn: impl Fn(&str, Option<&str>) -> String,
 ) -> String {
     let tokens = tokenize(text);
@@ -525,8 +526,10 @@ pub fn transliterate_context(
 
         let skeleton = strip_diacritics(&token.text, lang);
 
-        // Try dictionary resolution (bigram → unigram → fallback)
-        let resolved = dict.resolve(prev_skeleton.as_deref(), &skeleton);
+        // Try dictionary resolution (bigram → unigram → fallback dictionary)
+        let resolved = dict
+            .resolve(prev_skeleton.as_deref(), &skeleton)
+            .or_else(|| fallback?.resolve(prev_skeleton.as_deref(), &skeleton));
 
         match resolved {
             Some(diacritized) => {
@@ -883,13 +886,14 @@ mod tests {
             "كتب \u{e9} \u{5317}\u{4eac}\u{200c}",
             None,
             &dict,
+            None,
             ascii_or_q,
         );
         assert!(out.is_ascii(), "{out:?}");
         assert_eq!(out, "?????? ? ???");
         // Whitespace and ASCII punctuation still arrive unchanged, and a hard
         // boundary in a non-word span still resets bigram context (#101).
-        let out = transliterate_context("a, b.\nc", None, &dict, ascii_or_q);
+        let out = transliterate_context("a, b.\nc", None, &dict, None, ascii_or_q);
         assert_eq!(out, "a, b.\nc");
     }
 
@@ -904,7 +908,7 @@ mod tests {
         let dict = ContextDict::from_bytes(&bytes).expect("valid dict should parse");
 
         // Space between the two words: the bigram tier sees prev="ال" → kutub.
-        let out = transliterate_context("ال كتب", None, &dict, |s, _| s.to_string());
+        let out = transliterate_context("ال كتب", None, &dict, None, |s, _| s.to_string());
         assert!(
             out.contains("كُتُب"),
             "space must preserve bigram context: {out}"
@@ -915,7 +919,7 @@ mod tests {
         );
 
         // A hard boundary (newline) between the words resets context → unigram.
-        let out2 = transliterate_context("ال\nكتب", None, &dict, |s, _| s.to_string());
+        let out2 = transliterate_context("ال\nكتب", None, &dict, None, |s, _| s.to_string());
         assert!(
             out2.contains("كَتَبَ"),
             "newline must reset to the unigram: {out2}"

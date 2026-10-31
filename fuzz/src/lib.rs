@@ -77,7 +77,9 @@ pub const INTERESTING: &[(u32, u32)] = &[
     (0x1F300, 0x1F64F),   // emoji, skin-tone modifiers U+1F3FB-1F3FF
     (0x1F900, 0x1F9FF),   // supplemental symbols and pictographs
     (0xE0000, 0xE007F),   // tags
+    (0xE0080, 0xE00FF),   // reserved default-ignorable, between tags and selectors
     (0xE0100, 0xE01EF),   // variation selectors supplement
+    (0xE01F0, 0xE0FFF),   // reserved default-ignorable, up to the end of the range
     (0x10FFFE, 0x10FFFF), // plane-16 noncharacters
 ];
 

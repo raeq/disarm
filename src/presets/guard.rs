@@ -292,7 +292,7 @@ pub(super) fn acts_on_nonascii(
                 || invisibles::is_variation_selector(ch)
                 || invisibles::is_noncharacter(ch)
                 || invisibles::is_pua(ch)
-                || invisibles::is_default_ignorable_format(ch)
+                || invisibles::is_other_default_ignorable(ch)
                 || ch == '\u{034F}')) // CGJ
         // FP-1: gate on the fold *table* (`case_folding.tsv`, the actual authority
         // `fold_case_into` consults), not std `is_alphabetic`. The table folds some

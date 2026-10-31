@@ -1675,7 +1675,7 @@ fn survives_as_a_negation_base(b: char) -> bool {
     }
     if crate::invisibles::is_invisible_filler(b)
         || crate::invisibles::is_zero_width(b)
-        || crate::invisibles::is_default_ignorable_format(b)
+        || crate::invisibles::is_other_default_ignorable(b)
         || crate::invisibles::is_tag(b)
     {
         return false;

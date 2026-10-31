@@ -336,6 +336,13 @@ policy. They are:
 removes. The Duployan and musical format controls, `U+1BCA0`–`U+1BCA3` and
 `U+1D173`–`U+1D17A`, were on this list until #813 added them to that strip.)
 
+**The unassigned ones go too (#1103).** The property holds 4,174 code points and 3,769 have
+no character yet. 31 lie in the Tags block and go with it. The strip removes the other 3,738
+as well, `U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF` and `U+E01F0`–`U+E0FFF`, and the
+detector reports them as `invisible`. That follows the property with no filter on assignment,
+so a Unicode version that assigns a character in one of these ranges changes nothing, and
+`canonicalize` keeps the same 6 of all 4,174.
+
 Each is a formatting control belonging to a specific script, where removing it would
 damage ordinary text in that script rather than close a smuggling channel. All six are
 combining marks of class 0 and render as nothing, which made them the invisible way to

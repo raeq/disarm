@@ -144,11 +144,7 @@ def closure(seeds: list[int], rounds: int = 6) -> list[int]:
 
 
 def is_zero_width(c: int) -> bool:  # whitespace.rs is_zero_width / invisibles.rs
-    return (
-        c in (0x200B, 0x200C, 0x200D, 0xFEFF, 0x180E)
-        or 0x2060 <= c <= 0x2064
-        or (0x1BCA0 <= c <= 0x1BCA3 or 0x1D173 <= c <= 0x1D17A)
-    )
+    return c in (0x200B, 0x200C, 0x200D, 0xFEFF, 0x180E) or 0x2060 <= c <= 0x2064 or is_dif(c)
 
 
 def is_bidi_or_format(c: int) -> bool:  # presets.rs is_bidi_or_format
@@ -194,8 +190,15 @@ def is_pua(c: int) -> bool:
     return 0xE000 <= c <= 0xF8FF or 0xF0000 <= c <= 0xFFFFD or 0x100000 <= c <= 0x10FFFD
 
 
-def is_dif(c: int) -> bool:  # invisibles.rs is_default_ignorable_format
-    return 0x1BCA0 <= c <= 0x1BCA3 or 0x1D173 <= c <= 0x1D17A
+def is_dif(c: int) -> bool:  # invisibles.rs is_other_default_ignorable
+    return (
+        0x1BCA0 <= c <= 0x1BCA3
+        or 0x1D173 <= c <= 0x1D17A
+        or c == 0x2065
+        or 0xFFF0 <= c <= 0xFFF8
+        or 0xE0080 <= c <= 0xE00FF
+        or 0xE01F0 <= c <= 0xE0FFF
+    )
 
 
 def is_alnum(c: int) -> bool:  # Rust char::is_alphanumeric, on this alphabet
@@ -382,7 +385,7 @@ def main() -> None:
     parts.append(pred("isVS", "`invisibles::is_variation_selector`.", dom, is_vs))
     parts.append(pred("isNonchar", "`invisibles::is_noncharacter`.", dom, is_nonchar))
     parts.append(pred("isPUA", "`invisibles::is_pua`.", dom, is_pua))
-    parts.append(pred("isDIF", "`invisibles::is_default_ignorable_format`.", dom, is_dif))
+    parts.append(pred("isDIF", "`invisibles::is_other_default_ignorable`.", dom, is_dif))
     parts.append(pred("isAlnum", "`char::is_alphanumeric`.", dom, is_alnum))
     parts.append(pred("occupiesCell", "`deletions::occupies_cell`.", dom, occupies_cell))
     parts.append(

@@ -229,7 +229,7 @@ fn is_visible(c: char) -> bool {
     !(c.is_control()
         || crate::invisibles::is_zero_width(c)
         || crate::invisibles::is_variation_selector(c)
-        || crate::invisibles::is_default_ignorable_format(c)
+        || crate::invisibles::is_other_default_ignorable(c)
         || crate::invisibles::is_tag(c)
         || crate::invisibles::is_noncharacter(c)
         || crate::invisibles::is_invisible_filler(c)

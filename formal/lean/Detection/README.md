@@ -176,7 +176,7 @@ The library's own comment at `src/presets.rs` L1053-1058 calls `U+206A`-`U+206F`
 **Root cause:** `is_invisible_in_word` (`src/anomalies.rs` L47-55) ORs three predicates
 from `crate::invisibles`. The set is in `presets::is_bidi_or_format` (`src/presets.rs`
 L1038-1058) and in none of those three. The comment on
-`invisibles::is_default_ignorable_format` (`src/invisibles.rs` L41-57) says it covers the
+`invisibles::is_other_default_ignorable` (`src/invisibles.rs` L41-57) says it covers the
 `Default_Ignorable` `Cf` code points "that no other predicate here covers". These six are
 covered by a predicate in `presets`, which the detector never reads.
 
@@ -421,7 +421,7 @@ set.
 **Minimal fix:** make `is_invisible_in_hostname` the whole `Default_Ignorable_Code_Point`
 property, minus the bidi controls that `bidi_control` already reports. As a narrower
 alternative, add the soft hyphen, `U+034F`, the Mongolian free variation selectors,
-`U+17B4`-`U+17B5`, the fillers, `is_default_ignorable_format` and Finding 1's predicate.
+`U+17B4`-`U+17B5`, the fillers, `is_other_default_ignorable` and Finding 1's predicate.
 
 ## Checked and not a bug
 

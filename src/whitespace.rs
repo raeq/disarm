@@ -163,10 +163,11 @@ pub(crate) fn is_zero_width(ch: char) -> bool {
     // (U+180E).
     //
     // #813 adds the `Default_Ignorable` formats that carry no other predicate — the
-    // Duployan and musical `Cf` runs. They belong to this set by the function's own
+    // Duployan and musical `Cf` runs — and #1103 the reserved code points beside them.
+    // They belong to this set by the function's own
     // description ("zero-width and invisible characters"): they render as nothing and
     // split a token for anything comparing strings. Delegated rather than restated, so
-    // `crate::invisibles::is_default_ignorable_format` stays the single definition —
+    // `crate::invisibles::is_other_default_ignorable` stays the single definition —
     // the detector reads the same one, which is what stops the two drifting the way
     // #700 found them drifted.
     let cp = ch as u32;
@@ -174,7 +175,7 @@ pub(crate) fn is_zero_width(ch: char) -> bool {
         || cp.wrapping_sub(0x2060) <= 4
         || cp == 0xFEFF
         || cp == 0x180E
-        || crate::invisibles::is_default_ignorable_format(ch)
+        || crate::invisibles::is_other_default_ignorable(ch)
 }
 
 #[cfg(test)]

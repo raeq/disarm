@@ -94,7 +94,9 @@ byte lengths are character counts. The models otherwise follow the code line by 
 
 `Unique.lean` models `build_unique_candidate` (`src/py/slugify.rs` L295-327) and the loop
 at L416-479, including the `MAX_UNIQUE_ATTEMPTS` bound, the `min_unique_len` check and the
-`lossy` flag, with `seen` and `next_counter` as association lists. `LogInjection.lean`
+`lossy` flag, with `seen` and `next_counter` as association lists. `walkFixed`, which the
+code follows, has no such bound: since #1102 it counts what `check` is asked, and the model
+has no `check`. `LogInjection.lean`
 and `Encoders.lean` are the code (`is_log_injection_char`, `escape_html_str`,
 `percent_encode_into` over UTF-8 bytes); `EditDistance.lean` is the row DP of
 `utils::edit_distance` beside the recursive Levenshtein specification.
@@ -564,7 +566,8 @@ This is the right behaviour for polytonic Greek; the docs should say "at most tw
   (`unique_hint_is_sound`), with a small `MAX_UNIQUE_ATTEMPTS`. Beyond it, the only way
   the two walks could differ is the error *kind* once the hint passes 10,000, which needs
   a `lossy` candidate to be consumed; a lossy candidate is the suffix of an earlier
-  counter, already in `seen`, so this should not arise. Argued, not proved.
+  counter, already in `seen`, so this should not arise. Argued, not proved. This is about
+  `run`; the code follows `runFixed`, where #1102 removed the limit on this path.
 * **25 visible format characters** (U+0600-U+0605, U+06DD, ...) survive into a hostname's
   `canonical`, but every such hostname is flagged suspicious, and they are outside the
   documented classes.

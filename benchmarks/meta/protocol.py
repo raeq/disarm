@@ -3,8 +3,9 @@
 The meta-harness runs *externally produced* benchmarks. It owns the runner, the
 selection, the provenance record and the report; it owns **no vectors**. Every
 suite in the registry names an artifact somebody else published — an academic
-corpus, a public dataset, a normative Unicode/IETF/ICANN table, a CVE, or a
-released model artifact — and scores disarm against it without editing it.
+corpus, a public dataset, a normative Unicode/IETF/ICANN table, a CVE, a released
+model artifact, or a practitioner's tool — and scores disarm against it without
+editing it.
 
 That boundary is machine-checkable rather than aspirational: :class:`Provenance`
 carries ``external``, and :func:`Suite.run` results are tagged with it, so a
@@ -30,6 +31,7 @@ class Family(enum.StrEnum):
     CVE = "cve"  # a published vulnerability's vector
     MODEL_ARTIFACT = "model"  # a released tokenizer / chat template
     COMPARATOR = "comparator"  # a third-party labelled benchmark or rival tool
+    PRACTITIONER = "practitioner"  # a tool or repository published outside the literature
     INTROSPECTIVE = "introspective"  # sweeps disarm's own tables — NOT external
 
 
@@ -41,6 +43,23 @@ class Availability(enum.StrEnum):
     NETWORK = "network"  # public download, no credentials
     CREDENTIALED = "credentialed"  # needs a Kaggle / HF token
     MANUAL = "manual"  # operator must place the file
+
+
+class Evidence(enum.StrEnum):
+    """What a practitioner source can support, decided by who knows the answer.
+
+    A corpus released with a paper usually arrives labelled. A repository of
+    attack tooling usually does not, and popularity supplies no label. So the
+    practitioner family states which kind of evidence each suite is, and the
+    suite base classes hold it to that.
+    """
+
+    #: Every case has an answer fixed before the subject runs: a generator applied
+    #: to known text, or a payload embedded in a known cover.
+    KNOWN_ANSWER = "known-answer"
+    #: Unlabelled. A regression or stress input whose numbers are censuses, never
+    #: a score, because nothing outside disarm says what the right output is.
+    FIXTURE = "fixture"
 
 
 class Status(enum.StrEnum):
@@ -75,6 +94,8 @@ class Provenance:
     #: Empty means the suite generalises its issue rather than reproducing a
     #: measurement, and no finding/now comparison should be read off it.
     reproduces: str = ""
+    #: Set on the practitioner family and on nothing else.
+    evidence: Evidence | None = None
 
 
 @dataclass

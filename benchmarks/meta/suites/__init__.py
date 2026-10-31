@@ -10,9 +10,19 @@ from . import (
     introspective,
     model_artifacts,
     normative,
+    practitioner,
 )
 
-MODULES = (normative, cve, academic, datasets, model_artifacts, comparators, introspective)
+MODULES = (
+    normative,
+    cve,
+    academic,
+    datasets,
+    model_artifacts,
+    comparators,
+    practitioner,
+    introspective,
+)
 
 __all__ = [
     "MODULES",
@@ -23,4 +33,5 @@ __all__ = [
     "introspective",
     "model_artifacts",
     "normative",
+    "practitioner",
 ]

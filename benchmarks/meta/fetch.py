@@ -46,8 +46,10 @@ TIMEOUT = 120
 class Source:
     """One upstream artifact, named precisely enough to cite.
 
-    ``sha256`` is optional and, when set, enforced: a mismatch aborts rather than
-    scoring against unexpected bytes. It is left unset for artifacts that
+    ``sha256`` is optional and, when set, enforced on the downloaded bytes before
+    they reach the cache: a mismatch aborts rather than scoring against unexpected
+    bytes, and for an archive it is the archive that is checked, before anything
+    is expanded. It is left unset for artifacts that
     legitimately move (a ``latest`` UCD file, a repository's default branch), and
     the digest actually seen is recorded in the manifest either way.
     """
@@ -121,6 +123,13 @@ def _download(source: Source, cache: Path) -> Path:
     with urlopen(request, timeout=TIMEOUT) as response, open(part, "wb") as out:  # noqa: S310
         while chunk := response.read(1 << 20):
             out.write(chunk)
+    # Checked on the partial file. Checked after the move, a mismatch leaves the bad
+    # bytes under the final name, and the next run reads them as a cached artifact.
+    if source.sha256:
+        digest, _ = _digest(part)
+        if digest != source.sha256:
+            part.unlink(missing_ok=True)
+            raise ValueError(f"{source.filename}: expected sha256 {source.sha256}, got {digest}")
     part.replace(raw)
 
     if source.kind == "file":
@@ -203,8 +212,6 @@ def ensure(
         return None
     path = _download(source, cache)
     digest, size = _digest(path) if path.is_file() else ("", _tree_bytes(path))
-    if source.sha256 and digest and digest != source.sha256:
-        raise ValueError(f"{source.filename}: expected sha256 {source.sha256}, got {digest}")
     return Fetched(
         source,
         path,

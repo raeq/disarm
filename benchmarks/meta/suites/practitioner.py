@@ -23,18 +23,21 @@ never reaches a report: these suites print counts, and the names of transforms.
 from __future__ import annotations
 
 import ast
+import csv
 import hashlib
 import json
 import re
 import shutil
 import statistics
 import subprocess
+from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 
 from .. import damage
-from ..base import SuiteBase, add, record, thin
+from ..base import FETCH_CACHE, SuiteBase, add, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Evidence, Family, Outcome, Provenance
 from ..subjects import Job, Role
@@ -679,4 +682,292 @@ class L1b3rt4sFixtures(_FixtureSuite):
         add(outcome, "stress_carriers_left", len(_CARRIER.findall(out)), of=len(text))
 
 
-SUITES = [P4rs3lt0ngv3Transforms(), GarakAnsiEscapes(), L1b3rt4sFixtures()]
+def _csv_prompts(path: Path) -> list[str]:
+    """Each non-empty `prompt` cell. A long prompt passes csv's default field limit."""
+    csv.field_size_limit(10_000_000)
+    with open(path, encoding="utf-8", newline="") as fh:
+        return [row["prompt"] for row in csv.DictReader(fh) if row.get("prompt")]
+
+
+def _nonblank_lines(path: Path) -> list[str]:
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _jsonl_text(path: Path) -> list[str]:
+    return [json.loads(line)["text"] for line in _nonblank_lines(path)]
+
+
+def _taxonomy_examples(path: Path) -> list[str]:
+    """Every example under every evasion, whichever container holds the list of them."""
+    evasions = json.loads(path.read_text(encoding="utf-8"))["evasions"]
+    items = (
+        evasions
+        if isinstance(evasions, list)
+        else next(v for v in evasions.values() if isinstance(v, list))
+    )
+    return [
+        example if isinstance(example, str) else json.dumps(example, ensure_ascii=False)
+        for item in items
+        for example in item.get("examples", [])
+    ]
+
+
+@dataclass(frozen=True)
+class _Corpus:
+    """One pinned practitioner file, and how to take its texts out of it."""
+
+    name: str
+    source: Source
+    read: Callable[[Path], list[str]]
+
+
+_JAILBREAK_LLMS_COMMIT = "4f4031bf8be187f4478c7f94f42b08714722c12e"
+_FUZZYAI_COMMIT = "8184b9667a665aa27fb69ef81a7a30615d13faf5"
+_PALISADE_COMMIT = "4d1728acdb916c74e44a8465672aa088ff298b08"
+_ARCANUM_COMMIT = "e02cf5b6e202f195c6b6c01484e99519f797acc6"
+
+
+def _jailbreak_llms(stem: str, sha256: str) -> _Corpus:
+    return _Corpus(
+        name=f"jailbreak_llms:{stem}",
+        source=Source(
+            url=(
+                "https://raw.githubusercontent.com/verazuo/jailbreak_llms/"
+                f"{_JAILBREAK_LLMS_COMMIT}/data/prompts/{stem}.csv"
+            ),
+            filename=f"practitioner-corpora/jailbreak_llms/{stem}.csv",
+            licence="MIT",
+            sha256=sha256,
+            note="Its README says the data can hold personal information. Count, never print.",
+        ),
+        read=_csv_prompts,
+    )
+
+
+#: Files a number can come from without labelling anything. A corpus suite that also
+#: reads one of these takes it from here, so each file has one pin.
+PROMPT_CORPORA = (
+    _jailbreak_llms(
+        "regular_prompts_2023_12_25",
+        "fb82e3f88fbd5d9c6edf8927b138510f339b85012cab24d41d13e1665a9c5819",
+    ),
+    _jailbreak_llms(
+        "regular_prompts_2023_05_07",
+        "2286158d3078ac9624bf5f10e679c8db9d7549c882608638e4923a62fd7b6031",
+    ),
+    _jailbreak_llms(
+        "jailbreak_prompts_2023_12_25",
+        "accf97463de96c33c48453dfee9600191ff6fd5a0c43f3f11d5ebf98d1a5de55",
+    ),
+    _jailbreak_llms(
+        "jailbreak_prompts_2023_05_07",
+        "6f0ccbea6c0118d4d563e885ae4c459980943c44b57fd66d6fbe7c869ab61e6b",
+    ),
+    _Corpus(
+        name="fuzzyai:benign_prompts",
+        source=Source(
+            url=(
+                f"https://raw.githubusercontent.com/cyberark/FuzzyAI/{_FUZZYAI_COMMIT}"
+                "/src/fuzzyai/resources/benign_prompts.txt"
+            ),
+            filename="practitioner-corpora/fuzzyai/benign_prompts.txt",
+            licence="Apache-2.0",
+            sha256="95366fd7c23e37ff47054ba7407c231050e95da4eab8cd92ef4c91ac20da5eed",
+        ),
+        read=_nonblank_lines,
+    ),
+    _Corpus(
+        name="palisade:benchmark",
+        source=Source(
+            url=(
+                f"https://raw.githubusercontent.com/RootVandal/palisade/{_PALISADE_COMMIT}"
+                "/palisade/data/benchmark.jsonl"
+            ),
+            filename="practitioner-corpora/palisade/benchmark.jsonl",
+            licence="MIT",
+            sha256="0ac34ef295d1c70ae8737816725a16ce988b0d249516c07542b13e6eb783d877",
+        ),
+        read=_jsonl_text,
+    ),
+    _Corpus(
+        name="arcanum:taxonomy",
+        source=Source(
+            url=(
+                f"https://raw.githubusercontent.com/Arcanum-Sec/arc_pi_taxonomy/{_ARCANUM_COMMIT}"
+                "/docs/data/taxonomy.json"
+            ),
+            filename="practitioner-corpora/arcanum/taxonomy.json",
+            licence="CC-BY-4.0",
+            sha256="fc26b73a909faf73087dac4829cbd2118eb3f4505db6729dc048bc6fb3e1daa7",
+            note="Attribution: Arcanum Information Security, Arc PI Taxonomy.",
+        ),
+        read=_taxonomy_examples,
+    ),
+)
+
+
+def _always_raises(_text: str) -> str:
+    raise ValueError("a surface that always raises, to show the sweep can see one")
+
+
+def _always_grows(text: str) -> str:
+    return text + "x"
+
+
+class LabelFreeInvariants(_FixtureSuite):
+    """Three questions whose answer comes from the library's contract, not from a label.
+
+    Does a surface raise, is its output a fixed point, and does a sanitizer's output
+    report what its input did not. Each one is undirected on purpose: raising and
+    moving have a right answer, and deleting everything earns it, so neither can rank
+    a tool. A change shows up as drift.
+    """
+
+    name = "label-free-invariants"
+    summary = (
+        "Raises, fixed point and gained kinds over the provisioned practitioner corpora: "
+        "counts, never a score."
+    )
+    provenance = Provenance(
+        origin="an audit of 67 practitioner repositories",
+        citation="verazuo/jailbreak_llms, cyberark/FuzzyAI, RootVandal/palisade, Arc PI Taxonomy",
+        url="https://gist.github.com/raeq/1d1c2c3c354e390693a225ff0b879d0c",
+        version=(
+            f"commits {_JAILBREAK_LLMS_COMMIT[:8]}, {_FUZZYAI_COMMIT[:8]}, "
+            f"{_PALISADE_COMMIT[:8]}, {_ARCANUM_COMMIT[:8]}"
+        ),
+        licence="MIT, Apache-2.0, MIT and CC-BY-4.0, per source",
+        issues=(1163, 1157, 1158),
+        evidence=Evidence.FIXTURE,
+        finding=(
+            "On 0.18.0 over 67 repositories and 670,101 texts, nothing raised and no preset "
+            "or profile failed to be a fixed point. Over this suite's four corpora `rag_ingest` "
+            "output gains no kind, while `canonicalize` gains `mixed_script` and `bidi_mixed`, "
+            "which #1157 records as intended, and `enclosing_mark`, which is #1158. `demojize` "
+            "moves on 10 of 22,897 texts, because the CLDR names of `U+1F550` and three others "
+            "hold a quotation mark that a second pass names. It is not a preset, and "
+            "`tests/test_adversarial_oracle.py` records it as no documented fixed point."
+        ),
+        notes=(
+            "Counts only: the corpora hold prompts, some with personal information, and no "
+            "text reaches a report. `raised` and `not_fixed_point` stay undirected, because "
+            "deleting everything also scores zero on both and they could only ever tie. The "
+            "sweep proves it can see a failure on every run, and a run whose call count is not "
+            "texts times surfaces is an error. Gained kinds are reported for disarm alone, "
+            "since scoring another tool with disarm's detector would be circular. Attribution "
+            "for the taxonomy: Arcanum Information Security, Arc PI Taxonomy, CC-BY-4.0."
+        ),
+    )
+    CORPORA = PROMPT_CORPORA
+    SOURCES = tuple(corpus.source for corpus in CORPORA)
+    #: `rag_ingest` is the contrast the other three are read against.
+    SANITIZERS = (
+        "canonicalize",
+        "profile:llm_guardrail",
+        "strip_obfuscation",
+        "profile:rag_ingest",
+    )
+
+    def read_corpora(self) -> dict[str, list[str]]:
+        """Each corpus that is in the cache. An absent one is left out, and counted."""
+        return {
+            corpus.name: corpus.read(FETCH_CACHE / corpus.source.filename)
+            for corpus in self.CORPORA
+            if (FETCH_CACHE / corpus.source.filename).exists()
+        }
+
+    @staticmethod
+    def _sweep(surface: Callable[[str], str], texts: list[str]) -> tuple[int, int, int]:
+        """Calls, raises and outputs that are not a fixed point, for one surface."""
+        calls = raised = moved = 0
+        for text in texts:
+            calls += 1
+            try:
+                once = surface(text)
+                if surface(once) != once:
+                    moved += 1
+            except Exception:  # noqa: BLE001 - the count is the result, and it is reported
+                raised += 1
+        return calls, raised, moved
+
+    def _check_the_sweep_can_fail(self) -> None:
+        """An earlier sweep printed 0 moved because `except` hid that nothing had run."""
+        probe = ["x"]
+        if self._sweep(_always_raises, probe) != (1, 1, 0):
+            raise ValueError(f"{self.name}: the sweep cannot see a surface that raises")
+        if self._sweep(_always_grows, probe) != (1, 0, 1):
+            raise ValueError(f"{self.name}: the sweep cannot see a moved output")
+
+    def census(self, outcome: Outcome, limit: int | None) -> None:
+        corpora = self.read_corpora()
+        texts = [text for rows in corpora.values() for text in rows][: limit or None]
+        surfaces = self.transforms()
+        if not texts or not surfaces:
+            raise ValueError(f"{len(texts)} texts and {len(surfaces)} surfaces: nothing to sweep")
+        self._check_the_sweep_can_fail()
+        outcome.population = len(texts)
+        record(
+            outcome,
+            domain=f"{len(texts)} texts from {len(corpora)} provisioned corpora",
+            predicates=sorted(surfaces),
+            commit=self.provenance.version,
+            evidence="fixture: every number here is a census",
+        )
+        add(outcome, "corpora_read", len(corpora), of=len(self.CORPORA), unit="corpora")
+        add(outcome, "texts", len(texts), unit="texts")
+        add(outcome, "characters", sum(map(len, texts)), unit="characters")
+        add(outcome, "surfaces", len(surfaces), unit="surfaces")
+        calls = raised = moved = 0
+        for name, surface in sorted(surfaces.items()):
+            made, its_raised, its_moved = self._sweep(surface, texts)
+            calls, raised, moved = calls + made, raised + its_raised, moved + its_moved
+            add(outcome, f"raised:{name}", its_raised, of=len(texts))
+            add(outcome, f"not_fixed_point:{name}", its_moved, of=len(texts))
+        expected = len(texts) * len(surfaces)
+        if calls != expected:
+            raise ValueError(f"the sweep made {calls} calls where it owed {expected}")
+        add(outcome, "calls", calls, unit="calls")
+        add(outcome, "raised", raised, of=calls)
+        add(outcome, "not_fixed_point", moved, of=calls)
+        _, control_raised, control_moved = self._sweep(_delete_everything, texts)
+        add(outcome, "control_delete_everything_raised", control_raised, of=len(texts))
+        add(outcome, "control_delete_everything_not_fixed_point", control_moved, of=len(texts))
+        if outcome.method.subject == "disarm":
+            self._gained_kinds(outcome, surfaces, texts)
+
+    def _gained_kinds(
+        self, outcome: Outcome, surfaces: dict[str, Callable[[str], str]], texts: list[str]
+    ) -> None:
+        import disarm
+
+        inspect = getattr(disarm, "inspect_anomalies", None)
+        if inspect is None:
+            return
+        for name in self.SANITIZERS:
+            surface = surfaces.get(name)
+            if surface is None:
+                continue
+            reports = rows = 0
+            gained: Counter[str] = Counter()
+            for text in texts:
+                try:
+                    output = surface(text)
+                except Exception:  # noqa: BLE001 - no output to inspect, and `raised:` counts it
+                    continue
+                after = set(inspect(output).kinds)
+                reports += bool(after)
+                new = after - set(inspect(text).kinds)
+                rows += bool(new)
+                gained.update(new)
+            add(outcome, f"output_reports:{name}", reports, of=len(texts))
+            add(outcome, f"gained_a_kind:{name}", rows, of=len(texts))
+            for kind, count in sorted(gained.items()):
+                add(outcome, f"gained_kind:{name}:{kind}", count, of=len(texts))
+
+
+SUITES = [
+    P4rs3lt0ngv3Transforms(),
+    GarakAnsiEscapes(),
+    L1b3rt4sFixtures(),
+    LabelFreeInvariants(),
+]

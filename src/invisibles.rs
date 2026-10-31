@@ -67,18 +67,11 @@ fn is_tag_letter(ch: char) -> bool {
 pub(crate) fn is_other_default_ignorable(ch: char) -> bool {
     // Every strip path asks this for every character, so ordinary text has to leave early:
     // six range checks moved `strip_obfuscation` by +5.9% on the perf gate (#1103). One
-    // member lies below `U+FFF0`, and the rest stay out of line so that each inlined copy
-    // of this stays small.
+    // member lies below `U+FFF0`.
     let cp = ch as u32;
     if cp < 0xFFF0 {
         return cp == 0x2065;
     }
-    is_other_default_ignorable_from_fff0(cp)
-}
-
-/// [`is_other_default_ignorable`] for `U+FFF0` and up, which ordinary text rarely reaches.
-#[inline(never)]
-fn is_other_default_ignorable_from_fff0(cp: u32) -> bool {
     matches!(
         cp,
         0xFFF0..=0xFFF8

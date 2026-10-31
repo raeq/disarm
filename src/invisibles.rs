@@ -65,14 +65,20 @@ fn is_tag_letter(ch: char) -> bool {
 /// hieroglyph layout controls. None is `Default_Ignorable`, and all carry meaning.
 #[inline]
 pub(crate) fn is_other_default_ignorable(ch: char) -> bool {
+    // Every strip path asks this for every character, so ordinary text has to leave early:
+    // six range checks moved `strip_obfuscation` by +5.9% on the perf gate (#1103). One
+    // member lies below `U+FFF0`.
+    let cp = ch as u32;
+    if cp < 0xFFF0 {
+        return cp == 0x2065;
+    }
     matches!(
-        ch,
-        '\u{1BCA0}'..='\u{1BCA3}'
-            | '\u{1D173}'..='\u{1D17A}'
-            | '\u{2065}'
-            | '\u{FFF0}'..='\u{FFF8}'
-            | '\u{E0080}'..='\u{E00FF}'
-            | '\u{E01F0}'..='\u{E0FFF}'
+        cp,
+        0xFFF0..=0xFFF8
+            | 0x1BCA0..=0x1BCA3
+            | 0x1D173..=0x1D17A
+            | 0xE0080..=0xE00FF
+            | 0xE01F0..=0xE0FFF
     )
 }
 
@@ -367,7 +373,7 @@ mod tests {
 
     #[test]
     fn the_reserved_ranges_stop_where_their_neighbours_start() {
-        for ch in ['\u{2064}', '\u{2066}', '\u{FFF9}', '\u{E0FFF}'] {
+        for ch in ['\u{2064}', '\u{2066}', '\u{FFEF}', '\u{FFF9}', '\u{E0FFF}'] {
             let expected = ch == '\u{E0FFF}';
             assert_eq!(
                 is_other_default_ignorable(ch),
@@ -380,7 +386,14 @@ mod tests {
         for ch in ['\u{E007F}', '\u{E0100}', '\u{E01EF}'] {
             assert!(!is_other_default_ignorable(ch), "U+{:04X}", ch as u32);
         }
-        for ch in ['\u{E0080}', '\u{E00FF}', '\u{E01F0}'] {
+        for ch in [
+            '\u{2065}',
+            '\u{FFF0}',
+            '\u{FFF8}',
+            '\u{E0080}',
+            '\u{E00FF}',
+            '\u{E01F0}',
+        ] {
             assert!(is_other_default_ignorable(ch), "U+{:04X}", ch as u32);
         }
         assert!(!is_other_default_ignorable('\u{E1000}'));

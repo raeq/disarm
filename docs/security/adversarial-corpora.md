@@ -55,6 +55,9 @@ checks this table.
 | Homoglyph | `greek substitution` | yes | yes |
 | Homoglyph | `mathematical alphanumerics` | yes | yes |
 | Homoglyph | `small capitals` | yes | yes |
+| Homoglyph | `parenthesized letters` | yes | yes |
+| Homoglyph | `regional indicators` | no | no |
+| Homoglyph | `turned letters` | yes | yes |
 | Structural | `bracket nesting` | no | no |
 | Structural | `character deletion` | no | no |
 | Structural | `fragmentation` | yes | no |

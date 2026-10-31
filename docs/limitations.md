@@ -468,6 +468,25 @@ drops rows reads as coverage it does not have. See
 [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
 [Provenance](provenance.md).
 
+### Three ways of restyling letters have no answer in Unicode (#1138)
+
+These are not fold defects. In each case disarm follows Unicode, or the construction has no
+Unicode answer, and a word filter after the fold still does not match.
+
+Parenthesized letters fold to `(a)`, because NFKC and UTS #39 define them that way. `the` written
+in `U+24AF U+24A3 U+24A0` becomes `(t)(h)(e)`, so a word filter after the fold does not match it.
+`has_anomalies` reports `compat_fold`.
+
+Regional indicators have no compatibility mapping and no confusable row. `canonicalize`,
+`search_key` and `llm_guardrail` keep them, `rag_ingest` deletes them, and `has_anomalies` is
+False. A run of them that forms no flag is not reported either: nothing in it disguises anything
+a reader or a comparison would otherwise take at face value, and flags share the block.
+
+Turned letters such as `U+0250` and `U+0287` are distinct letters with no decomposition. They are
+kept, and a transliterating surface may give a different letter. A text reversed as well as
+turned has no recoverable form. Beside ASCII letters a turned letter the fold reaches, such as
+`U+01DD`, reports `confusable`.
+
 ### 65 table rows are shadowed by the preceding NFKC (#834)
 
 The paragraph above insists nothing is filtered out of the coverage report, because *"a

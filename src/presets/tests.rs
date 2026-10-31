@@ -2469,8 +2469,9 @@ mod proptest_properties {
         fn strip_format_idempotent(s in adversarial()) {
             // Review D-2: a presentation VS kept after a base that a later
             // strip removes (blank-render, control, zero-width) was orphaned
-            // on the second pass. `is_presentation_base` now rejects those
-            // bases, so the preset is a true fixed point.
+            // on the second pass. Only a base Unicode registers keeps one now
+            // (#1135), and no later strip removes those, so the preset is a
+            // true fixed point.
             let once = strip_format(&s);
             prop_assert_eq!(&once, &strip_format(&once));
         }

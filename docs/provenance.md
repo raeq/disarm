@@ -26,6 +26,7 @@ against for byte-stable behavior.
 | Decimal numbering systems — `decimal_digit_zeros.tsv` | UCD `Numeric_Type=Decimal`, one row per system zero (#777) | **17.0.0** |
 | Bidi direction — `bidi_strong_ranges.tsv` | UCD `Bidi_Class` (UAX&nbsp;#9 `L`, and `R`/`AL`) | **17.0.0** |
 | Confusable prototype census — `confusable_prototype_census.tsv` | `confusables.txt` grouped by the UCD `Script` of each prototype, from the vendored `data/Scripts.txt` (#963) | **17.0.0** (both inputs) |
+| Registered variation sequences — `variation_sequences.tsv` | `emoji-variation-sequences.txt` and `StandardizedVariants.txt`, selectors `U+FE00` to `U+FE0F` (#1135) | **18.0.0** |
 | Within-word joiners — `word_joiners.tsv` | UCD `General_Category` (`Pd`, `Pc`, plus `U+002E` by hand) | **17.0.0** |
 | Normalization — `normalize()`, every NFC/NFKC step inside the presets, and the NFD and combining classes `is_zalgo` / `strip_zalgo` count marks over | UCD, via the [`unicode-normalization`](https://crates.io/crates/unicode-normalization) crate (not a bundled table) | **18.0.0** |
 | Grapheme segmentation — `grapheme_len`, `terminal_width`, the cluster boundaries `slugify` cuts on, and the zero-width `Prepend` characters `terminal_width` looks past for a cluster's base (checked against it by `zero_width_prepend_matches_the_segmenter`) | UAX&nbsp;#29, via the [`unicode-segmentation`](https://crates.io/crates/unicode-segmentation) crate (not a bundled table) | **17.0.0** |

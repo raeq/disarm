@@ -103,6 +103,19 @@ const RUN_THRESHOLD_VARIATION_SELECTOR: usize = 2;
 const RUN_THRESHOLD_ZERO_WIDTH: usize = 8;
 const RUN_THRESHOLD_PRIVATE_USE: usize = 4;
 const RUN_THRESHOLD_NONCHARACTER: usize = 1;
+/// How many carriers spread through a text report, with none touching (#1134).
+///
+/// The run floors above see only marks that touch, and a selector or `U+034F` after each
+/// letter touches nothing. Eight is the zero-width floor's reasoning again: enough to spell
+/// one byte, and more than ordinary text holds by accident. [`spread_carriers`] says what
+/// counts. One selector after an unregistered base stays unreported, as it was.
+const SPREAD_CARRIER_FLOOR: usize = 8;
+/// How many *different* ideographic selectors a text must use before they report (#1134).
+///
+/// The IVD registers tens of thousands of sequences and is not shipped, so a selector after
+/// an ideograph cannot be checked against it. What separates the two is variety: a text
+/// repeats the registered variants of its words, and a message's bytes do not repeat.
+const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -735,6 +748,53 @@ fn paints_over(line: &str, after: &str) -> bool {
         return cells > 0 && painted.chars().count() >= cells;
     }
     true
+}
+
+/// Carriers spread through a text, as `(first carrier's byte offset and length, count)`, once
+/// there are enough to report (#1134).
+///
+/// Counts a selector after a base no sequence registers, and `U+034F` before a non-mark,
+/// since its legitimate use holds a mark away from its base. A selector touching another is
+/// the run rule's, and an ideographic selector after an ideograph answers to variety alone.
+fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
+    if text.is_ascii() {
+        return None;
+    }
+    let mut first = None;
+    let mut count = 0usize;
+    let mut ideographic_first = None;
+    let mut ideographic_count = 0usize;
+    let mut ideographic = HashSet::new();
+    let mut previous = None;
+    let mut chars = text.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        let next = chars.peek().map(|&(_, n)| n);
+        if c == CGJ {
+            if next.is_none_or(|n| !unicode_normalization::char::is_combining_mark(n)) {
+                first.get_or_insert_with(|| (i, c.len_utf8()));
+                count += 1;
+            }
+        } else if crate::invisibles::is_variation_selector(c) {
+            let base = previous.filter(|b| !crate::invisibles::is_variation_selector(*b));
+            let ideograph = base.is_some_and(|b| crate::scripts::detect_char_script(b) == "Han");
+            if ideograph && c >= '\u{E0100}' {
+                ideographic_first.get_or_insert_with(|| (i, c.len_utf8()));
+                ideographic_count += 1;
+                ideographic.insert(c);
+            } else if base.is_some_and(|b| !crate::tables::is_registered_variation(b, c)) {
+                first.get_or_insert_with(|| (i, c.len_utf8()));
+                count += 1;
+            }
+        }
+        previous = Some(c);
+    }
+    if ideographic.len() >= SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR {
+        count += ideographic_count;
+        first = first.or(ideographic_first);
+    }
+    (count >= SPREAD_CARRIER_FLOOR)
+        .then(|| first.map(|at| (at, count)))
+        .flatten()
 }
 
 fn codepoint(c: char) -> String {
@@ -1849,6 +1909,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     // it *splits* the tokens either side of it and both halves are clean on their own
     // (#739). `split_tokens` can never present it to `classify`.
     overwriting_cr(text).is_some()
+        || spread_carriers(text).is_some()
         || decoded_payloads(text).next().is_some()
         || split_tokens(text)
             .into_iter()
@@ -1886,6 +1947,26 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
         .collect();
     for f in smuggled.into_iter().rev() {
         findings.insert(0, f);
+    }
+
+    // Text-level for the reason the CR rule below is: the carriers sit in different tokens,
+    // and each token on its own holds one and is clean (#1134).
+    if let Some(((start, len), count)) = spread_carriers(text) {
+        let at = findings.partition_point(|f: &Finding| f.start < start);
+        let carrier = &text[start..start + len];
+        findings.insert(
+            at,
+            Finding {
+                kind: AnomalyKind::Invisible,
+                token: carrier.to_owned(),
+                start,
+                end: start + len,
+                detail: format!(
+                    "{count} spread through the text, first {}",
+                    carrier.chars().next().map_or_else(String::new, codepoint)
+                ),
+            },
+        );
     }
 
     // Spliced in at its byte offset rather than pushed, so `findings` stays in

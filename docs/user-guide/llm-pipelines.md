@@ -436,7 +436,9 @@ for the selectors and `U+034F`. `U+FE0F` on an emoji in a string literal and an 
 variation sequence in a UI string are source text, so removing them would rewrite the file.
 They are also a concealment channel, and that half is what the detector is for: a run of
 tags or selectors is reported as `smuggled`, and `decode_smuggled` reads it back. One
-selector alone is not a run, and [is not reported](../limitations.md).
+selector alone is not a run, and [is not reported](../limitations.md). Selectors spread one per
+letter, with none touching, report `invisible` from eight on and decode to nothing, since a bit
+pattern across letters is not one of its schemes.
 
 ```python
 from disarm import decode_smuggled, get_pipeline, has_anomalies, inspect_anomalies

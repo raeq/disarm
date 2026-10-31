@@ -347,7 +347,15 @@ pub fn unicode_version() -> &'static str {
 ///
 /// The fixture was green through both, for the reason recorded above: its corpus held no
 /// character new in Unicode 18 and no such pair. 119 rows were added.
-pub const KEY_SCHEMA_VERSION: u32 = 11;
+///
+/// Bumped to 12 by #1103: the 3,738 code points Unicode reserves as
+/// `Default_Ignorable_Code_Point` and has not assigned go, as the assigned ones of #813 did.
+/// `canonicalize("pay\u{E0080}pal")` kept the code point and is `paypal`. Measured against
+/// `0.18.0` over every scalar value (alone, after `a`, before U+0301, after `a` + U+0301),
+/// through the fixture's eight functions, `skeleton_key` and `ml_normalize`: only these
+/// 3,738 move. A key moves only where its text holds one of them. The corpus held none, so
+/// 12 rows were added.
+pub const KEY_SCHEMA_VERSION: u32 = 12;
 
 /// SHA-256 of the key-stability fixture's *decompressed* bytes (#887).
 ///
@@ -382,7 +390,7 @@ pub const KEY_SCHEMA_VERSION: u32 = 11;
 /// difference was `# generated against disarm 0.14.1` becoming `0.15.0`. The rows are
 /// the semantic anchor: they change when, and only when, a key moved.
 pub const KEY_FIXTURE_SHA256: &str =
-    "55fb8cc77bb3de9287fc31befa250467bb6ef30c156a6365f5e55c479a7f7bf9";
+    "060237301fc7eba13c625a127f844bc431cab5154c36d16c559f2dab591ffdbe";
 
 /// The key-schema counter, as a function (#645).
 ///

@@ -294,3 +294,5 @@ The 22 zero-width characters handled by the `strip_zero_width` step:
 - U+180E Mongolian Vowel Separator
 - U+1BCA0–U+1BCA3, the Duployan shorthand format controls (#813)
 - U+1D173–U+1D17A, the musical symbol format controls (#813)
+- U+2065, U+FFF0–U+FFF8, U+E0080–U+E00FF and U+E01F0–U+E0FFF, which Unicode reserves as
+  default-ignorable and has not assigned (#1103)

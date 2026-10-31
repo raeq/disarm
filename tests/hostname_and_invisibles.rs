@@ -165,6 +165,24 @@ fn the_default_ignorable_formats_are_invisible() {
 }
 
 #[test]
+fn the_reserved_default_ignorables_are_invisible() {
+    // No character yet, and invisible by the same property (#1103).
+    for ch in [
+        '\u{2065}',
+        '\u{FFF0}',
+        '\u{FFF8}',
+        '\u{E0080}',
+        '\u{E00FF}',
+        '\u{E01F0}',
+        '\u{E0FFF}',
+    ] {
+        let s = format!("pay{ch}pal");
+        assert_eq!(strip_format(&s), "paypal", "U+{:04X}", ch as u32);
+        assert_eq!(canonicalize(&s).unwrap(), "paypal", "U+{:04X}", ch as u32);
+    }
+}
+
+#[test]
 fn a_subdivision_flag_is_skipped_whole() {
     // England: U+1F3F4, the tag letters `gbeng`, U+E007F CANCEL TAG. The detector and
     // the carrier scan skip the whole sequence; one short would leave CANCEL TAG behind

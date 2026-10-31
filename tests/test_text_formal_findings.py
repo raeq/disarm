@@ -302,7 +302,10 @@ class TestC1C2CaseFoldDocs:
 
 class TestD1ZeroWidthSet:
     def test_the_docstring_lists_exactly_the_set_removed(self) -> None:
-        """Regression: the docstring said "exactly" 10 code points; 22 are removed."""
+        """Regression: the docstring said "exactly" 10 code points; 22 were removed.
+
+        #1103 added the 3,738 reserved code points.
+        """
         doc = inspect.getdoc(disarm.strip_zero_width_chars) or ""
         listed: set[int] = set()
         for lo, hi in re.findall(r"^- ``U\+([0-9A-F]+)``(?:\u2013``U\+([0-9A-F]+)``)?", doc, re.M):
@@ -313,7 +316,7 @@ class TestD1ZeroWidthSet:
             if not 0xD800 <= cp <= 0xDFFF
             and disarm.strip_zero_width_chars("a" + chr(cp) + "b") == "ab"
         }
-        assert len(removed) == 22
+        assert len(removed) == 3_760
         assert listed == removed
 
 

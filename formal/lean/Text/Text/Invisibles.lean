@@ -14,7 +14,7 @@
 | `pua` | `is_pua` | `U+E000` |
 | `vs i` | `is_variation_selector`, not VS15/VS16 | `U+FE00`, `U+E0100` |
 | `vs15`, `vs16` | `U+FE0E`, `U+FE0F` | |
-| `difmt` | `is_default_ignorable_format` | `U+1D173` |
+| `difmt` | `is_other_default_ignorable` | `U+1D173` |
 | `zw` | `whitespace::is_zero_width` (not `difmt`) | `U+200B` |
 | `ws i` | fold whitespace (`ws 0` is the space `collapse` writes) | space, NBSP |
 | `blank` | `is_blank_render` | `U+2800` |

@@ -246,6 +246,15 @@ class TestTheFixtureCoversWhatItClaims:
             "code point new in Unicode 18": sum(
                 1 for c in joined if c in "\u0558\u058b\u058c\u05c8\u05c9\u0b53\u0b54\u1ade\u209d"
             ),
+            # What `KEY_SCHEMA_VERSION` 12 records (#1103).
+            "reserved default-ignorable": sum(
+                1
+                for c in joined
+                if ord(c) == 0x2065
+                or 0xFFF0 <= ord(c) <= 0xFFF8
+                or 0xE0080 <= ord(c) <= 0xE00FF
+                or 0xE01F0 <= ord(c) <= 0xE0FFF
+            ),
             "Brahmic slot with no inherent `a` before an unassigned sign": sum(
                 1
                 for line in gen.read_corpus()

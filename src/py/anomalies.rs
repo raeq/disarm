@@ -157,6 +157,13 @@ fn lexicon_from_py(words: Option<Bound<'_, PyAny>>) -> PyResult<HashSet<String>>
 }
 
 /// `has_anomalies(text, lexicon=None) -> bool`
+/// The level a finding of this kind carries, by the kind's name (#946).
+#[pyfunction]
+pub fn _anomaly_severity(kind: &str) -> PyResult<&'static str> {
+    let kind: crate::api::AnomalyKind = kind.parse()?;
+    Ok(kind.severity().as_str())
+}
+
 #[pyfunction]
 #[pyo3(signature = (text, lexicon=None))]
 pub fn _has_anomalies(text: &str, lexicon: Option<Bound<'_, PyAny>>) -> PyResult<bool> {

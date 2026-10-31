@@ -72,6 +72,15 @@ raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
 strong-direction **letters** and is structurally blind to controls altogether.
 
 
+### Levels (#946)
+
+`anomaly_severity(kind)` gives the level a finding of that kind carries, by the name a report holds:
+`"error"` or `"warning"`, which are SARIF's names. `smuggled` is the one `"error"`, because it fires
+only on a run that decodes to readable text. Every other kind reports a technical fact and leaves the
+judgement to the caller, and that includes `deletion`, whose presence is not a matter of degree: a
+classic Mac OS file with `CR` line endings is a known false positive. The Node, Ruby, Java and C ABI
+bindings take the same name. The scanner's SARIF output reads these levels.
+
 ### One verdict for every canonically equivalent spelling
 
 `\u00e9` is one code point in NFC and two in NFD, and a reader cannot tell them apart. The

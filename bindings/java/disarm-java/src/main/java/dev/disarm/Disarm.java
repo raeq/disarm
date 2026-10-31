@@ -706,6 +706,18 @@ public final class Disarm {
         return Native.hasAnomalies(text, lexicon.handle());
     }
 
+    /**
+     * The level a finding of this kind carries, by the name a report holds: {@code "error"} or
+     * {@code "warning"}, which are SARIF's names. {@code smuggled} is the one {@code "error"},
+     * because it fires only on a run that decodes to readable text.
+     *
+     * @throws DisarmInvalidArgumentException if {@code kind} names no anomaly kind
+     */
+    public static String anomalySeverity(String kind) {
+        req(kind);
+        return Native.anomalySeverity(kind);
+    }
+
     /** Full anomaly report against a word list (per-call set build). */
     public static AnomalyReport inspectAnomalies(String text, List<String> words) {
         req(text);

@@ -334,6 +334,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py::hostname::_is_suspicious_hostname, m)?)?;
     m.add_class::<py::hostname::HostnameAnalysis>()?;
     m.add_function(wrap_pyfunction!(py::anomalies::_has_anomalies, m)?)?;
+    m.add_function(wrap_pyfunction!(py::anomalies::_anomaly_severity, m)?)?;
     m.add_function(wrap_pyfunction!(py::anomalies::_inspect_anomalies, m)?)?;
     m.add_function(wrap_pyfunction!(py::anomalies::_has_anomalies_lex, m)?)?;
     m.add_function(wrap_pyfunction!(py::anomalies::_inspect_anomalies_lex, m)?)?;

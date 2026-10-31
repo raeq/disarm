@@ -770,6 +770,19 @@ RSpec.describe Disarm do
     end
   end
 
+  describe ".anomaly_severity" do
+    it "makes a decoded payload the one error (#946)" do
+      expect(Disarm.anomaly_severity("smuggled")).to eq("error")
+      expect(Disarm.anomaly_severity(:deletion)).to eq("warning")
+      finding = Disarm.inspect_anomalies("hi\u200bthere", [])[:findings].first
+      expect(Disarm.anomaly_severity(finding[:kind])).to eq("warning")
+    end
+
+    it "raises on a name that is no kind" do
+      expect { Disarm.anomaly_severity("nope") }.to raise_error(Disarm::InvalidArgument, /anomaly kind/)
+    end
+  end
+
   describe "reusable lexicon (Disarm::Lexicon)" do
     words = %w[free viagra paypal]
     lex = Disarm::Lexicon.new(words)

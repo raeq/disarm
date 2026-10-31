@@ -444,7 +444,7 @@ def strip_zero_width_chars(text: str) -> str:
 
     Deletes the zero-width set, which renders as nothing and is used to fragment a
     token so it evades a denylist while looking unchanged. The set is exactly these
-    22 code points:
+    3,760 code points:
 
     - ``U+200B``–``U+200D`` — ZWSP, ZWNJ, ZWJ
     - ``U+2060``–``U+2064`` — word joiner and the invisible operators
@@ -453,6 +453,11 @@ def strip_zero_width_chars(text: str) -> str:
       Unicode 6.3, so it is a format character despite the name)
     - ``U+1BCA0``–``U+1BCA3`` — the Duployan shorthand format controls (#813)
     - ``U+1D173``–``U+1D17A`` — the musical symbol format controls (#813)
+    - ``U+2065`` — this and the next three are reserved as default-ignorable and not
+      assigned (#1103)
+    - ``U+FFF0``–``U+FFF8``
+    - ``U+E0080``–``U+E00FF``
+    - ``U+E01F0``–``U+E0FFF``
 
     Args:
         text: Input string.

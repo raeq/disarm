@@ -37,11 +37,20 @@ fn is_tag_letter(ch: char) -> bool {
     matches!(ch, '\u{E0061}'..='\u{E007A}')
 }
 
-/// The `Cf` code points Unicode marks `Default_Ignorable_Code_Point=Yes` that no other
-/// predicate here covers (#813).
+/// The code points Unicode marks `Default_Ignorable_Code_Point=Yes` that no other
+/// predicate here covers (#813, #1103).
 ///
 /// - `U+1BCA0`–`U+1BCA3` Duployan shorthand format letters
 /// - `U+1D173`–`U+1D17A` musical symbol BEGIN/END BEAM, TIE, SLUR, PHRASE
+/// - `U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF`, `U+E01F0`–`U+E0FFF`: the 3,738
+///   reserved ones, with no character yet
+///
+/// The reserved ones are here by the property and with no filter on assignment, so a
+/// Unicode version that assigns a character in one of these ranges changes nothing. UAX
+/// #44 reserves them so that a program can ignore characters assigned later, and a
+/// renderer that follows it, as HarfBuzz does, shows nothing for them today. `U+E01F0`
+/// follows directly on VS256, so until #1103 the payload #413 closed in the variation
+/// selectors went through `canonicalize` moved up by 240 code points, and reported clean.
 ///
 /// Invisible by **property** rather than by convention, which is why they were missed:
 /// they are not zero-width by name, not in the Tags block, not fillers, and not bidi. They
@@ -55,8 +64,16 @@ fn is_tag_letter(ch: char) -> bool {
 /// `U+110BD`/`U+110CD` are Kaithi number signs, and `U+13430`–`U+1343F` are Egyptian
 /// hieroglyph layout controls. None is `Default_Ignorable`, and all carry meaning.
 #[inline]
-pub(crate) fn is_default_ignorable_format(ch: char) -> bool {
-    matches!(ch, '\u{1BCA0}'..='\u{1BCA3}' | '\u{1D173}'..='\u{1D17A}')
+pub(crate) fn is_other_default_ignorable(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{2065}'
+            | '\u{FFF0}'..='\u{FFF8}'
+            | '\u{E0080}'..='\u{E00FF}'
+            | '\u{E01F0}'..='\u{E0FFF}'
+    )
 }
 
 /// The deprecated format controls and the interlinear annotation characters: the one
@@ -314,7 +331,7 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
             }
             continue;
         }
-        if is_tag(ch) || ch == CGJ || is_noncharacter(ch) || is_default_ignorable_format(ch) {
+        if is_tag(ch) || ch == CGJ || is_noncharacter(ch) || is_other_default_ignorable(ch) {
             continue;
         }
         if policy.strip_pua && is_pua(ch) {
@@ -337,6 +354,37 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_other_default_ignorable_set_is_twelve_formats_and_the_reserved_3738() {
+        let reserved = (0..=0x0010_FFFF_u32)
+            .filter_map(char::from_u32)
+            .filter(|&c| is_other_default_ignorable(c))
+            .filter(|&c| !matches!(c, '\u{1BCA0}'..='\u{1BCA3}' | '\u{1D173}'..='\u{1D17A}'))
+            .count();
+        assert_eq!(reserved, 3_738);
+    }
+
+    #[test]
+    fn the_reserved_ranges_stop_where_their_neighbours_start() {
+        for ch in ['\u{2064}', '\u{2066}', '\u{FFF9}', '\u{E0FFF}'] {
+            let expected = ch == '\u{E0FFF}';
+            assert_eq!(
+                is_other_default_ignorable(ch),
+                expected,
+                "U+{:04X}",
+                ch as u32
+            );
+        }
+        // The tags and the selectors keep their own predicates, and each policy with them.
+        for ch in ['\u{E007F}', '\u{E0100}', '\u{E01EF}'] {
+            assert!(!is_other_default_ignorable(ch), "U+{:04X}", ch as u32);
+        }
+        for ch in ['\u{E0080}', '\u{E00FF}', '\u{E01F0}'] {
+            assert!(is_other_default_ignorable(ch), "U+{:04X}", ch as u32);
+        }
+        assert!(!is_other_default_ignorable('\u{E1000}'));
+    }
 
     fn comparison() -> StripPolicy {
         StripPolicy {

@@ -35,13 +35,13 @@ use unicode_normalization::char::is_combining_mark;
 /// neither advances. The format half is disarm's own predicates rather than a general
 /// `Cf` test, and that is **narrower on purpose**: `U+0600`–`U+0605`, `U+06DD` and the
 /// Kaithi and Egyptian layout controls are `Cf` and *render*, so they do occupy a cell.
-/// [`crate::invisibles::is_default_ignorable_format`] already draws that line and
+/// [`crate::invisibles::is_other_default_ignorable`] already draws that line and
 /// explains it; reusing it means the two cannot disagree.
 fn occupies_cell(ch: char) -> bool {
     !(is_combining_mark(ch)
         || crate::invisibles::is_zero_width(ch)
         || crate::invisibles::is_variation_selector(ch)
-        || crate::invisibles::is_default_ignorable_format(ch)
+        || crate::invisibles::is_other_default_ignorable(ch)
         || crate::invisibles::is_tag(ch)
         || crate::scripts::is_bidi_control(ch))
 }

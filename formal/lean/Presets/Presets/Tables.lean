@@ -601,7 +601,7 @@ def isNonchar (_c : Nat) : Bool := false
 /-- `invisibles::is_pua`. -/
 def isPUA (c : Nat) : Bool := c == 0xE000
 
-/-- `invisibles::is_default_ignorable_format`. -/
+/-- `invisibles::is_other_default_ignorable`. -/
 def isDIF (_c : Nat) : Bool := false
 
 /-- `char::is_alphanumeric`. -/

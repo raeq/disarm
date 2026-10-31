@@ -309,7 +309,7 @@ or when `has_compat_form` always returns `false`: the hostname screen's invisibl
 compatibility-form checks (#605, #709, #1019) are asserted only by the Python suite
 (`tests/test_hn_compat_and_mapping.py`), which cargo-mutants does not run. The same
 holds for `strip_variation_selectors`, which can return `"xyzzy"` unnoticed, for
-`is_default_ignorable_format`, and for the IPv6-literal parser. Every other binding calls
+`is_other_default_ignorable`, and for the IPv6-literal parser. Every other binding calls
 this code through the Rust core, so each miss is a Rust test worth writing.
 
 `tests/hostname_and_invisibles.rs` writes them, through the public API: one character of

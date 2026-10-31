@@ -51,7 +51,7 @@ fn is_invisible_in_word(c: char) -> bool {
         // `pal` is the same attack as `pay` + `U+200B` + `pal` and was reported clean,
         // which is the inconsistency that makes it a defect rather than a coverage gap —
         // the argument #643 made for the fillers on the line above.
-        || crate::invisibles::is_default_ignorable_format(c)
+        || crate::invisibles::is_other_default_ignorable(c)
         // The deprecated format controls and the interlinear annotation characters, which
         // `strip_bidi`, `strip_format` and `canonicalize` all delete. They were defined
         // only inside the bidi strip, so the detector never saw them and `pay` + `U+206A`

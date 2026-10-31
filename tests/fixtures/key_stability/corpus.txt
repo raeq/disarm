@@ -23325,3 +23325,15 @@ ba\u0b95\u0bbf
 a\u1ade
 a\u0301\u1ade
 a\u1ade\u0301
+pay⁥pal
+pay￰pal
+pay￸pal
+pay\U000e0080pal
+pay\U000e00ffpal
+pay\U000e01f0pal
+pay\U000e0fffpal
+⁥
+\U000e01f0
+hello\U000e0263\U000e0255\U000e0253\U000e0262\U000e0255\U000e0264
+a\U000e0080́
+́\U000e01f0́

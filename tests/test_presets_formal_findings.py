@@ -20,6 +20,7 @@ character appears in this file.
 
 from __future__ import annotations
 
+import functools
 import unicodedata
 from pathlib import Path
 
@@ -234,14 +235,22 @@ def _strip_invisibles(policy: str, s: str) -> str:
     s = disarm.strip_noncharacters(disarm.strip_tags(s)).replace(chr(0x34F), "")
     if policy == "comparison":
         return disarm.strip_variation_selectors(disarm.strip_pua(s))
-    # Rendering: VS15/VS16 stay after a base; every other selector goes.
-    out = []
-    for i, ch in enumerate(s):
+    # Rendering: VS15/VS16 stay after a base Unicode registers for them (#1135).
+    out: list[str] = []
+    for ch in s:
         is_vs = disarm.strip_variation_selectors(ch) == ""
-        if is_vs and not (ch in (chr(0xFE0E), chr(0xFE0F)) and i > 0):
+        keep = ch in (chr(0xFE0E), chr(0xFE0F)) and out and (ord(out[-1]), ord(ch)) in _registered()
+        if is_vs and not keep:
             continue
         out.append(ch)
     return "".join(out)
+
+
+@functools.lru_cache(maxsize=1)
+def _registered() -> frozenset[tuple[int, int]]:
+    table = Path(__file__).resolve().parent.parent / "src/tables/data/variation_sequences.tsv"
+    rows = (line.split("\t") for line in table.read_text(encoding="utf-8").splitlines())
+    return frozenset((int(r[0], 16), int(r[1], 16)) for r in rows if not r[0].startswith("#"))
 
 
 def _transliterate(preset: str, param: str | None, s: str) -> str:

@@ -214,6 +214,18 @@ behavior, not a vulnerability:
   threat model includes an encoded payload, decode it yourself first and pass the result
   to disarm; disarm before decode leaves the payload untouched, and decode before disarm
   is the correct order for the same reason canonicalization precedes validation.
+  FlipAttack (reordered words and letters), CipherChat (classical ciphers and character
+  codes), BitBypass (binary spelled in ASCII) and ArtPrompt (ASCII art) all fall here: each
+  is ordinary ASCII to disarm, which reports nothing and decodes nothing.
+- **Charset confusion between two decoders.** disarm reads the bytes one way. If a later
+  component decodes the same bytes differently, as UTF-7 or a legacy Chinese charset can
+  be, then disarm examined text that component never saw. Fix the charset at the boundary
+  and pass `str`, or use `decode_to_utf8` with an explicit encoding.
+- **Text a renderer hides.** An HTML comment, a Markdown reference definition, a `details`
+  block, alt text or a hidden attribute holds ordinary characters, so disarm reports nothing
+  and removes nothing. The page a person reads and the text a model receives can then
+  differ. Render or strip the markup yourself before retrieval or review if your pipeline
+  depends on the two matching.
 - **Word fragmentation by a *visible* separator (#755, #804).** `Con firm`,
   `C.o.n.f.i.r.m`, `C-o-n-f-i-r-m`. The invisible twin of this is not just handled but is
   a documented asset — see *Payload reconstitution via invisible-character stripping*

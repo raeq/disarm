@@ -14,6 +14,7 @@ Invisible characters are written as escapes, per #802.
 from __future__ import annotations
 
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -223,6 +224,18 @@ def test_a_base_the_fold_does_not_read_is_no_keycap_to_the_detector(base: str) -
     if base in "a\u0661@":
         # The others are compatibility digits, which NFKC folds to a digit first.
         assert "\u20e3" in disarm.canonicalize(_keycap(base)), ascii(text)
+
+
+def test_the_keycap_bases_are_written_down_once() -> None:
+    """Restating them is how the fold and the detector came to disagree (#1195)."""
+    source = Path(__file__).resolve().parent.parent / "src"
+    spelled = "'0'..='9' | '#' | '*'"
+    sites = {
+        path.relative_to(source).as_posix(): path.read_text(encoding="utf-8").count(spelled)
+        for path in source.rglob("*.rs")
+        if spelled in path.read_text(encoding="utf-8")
+    }
+    assert sites == {"emoji.rs": 1}
 
 
 def test_one_letter_with_the_sequence_stays_clean() -> None:

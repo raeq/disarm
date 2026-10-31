@@ -643,7 +643,7 @@ fn head_len_at(window: &[char]) -> Option<usize> {
 
     // Keycap: `base + U+FE0F? + U+20E3`. The base is a digit, `#` or `*` — ordinary
     // characters, so the keycap itself is what makes the sequence an emoji.
-    if matches!(first, '0'..='9' | '#' | '*') {
+    if is_keycap_base(first) {
         let after_selector = usize::from(window.get(1) == Some(&VS16));
         return if window.get(1 + after_selector) == Some(&KEYCAP) {
             Some(2 + after_selector)
@@ -689,7 +689,7 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
 
     // A flag and a keycap take no continuation: UTS #51 defines neither as joinable, and
     // chaining one would swallow a following emoji into it.
-    if is_regional_indicator(first) || matches!(first, '0'..='9' | '#' | '*') {
+    if is_regional_indicator(first) || is_keycap_base(first) {
         return Some(len);
     }
 

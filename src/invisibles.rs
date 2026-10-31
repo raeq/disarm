@@ -350,6 +350,15 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
                 && out.chars().next_back().is_some_and(is_presentation_base);
             if keep {
                 out.push(ch);
+            } else if !policy.keep_presentation_vs
+                && chars.peek() == Some(&crate::emoji::KEYCAP)
+                && ch == '\u{FE0F}'
+                && out.ends_with(|base| matches!(base, '0'..='9' | '#' | '*'))
+            {
+                // A keycap's selector and mark go together (#1158). Removing the selector
+                // alone left `1` + `U+20E3`, a bare enclosing mark, so the output of a
+                // sanitizer reported what its input did not.
+                chars.next();
             }
             continue;
         }

@@ -116,6 +116,11 @@ const SPREAD_CARRIER_FLOOR: usize = 8;
 /// does (#1196). Registered ones answer to variety alone: a text repeats the registered
 /// variants of its words. 72 bases register eight or more, so that stays a sign of a carrier.
 const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
+/// How many spaces after a `CR` are spared when they do not blank the whole line (#1193).
+///
+/// Two is a Markdown hard line break, and the whole of the evidence: no set read holds any
+/// other count. One hides less than that. Three is enough to hide `not`.
+const CR_SPARED_SPACES: usize = 2;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -208,6 +213,9 @@ const ENCLOSING_MARKS: &[char] = &[
     '\u{0488}', '\u{0489}', '\u{1ABE}', '\u{20DD}', '\u{20DE}', '\u{20DF}', '\u{20E0}', '\u{20E2}',
     '\u{20E3}', '\u{20E4}', '\u{A670}', '\u{A671}', '\u{A672}',
 ];
+/// The members of [`ENCLOSING_MARKS`] that historic Cyrillic writes, spared on a Cyrillic base.
+const CYRILLIC_ENCLOSING_MARKS: &[char] =
+    &['\u{0488}', '\u{0489}', '\u{A670}', '\u{A671}', '\u{A672}'];
 /// Fewest folding characters before a wholly non-ASCII token is called a disguise (#815).
 ///
 /// Below this sit IPA fragments and linguistic notation — `\u{026a}\u{0274}` is two
@@ -321,8 +329,9 @@ pub enum AnomalyKind {
     Invisible,
     /// A bidi override, or a bidi control inside a majority-Latin token (Trojan Source).
     Bidi,
-    /// Excessive stacked combining marks, an overlay on every letter of a word, or three marks
-    /// on every letter of a Latin word.
+    /// Excessive stacked combining marks, an overlay across a word, or three marks on half the
+    /// letters of a Latin word. A strike counts from half a word, an underline from all letters
+    /// but one (#1194).
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
@@ -362,10 +371,12 @@ pub enum AnomalyKind {
     ///
     /// A `CR` is reported only when it can actually overwrite something: something other
     /// than more `CR`s must follow it on the line (so `CRLF`, `CR CR LF` and a trailing `CR`
-    /// never fire), and spaces alone count only if there are enough to blank the whole line,
-    /// so the stray `CR` before a Markdown hard line break, which is two spaces and a line
-    /// feed, does not fire (#1155). There must also be text between it and the start of its
-    /// line — for every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`,
+    /// never fire), and one or two spaces alone count only if they blank the whole line, so
+    /// the stray `CR` before a Markdown hard line break, which is two spaces and a line feed,
+    /// does not fire (#1155). Three or more always fire, since sparing every run shorter than
+    /// the line let a `CR` blank all but one cell (#1193). There must also be text between it
+    /// and the start of its line — for every UAX #14 mandatory break, not just `LF`, so a `CR`
+    /// after `NEL`, `LS`,
     /// `PS`, `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file,
     /// which used a lone `CR` as its line ending until 2001, and a stray `CR` pasted in front
     /// of ordinary text. The report is a technical fact, as with `is_case_fold_stable` and
@@ -434,8 +445,9 @@ pub enum AnomalyKind {
     ///
     /// Keycap sequences are exempt: `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation
     /// selector is what makes it an RGI keycap rather than a bare enclosing mark — the
-    /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
-    /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
+    /// same shape as the subdivision-flag allowlist. The base has to be a digit, `#` or `*`,
+    /// so the sequence on a letter reports (#1195). The five marks of historic Cyrillic
+    /// notation on a Cyrillic base are exempt too: `U+0488`, `U+0489`, `U+A670`-`U+A672`.
     EnclosingMark,
     /// A token drawing digits from more than one decimal numbering system — UTS #39 §5.3
     /// *Mixed Numbers*.
@@ -833,10 +845,11 @@ fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
 /// through (#1155). What remains, up to the next line break or the end of text, is what a
 /// terminal paints:
 /// * nothing — `CRLF`, `CR CR LF`, or a trailing `CR`, which overwrite nothing;
-/// * spaces alone — these blank one cell each, so they hide the line only if there are as
-///   many as it has cells. Two spaces after `line one` is a Markdown hard line break with a
-///   stray `CR` in front of it, which was 247 of the 250 bare `CR`s in 13,735 regular
-///   prompts, and it hides two cells;
+/// * spaces alone — these blank one cell each. Two spaces after `line one` is a Markdown hard
+///   line break with a stray `CR` in front of it, which was all 330 such `CR`s in 13,735
+///   regular prompts, so up to [`CR_SPARED_SPACES`] are read as that unless they blank the
+///   whole line. More report, whatever is left: 23 after `delete the audit log now` shows a
+///   lone `w` (#1193);
 /// * anything else — paints over the start of the line, however long it is.
 fn paints_over(line: &str, after: &str) -> bool {
     let after = after.trim_start_matches('\r');
@@ -846,7 +859,8 @@ fn paints_over(line: &str, after: &str) -> bool {
     }
     if painted.chars().all(|c| c == ' ') {
         let cells = line.trim_end_matches(' ').chars().count();
-        return cells > 0 && painted.chars().count() >= cells;
+        let spaces = painted.chars().count();
+        return cells > 0 && (spaces > CR_SPARED_SPACES || spaces >= cells);
     }
     true
 }
@@ -1193,59 +1207,103 @@ fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
     ) && detect_scripts(word).iter().any(|s| CJK_SCRIPTS.contains(s))
 }
 
-/// Whether a mark draws over or under a letter: strikethrough, a slash, an underline (#1156).
-fn is_overlay_mark(c: char) -> bool {
-    matches!(c, '\u{0332}'..='\u{0338}')
+/// Whether a mark draws through a letter: a strikethrough or a slash (#1156, #1194).
+///
+/// `U+0334` to `U+0338`, and the overlays in the block for symbols. That is every mark in
+/// combining class 1 but those a script writes for itself: Vedic tones, Kharoshthi, Bassa Vah,
+/// Duployan and the musical tremolos.
+fn is_strike_mark(c: char) -> bool {
+    matches!(
+        c,
+        '\u{0334}'..='\u{0338}'
+            | '\u{20D2}'
+            | '\u{20D3}'
+            | '\u{20D8}'..='\u{20DA}'
+            | '\u{20E5}'
+            | '\u{20E6}'
+            | '\u{20EA}'
+            | '\u{20EB}'
+    )
 }
 
-/// The overlay on a word with one on every letter, or `None` (#1156).
+/// Whether a mark draws under a letter (#1156). Not `U+0331`, which is a letter in Kwak'wala
+/// and Tlingit, and not the overline `U+0305`, a vinculum and an active-low signal (#1194).
+fn is_underline_mark(c: char) -> bool {
+    matches!(c, '\u{0332}' | '\u{0333}')
+}
+
+/// The first overlay on a word covering enough of it, with how many letters of how many
+/// carry one, or `None` (#1156, #1194).
 ///
 /// One mark per base is below every count, the same blind spot #724 closed for enclosing
-/// marks, and these are `Mn` so that rule did not reach them. The shape is what no orthography
-/// does. Two letters at least, since one slashed letter is linguistic or math notation, and
-/// letters only, so `a=\u{338}b` stays the negation it is (#749).
-fn overlaid_word(word: &str) -> Option<char> {
+/// marks, and these are `Mn` so that rule did not reach them. Requiring every letter let one
+/// bare letter switch the rule off, and writing the mark before each letter does that without
+/// leaving one out on purpose. So:
+///
+/// * a strike reports on two letters and at least half the word. Nobody writes one on every
+///   other letter, and one struck letter is linguistic or math notation;
+/// * an underline reports on all letters but one, three at the least. Scholarly romanization of
+///   Arabic underlines digraphs, so `S\u{332}h\u{332}ayk\u{332}h\u{332}` is four of six.
+///
+/// A mark on a symbol counts for no letter, so `a=\u{338}b` stays the negation it is (#749).
+fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
     let (mut letters, mut overlaid) = (0usize, 0usize);
-    let mut this_letter = false;
+    let mut open_letter = false;
+    let mut struck = false;
     let mut found = None;
     for c in word.chars() {
-        if is_overlay_mark(c) {
-            if letters > 0 && !this_letter {
-                this_letter = true;
+        if unicode_normalization::char::is_combining_mark(c) {
+            let strike = is_strike_mark(c);
+            if open_letter && (strike || is_underline_mark(c)) {
+                open_letter = false;
                 overlaid += 1;
+                struck |= strike;
                 found.get_or_insert(c);
             }
-        } else if c.is_alphabetic() && !unicode_normalization::char::is_combining_mark(c) {
-            letters += 1;
-            this_letter = false;
+        } else {
+            open_letter = c.is_alphabetic();
+            letters += usize::from(open_letter);
         }
     }
-    (letters >= 2 && overlaid == letters)
+    let enough = if struck {
+        overlaid >= 2 && overlaid * 2 >= letters
+    } else {
+        letters >= 2 && (overlaid == letters || (overlaid >= 3 && overlaid + 1 == letters))
+    };
+    enough
         .then_some(found)
         .flatten()
+        .map(|mark| (mark, overlaid, letters))
 }
 
-/// The marks on a Latin word carrying three or more per letter, or `None` (#1156).
+/// The marks on a Latin word with three or more on half its letters, or `None` (#1156, #1194).
 ///
 /// The cap is per combining class, so four marks in four classes pass it, and it has to stay
 /// that way: counting every mark on a base flagged 142 Burmese place names (#842). Those are
 /// not Latin, and the discriminator here is exactly that. No orthography written in Latin
-/// letters carries three marks on every letter of a word, and Vietnamese, the heaviest, tops
-/// out at two.
+/// letters carries three marks on a letter, and Vietnamese, the heaviest, tops out at two. The
+/// bar is the one a strike answers to, since one bare letter switched the rule off here too.
 fn heavily_marked_latin_word(word: &str) -> Option<usize> {
-    let (mut letters, mut marks) = (0usize, 0usize);
+    let (mut letters, mut marks, mut heavy) = (0usize, 0usize, 0usize);
+    let mut on_this_letter = None;
     // Decomposed, or `e` + `U+0301` + two more counts as `\u{e9}` + two (Finding 3).
     for c in word.nfd() {
         if unicode_normalization::char::is_combining_mark(c) {
             marks += 1;
+            on_this_letter = on_this_letter.map(|count: usize| count + 1);
+            heavy += usize::from(on_this_letter == Some(3));
         } else if c.is_alphabetic() {
             if !is_ascii_letter_base(c) {
                 return None;
             }
             letters += 1;
+            on_this_letter = Some(0);
+        } else {
+            on_this_letter = None;
         }
     }
-    (letters >= 3 && marks >= 3 * letters).then_some(marks)
+    (letters >= 3 && (marks >= 3 * letters || (heavy >= 2 && heavy * 2 >= letters)))
+        .then_some(marks)
 }
 
 /// The first stacking mark that appears twice in a row on one base (#835).
@@ -1327,15 +1385,17 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
 /// - **Keycaps.** `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what
 ///   makes it an RGI keycap rather than a bare enclosing mark — the same distinction
 ///   `crate::invisibles` draws for a subdivision flag. A `U+20E3` with no `U+FE0F` before
-///   it is not a keycap.
+///   it is not a keycap, and neither is the sequence on a base other than a digit, `#` or
+///   `*`, which are the bases the `canonicalize` fold reads (#1195).
 /// - **Cyrillic.** `U+0488`, `U+0489`, `U+A670`-`U+A672` are historic Cyrillic notation.
-///   On a Cyrillic base they are orthography; on a Latin one they are a disguise.
+///   On a Cyrillic base they are orthography; on a Latin one they are a disguise. Those
+///   five and no other: no notation puts `U+20DD` or `U+20E3` on Cyrillic letters, and
+///   `canonicalize` keeps those marks while it folds the letters to Latin (#1195).
 ///
 /// Two are required rather than one. A single enclosing mark on a single base is a
 /// character someone may have typed; encircling *every* letter of a word is not something
 /// any orthography does, and that is the shape #724 measures.
 fn enclosing_marks(tok: &str) -> Vec<char> {
-    const KEYCAP: char = '\u{20E3}';
     const VS16: char = '\u{FE0F}';
     let chars: Vec<char> = tok.chars().collect();
     let mut out = Vec::new();
@@ -1343,7 +1403,11 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         if !ENCLOSING_MARKS.contains(&c) {
             continue;
         }
-        if c == KEYCAP && i > 0 && chars[i - 1] == VS16 {
+        if c == crate::emoji::KEYCAP
+            && i >= 2
+            && chars[i - 1] == VS16
+            && crate::emoji::is_keycap_base(chars[i - 2])
+        {
             continue;
         }
         // The base is the last character before it that is not a combining mark of any
@@ -1366,7 +1430,7 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
             .rev()
             .find(|b| !unicode_normalization::char::is_combining_mark(**b))
             .is_some_and(|b| crate::scripts::detect_char_script(*b) == "Cyrillic");
-        if base_is_cyrillic {
+        if CYRILLIC_ENCLOSING_MARKS.contains(&c) && base_is_cyrillic {
             continue;
         }
         out.push(c);
@@ -1705,10 +1769,10 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             ));
         }
         for part in word_parts(tok) {
-            if let Some(mark) = overlaid_word(part) {
+            if let Some((mark, overlaid, letters)) = overlaid_word(part) {
                 return Some(mk(
                     AnomalyKind::Zalgo,
-                    format!("{} on every letter", codepoint(mark)),
+                    format!("{} on {overlaid} of {letters} letters", codepoint(mark)),
                 ));
             }
             if let Some(marks) = heavily_marked_latin_word(part) {

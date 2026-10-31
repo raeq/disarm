@@ -260,6 +260,11 @@ pub(super) fn is_demojizable(ch: char) -> bool {
 /// a **conservative superset** of what the step actually touches (over-marking only
 /// costs a skipped optimization; under-marking would be unsound), verified
 /// exhaustively-in-distribution by the `fast_path_equivalence` proptest.
+///
+/// Not inlined: `classify` calls this from its ASCII byte loop, the deployment norm, and
+/// growing a predicate in here otherwise moves that loop's register allocation even though
+/// no ASCII byte reaches it. #1103 moved `canonicalize` on an ASCII document that way.
+#[inline(never)]
 pub(super) fn acts_on_nonascii(
     ch: char,
     m: Actionable,

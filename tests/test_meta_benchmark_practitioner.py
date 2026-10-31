@@ -2376,3 +2376,57 @@ def test_the_recorded_results_are_ruled_on_in_the_notes():
 def test_the_readme_holds_a_row_for_each_source(row):
     readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
     assert any(line.startswith("|") and row in line for line in readme.splitlines()), row
+
+
+# --- the source ledger (#1169) -----------------------------------------------
+
+
+def _practitioner_section() -> str:
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    return readme.split("## Practitioner sources", 1)[1].split("\n## ", 1)[0]
+
+
+@pytest.mark.parametrize(
+    "repository",
+    [
+        "jailbreak_llms",
+        "FuzzyAI",
+        "palisade",
+        "spikee",
+        "arc_pi_taxonomy",
+        "ghostchars",
+        "augustus",
+        "unicode-smuggling-guard",
+        "GlyphGuard",
+        "llm-guard",
+        "FlipAttack",
+        "CipherChat",
+        "ArtPrompt",
+        "BitBypass",
+        "TextAttack",
+        "janus",
+    ],
+)
+def test_the_audit_table_names_each_group_of_repositories(repository):
+    section = _practitioner_section().split("Audited on 2026-10-31", 1)[1]
+    assert any(line.startswith("|") and repository in line for line in section.splitlines())
+
+
+def test_the_audit_is_dated_and_links_its_dataset():
+    section = _practitioner_section()
+    assert "Audited on 2026-10-31" in section
+    assert "https://gist.github.com/raeq/1d1c2c3c354e390693a225ff0b879d0c" in section
+    assert "67 repositories" in section
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "unlabelled corpus is data",
+        "Narrow search terms",
+        "Check what a pattern caught",
+        "do not print them",
+    ],
+)
+def test_the_reading_rules_are_beside_the_table(rule):
+    assert rule in " ".join(_practitioner_section().split())

@@ -20,12 +20,14 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
 import yaml
 
+import disarm
 from benchmarks.meta import fetch, registry, subjects
 from benchmarks.meta.base import REPO_ROOT
 from benchmarks.meta.protocol import (
@@ -41,10 +43,15 @@ from benchmarks.meta.report import load_outcomes, render_json, render_markdown
 from benchmarks.meta.runner import run
 from benchmarks.meta.suites import practitioner
 from benchmarks.meta.suites.practitioner import (
+    ArcanumTaxonomy,
+    BenignControls,
     GarakAnsiEscapes,
+    GhostcharsLabels,
     L1b3rt4sFixtures,
     LabelFreeInvariants,
     P4rs3lt0ngv3Transforms,
+    St3ggTextExamples,
+    TokenSmugglingConstructions,
     _FixtureSuite,
     _KnownAnswerSuite,
     classify_transform,
@@ -127,6 +134,11 @@ def test_the_tier_is_registered_external_and_selectable():
         "garak-ansi-escapes",
         "l1b3rt4s-fixtures",
         "label-free-invariants",
+        "benign-controls",
+        "ghostchars-labels",
+        "token-smuggling-constructions",
+        "st3gg-text-examples",
+        "arcanum-taxonomy",
     }
     for suite in practitioner.SUITES:
         assert suite.family is Family.PRACTITIONER
@@ -449,6 +461,9 @@ def test_neither_control_neutralizes_an_escape(tmp_path, control):
 
 @pytest.mark.parametrize("suite", practitioner.SUITES, ids=lambda s: s.name)
 def test_every_source_is_cached_from_a_pinned_commit(suite):
+    if suite.availability is Availability.DERIVED:
+        assert not suite.SOURCES, "a suite that downloads something is not derived"
+        return
     assert suite.availability is Availability.NETWORK
     assert suite.SOURCES
     for source in suite.SOURCES:
@@ -829,6 +844,652 @@ def test_the_readme_says_what_an_unlabelled_corpus_can_answer():
         "regression."
     ) in flat
     assert "`label-free-invariants`" in readme
+
+
+# --- benign controls (#1154) -------------------------------------------------
+
+CURLY = "don\u2019t"
+SETS = {"plain": ["hello there", "nothing to see"], "typed": [CURLY, "well\u2026", "hello there"]}
+
+
+def _benign(corpora: dict | None = None) -> BenignControls:
+    suite = BenignControls()
+    suite.locate = lambda: None
+    suite.available = lambda: (True, "")
+    suite.read_corpora = lambda: corpora or SETS
+    return suite
+
+
+def test_each_benign_set_is_reported_alone():
+    """Pooling would let 13,735 rows hide 24."""
+    outcome = _benign().run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "rows:plain")[0] == 2
+    assert _measured(outcome, "rows:typed")[0] == 3
+    assert _measured(outcome, "non_ascii:plain") == (0, 2)
+    assert _measured(outcome, "non_ascii:typed") == (2, 3)
+
+
+def test_a_detector_firing_on_a_benign_set_is_counted_per_set():
+    outcome = _benign().run(subject=subjects.by_name(DISARM))
+    expected = sum(map(disarm.has_anomalies, SETS["typed"]))
+    assert _measured(outcome, "fires:has_anomalies:typed") == (expected, 3)
+    assert _measured(outcome, "fires:has_anomalies:plain") == (0, 2)
+
+
+def test_a_rewrite_of_a_benign_text_is_counted_per_set():
+    outcome = _benign().run(subject=subjects.by_name(DISARM))
+    expected = sum(disarm.canonicalize(text) != text for text in SETS["typed"])
+    assert _measured(outcome, "rewritten:typed") == (expected, 3)
+    assert _measured(outcome, "rewritten:plain") == (0, 2)
+
+
+def test_silence_on_benign_text_is_shown_beside_a_detection_measure():
+    """A detector that never fires reads perfect on a false-positive rate alone."""
+    outcome = _benign().run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "planted_detected:has_anomalies:plain") == (2, 2)
+
+
+def test_a_text_with_no_word_to_plant_in_is_left_out_of_that_denominator():
+    corpora = {"short": ["hello there", "\u4f60\u597d", "a b"]}
+    outcome = _benign(corpora).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "planted_detected:has_anomalies:short") == (1, 1)
+
+
+@pytest.mark.parametrize("subject", [DISARM, *CONTROLS])
+def test_every_benign_number_is_a_census(subject):
+    """The label says regular, not free of obfuscation, so a rate here is a ceiling."""
+    outcome = _benign().run(subject=subjects.by_name(subject))
+    assert outcome.status is Status.OK, outcome.error
+    assert all(m.higher_is_better is None for m in outcome.measurements)
+
+
+def test_the_null_baseline_rewrites_every_benign_text():
+    outcome = _benign().run(subject=subjects.by_name("null-baseline"))
+    assert _measured(outcome, "rewritten:plain") == (2, 2)
+    assert _measured(outcome, "rewritten:typed") == (3, 3)
+
+
+def test_a_subject_with_no_detector_omits_the_detector_rows():
+    outcome = _benign().run(subject=subjects.by_name("null-baseline"))
+    keys = [m.key for m in outcome.measurements]
+    assert not [key for key in keys if key.startswith(("fires:", "planted_detected:"))]
+
+
+def test_the_benign_controls_run_on_every_run():
+    outcome = _benign().run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "control_delete_everything_rewritten:plain") == (2, 2)
+    assert _measured(outcome, "control_identity_rewritten:plain") == (0, 2)
+
+
+def test_a_benign_set_never_reaches_a_report():
+    secret = "UNIQUEBENIGNMARKER"
+    report = run([_benign({"one": [secret]})], registered=1, subjects=[subjects.by_name(DISARM)])
+    assert report.outcomes[0].status is Status.OK
+    assert secret not in render_markdown(report)
+    assert secret not in render_json(report)
+
+
+def test_the_benign_controls_skip_with_a_reason_when_nothing_is_provisioned(monkeypatch):
+    suite = BenignControls()
+    monkeypatch.setattr(suite, "locate", lambda: None)
+    outcome = suite.run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.SKIPPED
+    assert outcome.skip_reason
+
+
+def test_the_benign_sets_are_the_ones_the_issue_fixed_in_advance():
+    names = {corpus.name for corpus in BenignControls.CORPORA}
+    assert names == {
+        "jailbreak_llms:regular_prompts_2023_12_25",
+        "jailbreak_llms:regular_prompts_2023_05_07",
+        "fuzzyai:benign_prompts",
+        "palisade:benign",
+        "spikee:seeds-investment-advice-fp",
+    }
+    for corpus in BenignControls.CORPORA:
+        assert re.search(r"/[0-9a-f]{40}/", corpus.source.url), corpus.source.url
+        assert re.fullmatch(r"[0-9a-f]{64}", corpus.source.sha256 or ""), corpus.name
+
+
+def test_the_palisade_reader_keeps_only_its_benign_rows(tmp_path):
+    path = tmp_path / "rows.jsonl"
+    path.write_text(
+        '{"text": "one", "label": "benign"}\n{"text": "two", "label": "attack"}\n',
+        encoding="utf-8",
+    )
+    corpus = next(c for c in BenignControls.CORPORA if c.name == "palisade:benign")
+    assert corpus.read(path) == ["one"]
+
+
+def test_the_readme_says_gutenberg_is_not_the_only_false_positive_axis():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    assert "`benign-controls`" in readme
+    flat = " ".join(readme.split())
+    assert "`gutenberg-benign` is no longer the only false-positive axis" in flat
+
+
+# --- ghostchars' labels and fixtures (#1161) ---------------------------------
+
+INVISIBLE = "pay\u200bpal"
+BLACK_FLAG_TAGS = "\U0001f3f4\U000e0061\U000e007f"
+BLACK_FLAG = "\U0001f3f4"
+EXCERPT_MARKER = "UNIQUEEXCERPTMARKER"
+
+
+@pytest.fixture
+def ghostchars_tree(tmp_path):
+    root = tmp_path / "studies"
+    (root / "prompt-census").mkdir(parents=True)
+    rows = [
+        {"label": "L", "excerpt": INVISIBLE},
+        {"label": "L", "excerpt": "plain"},
+        {"label": "O", "excerpt": INVISIBLE},
+        {"label": "O", "excerpt": "plain"},
+        {"label": "M", "excerpt": "plain"},
+        {"label": "T", "excerpt": "plain"},
+        {"label": "A", "excerpt": "plain"},
+        {"label": "H", "excerpt": INVISIBLE},
+        {"label": "D", "excerpt": INVISIBLE},
+        {"label": "X", "excerpt": EXCERPT_MARKER},
+        {"label": "B", "excerpt": INVISIBLE},
+        {"label": "U", "excerpt": ""},
+    ]
+    (root / "prompt-census" / "classification.json").write_text(
+        json.dumps({"categories": {"L": "language"}, "released": rows}), encoding="utf-8"
+    )
+    flags = root / "flag-tag-payloads"
+    (flags / "fixtures").mkdir(parents=True)
+    cases = [
+        {"id": "wrapped", "text": BLACK_FLAG_TAGS, "findings": 1, "expected": BLACK_FLAG},
+        {"id": "bare", "text": BLACK_FLAG, "findings": 0, "expected": BLACK_FLAG},
+    ]
+    (flags / "cases.json").write_text(json.dumps(cases), encoding="utf-8")
+    (flags / "fixtures" / "wrapped.txt").write_text(BLACK_FLAG_TAGS, encoding="utf-8")
+    (flags / "fixtures" / "bare.txt").write_text(BLACK_FLAG, encoding="utf-8")
+    code = root / "code-confusables" / "fixtures"
+    code.mkdir(parents=True)
+    (code / "one.txt").write_text(INVISIBLE, encoding="utf-8")
+    (root / "no-fixtures-here").mkdir()
+    return root
+
+
+def _ghostchars(root: Path) -> GhostcharsLabels:
+    suite = GhostcharsLabels()
+    suite.locate = lambda: root
+    suite.available = lambda: (True, "")
+    return suite
+
+
+def _direction(outcome: Outcome, key: str) -> bool | None:
+    found = outcome.measurement(key)
+    assert found is not None, key
+    return found.higher_is_better
+
+
+def test_a_label_that_should_stay_silent_reads_as_a_false_positive(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "label_L_fired:has_anomalies") == (1, 2)
+    assert _direction(outcome, "label_L_fired:has_anomalies") is False
+    for label in "MTA":
+        assert _direction(outcome, f"label_{label}_fired:has_anomalies") is False
+
+
+def test_a_label_that_should_fire_reads_as_detection(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "label_O_fired:has_anomalies") == (1, 2)
+    assert _direction(outcome, "label_O_fired:has_anomalies") is True
+
+
+@pytest.mark.parametrize("label", ["H", "D", "X", "B", "U"])
+def test_a_label_with_no_fixed_answer_is_a_census(ghostchars_tree, label):
+    """H's excerpts lack the hidden text they were labelled for, so it is no detection rate."""
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _direction(outcome, f"label_{label}_fired:has_anomalies") is None
+
+
+def test_every_label_is_reported_alone(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "labelled_rows")[0] == 12
+    assert _measured(outcome, "label_L_rows")[0] == 2
+    assert not outcome.measurement("label_fired:has_anomalies")
+
+
+def test_a_flag_case_agrees_on_findings_in_both_directions(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "flag_findings_agree:has_anomalies") == (2, 2)
+    assert _direction(outcome, "flag_findings_agree:has_anomalies") is True
+
+
+def test_a_detector_that_always_fires_loses_a_flag_case(ghostchars_tree):
+    suite = _ghostchars(ghostchars_tree)
+    suite.detect = lambda: {"always": lambda _text: True}
+    outcome = suite.run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "flag_findings_agree:always") == (1, 2)
+
+
+def test_a_flag_case_compares_a_surface_with_the_repair_it_expects(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "flag_expected_matched:canonicalize") == (2, 2)
+    assert _measured(outcome, "flag_expected_matched:strip_format") == (2, 2)
+    assert _direction(outcome, "flag_expected_matched:canonicalize") is True
+
+
+def test_deleting_everything_matches_no_expected_repair(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name("null-baseline"))
+    assert _measured(outcome, "control_delete_everything") == (0, 2)
+    assert _measured(outcome, "flag_expected_matched:delete_all") == (0, 2)
+
+
+def test_doing_nothing_earns_only_the_cases_with_nothing_to_repair(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name("identity"))
+    assert _measured(outcome, "control_identity") == (1, 2)
+
+
+def test_each_study_with_fixtures_is_counted_alone(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "fixtures:code-confusables")[0] == 1
+    assert _measured(outcome, "fixtures:flag-tag-payloads")[0] == 2
+    assert _measured(outcome, "fixtures_fired:has_anomalies:code-confusables") == (1, 1)
+    assert _direction(outcome, "fixtures_fired:has_anomalies:code-confusables") is None
+    assert outcome.measurement("fixtures:no-fixtures-here") is None
+
+
+def test_a_subject_with_no_detector_omits_the_detector_rows_here_too(ghostchars_tree):
+    outcome = _ghostchars(ghostchars_tree).run(subject=subjects.by_name("identity"))
+    assert outcome.status is Status.OK, outcome.error
+    keys = [m.key for m in outcome.measurements]
+    assert not [key for key in keys if "_fired:" in key or key.startswith("flag_findings")]
+
+
+def test_no_excerpt_reaches_a_report(ghostchars_tree):
+    report = run([_ghostchars(ghostchars_tree)], registered=1, subjects=[subjects.by_name(DISARM)])
+    assert report.outcomes[0].status is Status.OK
+    assert EXCERPT_MARKER not in render_markdown(report)
+    assert EXCERPT_MARKER not in render_json(report)
+
+
+def test_the_selection_bias_is_named_where_a_reader_finds_it():
+    notes = GhostcharsLabels.provenance.notes
+    assert "selected" in notes
+    assert "prevalence" in notes
+
+
+def test_a_tree_that_is_not_the_pinned_one_is_refused(tmp_path):
+    suite = GhostcharsLabels()
+    suite.locate = lambda: tmp_path
+    ready, reason = suite.available()
+    assert not ready
+    assert "digest" in reason
+
+
+def test_the_ghostchars_source_is_a_pinned_commit():
+    source = GhostcharsLabels.SOURCES[0]
+    assert re.search(r"/tar\.gz/[0-9a-f]{40}$", source.url), source.url
+    assert re.fullmatch(r"[0-9a-f]{64}", GhostcharsLabels.TREE_SHA256)
+
+
+def test_the_readme_lists_the_ghostchars_suite():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    assert "`ghostchars-labels`" in readme
+
+
+# --- what PyRIT and garak ship (#1143) ---------------------------------------
+
+
+def _smuggling(subject: str) -> Outcome:
+    return TokenSmugglingConstructions().run(subject=subjects.by_name(subject))
+
+
+def test_disarm_recovers_each_construction():
+    outcome = _smuggling(DISARM)
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "constructions_recovered") == (7, 7)
+    assert _direction(outcome, "constructions_recovered") is True
+
+
+@pytest.mark.parametrize("subject", CONTROLS)
+def test_a_control_recovers_no_construction(subject):
+    outcome = _smuggling(subject)
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "constructions_recovered") == (0, 7)
+
+
+def test_the_constructions_run_both_controls_on_every_run():
+    outcome = _smuggling(DISARM)
+    assert _measured(outcome, "control_delete_everything") == (0, 7)
+    assert _measured(outcome, "control_identity") == (0, 7)
+
+
+def test_the_unpadded_sneaky_bits_framing_is_scored_as_well():
+    """PyRIT pads each byte to eight bits, and garak and Augustus do not."""
+    outcome = _smuggling(DISARM)
+    assert _measured(outcome, "sneaky_bits_unpadded_recovered") == (1, 1)
+
+
+def test_the_two_sneaky_bits_framings_differ():
+    framings = TokenSmugglingConstructions.sneaky_bits
+    assert framings("hi", pad=True) != framings("hi", pad=False)
+    assert len(framings("hi", pad=True)) == 16
+    assert len(framings("hi", pad=False)) == 14
+
+
+def test_an_unpadded_space_is_a_zero_width_space():
+    bits = TokenSmugglingConstructions.sneaky_bits("a b", pad=False)
+    assert "\u200b" in bits
+
+
+def test_each_construction_is_reported_with_what_disarm_did():
+    outcome = _smuggling(DISARM)
+    per_construction = outcome.extra["recovered_by_construction"]
+    assert per_construction["tag characters"] == 1
+    assert len(per_construction) == 7
+
+
+def test_what_decode_smuggled_reads_is_reported_for_disarm_alone():
+    """Moves when #1136 lands, so it is a census and not a score."""
+    outcome = _smuggling(DISARM)
+    decoded = outcome.measurement("constructions_decoded")
+    assert decoded is not None
+    assert decoded.of == 8
+    assert decoded.higher_is_better is None
+    assert _smuggling("identity").measurement("constructions_decoded") is None
+
+
+def test_the_constructions_need_no_network_and_no_cache():
+    assert TokenSmugglingConstructions().available() == (True, "")
+    assert not TokenSmugglingConstructions.SOURCES
+
+
+def test_neither_package_is_imported():
+    _smuggling(DISARM)
+    assert "pyrit" not in sys.modules
+    assert "garak" not in sys.modules
+
+
+def test_each_construction_quotes_its_source():
+    notes = TokenSmugglingConstructions.provenance.notes
+    for name in (
+        "SneakyBitsSmugglerConverter",
+        "VariationSelectorSmugglerConverter",
+        "InjectUnicodeVariantSelectors",
+        "AsciiSmugglerConverter",
+        "InjectUnicodeTagChars",
+        "BidiConverter",
+        "ZeroWidthConverter",
+        "InjectSneakyBits",
+    ):
+        assert name in notes, name
+
+
+def test_the_readme_records_where_pyrit_and_garak_went():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    assert "`token-smuggling-constructions`" in readme
+    rows = [line for line in readme.splitlines() if line.startswith("| PyRIT")]
+    assert rows and "not read" not in rows[0]
+
+
+# --- ST3GG's static text examples (#1141) ------------------------------------
+
+ST3GG_COVER = "the quick brown fox"
+
+
+def _write_st3gg(root: Path) -> None:
+    words = ST3GG_COVER
+    files = {
+        "example_zero_width.txt": "the\u200b quick\u200c brown\u200d fox",
+        "example_invisible_ink.txt": f"{words}\U000e0061\U000e0062",
+        "example_variation_selector.txt": "the\ufe01 quick brown fox",
+        "example_combining_diacritics.txt": "the\u034f quick brown fox",
+        "example_directional_override.txt": f"\u202e{words}\u202c",
+        "example_hangul_filler.txt": "the\u3164quick brown fox",
+        "example_confusable_whitespace.txt": "the\u2002quick\u2003brown\u2009fox",
+        "example_whitespace.txt": f"{words}   \n{words}\t\n",
+        "example_homoglyph.txt": "the qu\u0456ck brown fox",
+        "example_math_alphanumeric.txt": "\U0001d42d\U0001d421\U0001d41e quick brown fox",
+        "example_normalization.txt": "cafe\u0301 quick",
+    }
+    for name, text in files.items():
+        (root / name).write_text(text, encoding="utf-8", newline="")
+    for name in St3ggTextExamples.BOUNDARY_FILES:
+        (root / name).write_text("plain words", encoding="utf-8")
+    (root / "README.md").write_text(f"hidden {SECRET}", encoding="utf-8")
+    (root / "generate_examples.py").write_text(
+        'HOMOGLYPH_MAP = {"i": "\\u0456"}\n', encoding="utf-8"
+    )
+
+
+@pytest.fixture
+def st3gg_tree(tmp_path):
+    _write_st3gg(tmp_path)
+    return tmp_path
+
+
+def _st3gg(root: Path) -> St3ggTextExamples:
+    suite = St3ggTextExamples()
+    suite.locate = lambda: root
+    suite.available = lambda: (True, "")
+    return suite
+
+
+def test_disarm_recovers_each_st3gg_technique(st3gg_tree):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "techniques_recovered") == (11, 11)
+    assert _direction(outcome, "techniques_recovered") is True
+
+
+@pytest.mark.parametrize("subject", CONTROLS)
+def test_a_control_recovers_no_st3gg_technique(st3gg_tree, subject):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(subject))
+    assert _measured(outcome, "techniques_recovered") == (0, 11)
+
+
+def test_the_st3gg_suite_runs_both_controls(st3gg_tree):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "control_delete_everything") == (0, 11)
+    assert _measured(outcome, "control_identity") == (0, 11)
+
+
+def test_the_detector_is_its_own_axis_and_a_census(st3gg_tree):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    detected = outcome.measurement("techniques_detected:has_anomalies")
+    assert detected is not None
+    assert detected.of == 11
+    assert detected.higher_is_better is None
+
+
+def test_a_subject_with_no_detector_omits_the_st3gg_detector_axis(st3gg_tree):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name("identity"))
+    assert not [m.key for m in outcome.measurements if m.key.startswith("techniques_detected")]
+
+
+def test_the_boundary_files_are_counted_and_never_scored(st3gg_tree):
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "boundary_files")[0] == len(St3ggTextExamples.BOUNDARY_FILES)
+    assert _direction(outcome, "boundary_files") is None
+
+
+def test_a_derived_cover_equal_to_its_example_is_an_error(st3gg_tree):
+    """A derivation that removes nothing would score every subject as having recovered it."""
+    (st3gg_tree / "example_zero_width.txt").write_text(ST3GG_COVER, encoding="utf-8")
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+    assert "zero width" in outcome.error
+
+
+def test_the_homoglyph_cover_comes_from_the_generator_constant(st3gg_tree):
+    (st3gg_tree / "generate_examples.py").write_text('HOMOGLYPH_MAP = {"x": "y"}\n', "utf-8")
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+    assert "homoglyph" in outcome.error
+
+
+def test_the_st3gg_suite_runs_nothing_from_upstream(st3gg_tree, monkeypatch):
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("a subprocess was started")
+
+    (st3gg_tree / "generate_examples.py").write_text(
+        'raise SystemExit("this file was executed")\nHOMOGLYPH_MAP = {"i": "\\u0456"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(subprocess, "run", refuse)
+    monkeypatch.setattr(subprocess, "Popen", refuse)
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name("identity"))
+    assert outcome.status is Status.OK, outcome.error
+
+
+def test_the_st3gg_readme_is_never_read(st3gg_tree):
+    (st3gg_tree / "README.md").write_bytes(b"\xff not utf-8, so a read of it would raise")
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+
+
+def test_the_st3gg_suite_skips_when_the_tree_is_absent(monkeypatch):
+    suite = St3ggTextExamples()
+    monkeypatch.setattr(suite, "locate", lambda: None)
+    outcome = suite.run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.SKIPPED
+    assert outcome.skip_reason
+
+
+def test_a_st3gg_tree_that_is_not_the_pinned_one_is_refused(tmp_path):
+    suite = St3ggTextExamples()
+    suite.locate = lambda: tmp_path
+    ready, reason = suite.available()
+    assert not ready
+    assert "digest" in reason
+
+
+def test_the_readme_records_that_st3gg_was_read():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    assert "`st3gg-text-examples`" in readme
+    rows = [line for line in readme.splitlines() if line.startswith("| ST3GG")]
+    assert rows and "not read" not in rows[0]
+    assert "122 zero-width" in rows[0]
+
+
+# --- Arcanum's named evasions (#1160) ----------------------------------------
+
+ARCANUM_MARKER = "UNIQUEARCANUMMARKER"
+
+
+def _arcanum(tmp_path: Path, items: list[dict] | None = None) -> ArcanumTaxonomy:
+    path = tmp_path / "taxonomy.json"
+    rows = (
+        items
+        if items is not None
+        else [
+            {"title": "Invisible Text", "examples": [INVISIBLE, ARCANUM_MARKER + "\u200b"]},
+            {"title": "Fullwidth Characters", "examples": ["\uff41\uff42", "plain"]},
+            {"title": "Braille", "examples": ["\u2801"]},
+            {"title": "Base64", "examples": ["aGVsbG8="]},
+        ]
+    )
+    path.write_text(json.dumps({"evasions": rows}), encoding="utf-8")
+    suite = ArcanumTaxonomy()
+    suite.locate = lambda: path
+    suite.available = lambda: (True, "")
+    return suite
+
+
+def test_the_taxonomy_counts_titles_and_non_ascii_examples(tmp_path):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "titles")[0] == 4
+    assert _measured(outcome, "titles_with_non_ascii")[0] == 3
+    assert _measured(outcome, "non_ascii_examples")[0] == 4
+
+
+def test_an_ascii_example_is_left_out_of_the_denominator(tmp_path):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "examples:style")[0] == 1
+
+
+def test_detection_and_change_are_reported_per_class(tmp_path):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "fired:has_anomalies:disguise") == (2, 2)
+    assert _measured(outcome, "fired:has_anomalies:boundary") == (0, 1)
+    assert _measured(outcome, "changed:disguise") == (2, 2)
+    assert _measured(outcome, "fired:has_anomalies") == (
+        sum(
+            disarm.has_anomalies(text)
+            for text in (INVISIBLE, ARCANUM_MARKER + "\u200b", "\uff41\uff42", "\u2801")
+        ),
+        4,
+    )
+
+
+def test_a_subject_with_no_detector_reports_change_alone(tmp_path):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name("null-baseline"))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "changed:disguise") == (2, 2)
+    assert not [m.key for m in outcome.measurements if m.key.startswith("fired:")]
+
+
+def test_the_taxonomy_runs_the_delete_everything_control(tmp_path):
+    """Deleting everything would otherwise read as full change on every class."""
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "control_delete_everything_changed:disguise") == (2, 2)
+    assert _measured(outcome, "control_identity_changed:disguise") == (0, 2)
+
+
+@pytest.mark.parametrize("subject", [DISARM, *CONTROLS])
+def test_every_taxonomy_number_is_a_census(tmp_path, subject):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(subject))
+    assert outcome.status is Status.OK, outcome.error
+    assert outcome.measurements
+    assert all(m.higher_is_better is None for m in outcome.measurements)
+
+
+def test_an_unclassed_title_is_an_error(tmp_path):
+    items = [{"title": "A Title Nobody Classed", "examples": ["x\u200by"]}]
+    outcome = _arcanum(tmp_path, items).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+    assert "A Title Nobody Classed" in outcome.error
+
+
+def test_each_title_gets_exactly_one_class():
+    seen = [title for titles in ArcanumTaxonomy.CLASSES.values() for title in titles]
+    assert len(seen) == len(set(seen))
+    assert set(ArcanumTaxonomy.CLASSES) == {"disguise", "style", "boundary"}
+
+
+def test_the_classes_say_who_chose_them_and_when():
+    notes = ArcanumTaxonomy.provenance.notes
+    assert "2026-10-31" in notes
+    assert "Claude" in notes
+
+
+def test_the_attribution_is_kept():
+    provenance = ArcanumTaxonomy.provenance
+    assert provenance.licence == "CC-BY-4.0"
+    assert "Arcanum" in provenance.notes
+
+
+def test_no_taxonomy_example_reaches_a_report(tmp_path):
+    report = run([_arcanum(tmp_path)], registered=1, subjects=[subjects.by_name(DISARM)])
+    assert report.outcomes[0].status is Status.OK
+    assert ARCANUM_MARKER not in render_markdown(report)
+    assert ARCANUM_MARKER not in render_json(report)
+
+
+def test_the_title_breakdown_holds_counts_only(tmp_path):
+    outcome = _arcanum(tmp_path).run(subject=subjects.by_name(DISARM))
+    row = outcome.extra["by_title"]["Invisible Text"]
+    assert row["class"] == "disguise"
+    assert row["examples"] == 2
+
+
+def test_the_taxonomy_reads_the_same_pinned_file_as_the_invariants():
+    invariants = {c.source.url for c in LabelFreeInvariants.CORPORA}
+    assert ArcanumTaxonomy.SOURCES[0].url in invariants
+
+
+def test_the_readme_lists_the_taxonomy_suite():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    assert "`arcanum-taxonomy`" in readme
 
 
 # --- the sandbox on CI (#1144) ----------------------------------------------

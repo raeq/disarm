@@ -108,6 +108,13 @@ of one thing compare equal — so they are reported apart from text surfaces.
 Scoring them together would make a library look destructive for doing its job,
 and would rank a tool with no key builder at all as the safer one.
 
+`gutenberg-benign` is no longer the only false-positive axis over ordinary text. It is
+manual pre-1923 prose and never meets the punctuation people type into a prompt, so
+`benign-controls` reports the sets practitioner repositories label regular or benign, each one
+alone. A rate there is a ceiling, because such a label does not say free of obfuscation, and it
+stands beside what the same detector does with a planted `U+200B`, because a detector that never
+fires reads perfect on a false-positive rate alone.
+
 ## The seven external families, and the introspective tier
 
 | family | anchor | examples |
@@ -426,11 +433,14 @@ Read so far, so the next search starts from here:
 | garak `resources/ansi.py` | Apache-2.0 | `garak-ansi-escapes` | a payload list that ships the tokens to detect it by |
 | L1B3RT4S | AGPL-3.0 | `l1b3rt4s-fixtures` | unlabelled: 169 of 182 sections carry no Unicode obfuscation |
 | jailbreak_llms, FuzzyAI, palisade, Arc PI Taxonomy | MIT, Apache-2.0, MIT, CC-BY-4.0 | `label-free-invariants` | 22,897 texts that need no label for three contract questions, pinned by commit and digest |
+| jailbreak_llms regular, FuzzyAI benign, palisade benign, spikee false-positive seeds | MIT, Apache-2.0, MIT, Apache-2.0 | `benign-controls` | text people type into a model, reported per set with `null-baseline` alongside |
+| Arc PI Taxonomy | CC-BY-4.0 | `arcanum-taxonomy` | 63 named evasions in three classes fixed in the source; it holds no covers, so it says seen and changed and not recovered |
+| ghostchars `studies/` | MIT | `ghostchars-labels` | another detector's hand labels and fixtures, including the class of text a detector gets wrong; the rows were selected by that detector firing, so no rate here is prevalence |
 | garak `badchars` | Apache-2.0 | not a suite | follows the Bad Characters paper, already wired as `bad-characters` |
-| garak `encoding`, `smuggling` | Apache-2.0 | not a suite yet | zalgo, tag, variant-selector, sneaky-bits and homoglyph probes have known answers, and they are code: Python has no sandbox like Node's, and garak's package is heavy to pin |
-| PyRIT | MIT | not read | its converters were not at the path its older layout used |
+| garak `encoding`, `smuggling` at `4b7761c2` | Apache-2.0 | `token-smuggling-constructions` | rebuilt and not imported: Python has no sandbox like Node's and the constructions are short; its zalgo and homoglyph probes repeat `p4rs3lt0ngv3-transforms` |
+| PyRIT at `d3446e04` | MIT | `token-smuggling-constructions` | about 100 converters behind about 50 dependencies, so seven are rebuilt from their docstrings and none is imported |
 | promptfoo | MIT | not read | |
-| ST3GG | AGPL-3.0 | not read | a steganography suite, and text channels would be the part in scope |
+| ST3GG `examples/` at `35f8b2b8` | AGPL-3.0 | `st3gg-text-examples` | eleven text techniques with a cover its generator fixes; its `README.md` hides 122 zero-width characters and no suite reads it |
 | CL4R1T4S | none checked | not read | holds system prompts, judged from its description only |
 
 ## Adding a benchmark

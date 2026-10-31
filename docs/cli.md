@@ -172,7 +172,7 @@ disarm p --steps "normalize,strip_accents,fold_case" "Café Résumé"
 `--steps STEPS`
 :   Comma-separated list of processing steps (required).
 
-Available steps: `normalize`, `transliterate`, `fold_case`, `collapse_whitespace`, `strip_accents`, `confusables`, `strip_control`, `strip_zero_width`, `demojize`, `strip_bidi`, `strip_zalgo`, `strip_pua`, `strip_plane14`, `resolve_deletions`, `resolve_cr`, `digit_policy`, `strict_iso9`, `gost7034`.
+Available steps: `normalize`, `transliterate`, `fold_case`, `collapse_whitespace`, `strip_accents`, `confusables`, `strip_control`, `strip_zero_width`, `demojize`, `strip_bidi`, `strip_zalgo`, `strip_pua`, `strip_plane14`, `strip_invisible_marks`, `resolve_deletions`, `resolve_cr`, `digit_policy`, `strict_iso9`, `gost7034`.
 
 `--form FORM`
 :   Normalization form when using the `normalize` step.

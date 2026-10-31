@@ -591,6 +591,7 @@ CLASS_METHODS = {
             "strip_zalgo",
             "strip_pua",
             "strip_plane14",
+            "strip_invisible_marks",
             "resolve_deletions",
             "resolve_cr",
             "digit_policy",

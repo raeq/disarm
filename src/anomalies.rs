@@ -116,6 +116,11 @@ const SPREAD_CARRIER_FLOOR: usize = 8;
 /// an ideograph cannot be checked against it. What separates the two is variety: a text
 /// repeats the registered variants of its words, and a message's bytes do not repeat.
 const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
+/// How many spaces after a `CR` are spared when they do not blank the whole line (#1193).
+///
+/// Two is a Markdown hard line break, and the whole of the evidence: no set read holds any
+/// other count. One hides less than that. Three is enough to hide `not`.
+const CR_SPARED_SPACES: usize = 2;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -362,10 +367,12 @@ pub enum AnomalyKind {
     ///
     /// A `CR` is reported only when it can actually overwrite something: something other
     /// than more `CR`s must follow it on the line (so `CRLF`, `CR CR LF` and a trailing `CR`
-    /// never fire), and spaces alone count only if there are enough to blank the whole line,
-    /// so the stray `CR` before a Markdown hard line break, which is two spaces and a line
-    /// feed, does not fire (#1155). There must also be text between it and the start of its
-    /// line — for every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`,
+    /// never fire), and one or two spaces alone count only if they blank the whole line, so
+    /// the stray `CR` before a Markdown hard line break, which is two spaces and a line feed,
+    /// does not fire (#1155). Three or more always fire, since sparing every run shorter than
+    /// the line let a `CR` blank all but one cell (#1193). There must also be text between it
+    /// and the start of its line — for every UAX #14 mandatory break, not just `LF`, so a `CR`
+    /// after `NEL`, `LS`,
     /// `PS`, `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file,
     /// which used a lone `CR` as its line ending until 2001, and a stray `CR` pasted in front
     /// of ordinary text. The report is a technical fact, as with `is_case_fold_stable` and
@@ -833,10 +840,11 @@ fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
 /// through (#1155). What remains, up to the next line break or the end of text, is what a
 /// terminal paints:
 /// * nothing — `CRLF`, `CR CR LF`, or a trailing `CR`, which overwrite nothing;
-/// * spaces alone — these blank one cell each, so they hide the line only if there are as
-///   many as it has cells. Two spaces after `line one` is a Markdown hard line break with a
-///   stray `CR` in front of it, which was 247 of the 250 bare `CR`s in 13,735 regular
-///   prompts, and it hides two cells;
+/// * spaces alone — these blank one cell each. Two spaces after `line one` is a Markdown hard
+///   line break with a stray `CR` in front of it, which was all 330 such `CR`s in 13,735
+///   regular prompts, so up to [`CR_SPARED_SPACES`] are read as that unless they blank the
+///   whole line. More report, whatever is left: 23 after `delete the audit log now` shows a
+///   lone `w` (#1193);
 /// * anything else — paints over the start of the line, however long it is.
 fn paints_over(line: &str, after: &str) -> bool {
     let after = after.trim_start_matches('\r');
@@ -846,7 +854,8 @@ fn paints_over(line: &str, after: &str) -> bool {
     }
     if painted.chars().all(|c| c == ' ') {
         let cells = line.trim_end_matches(' ').chars().count();
-        return cells > 0 && painted.chars().count() >= cells;
+        let spaces = painted.chars().count();
+        return cells > 0 && (spaces > CR_SPARED_SPACES || spaces >= cells);
     }
     true
 }

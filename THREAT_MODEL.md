@@ -391,8 +391,10 @@ behavior, not a vulnerability:
   CJK/Indic/abjad — that is a quality property, not a security property).
 - **Resolving a lone `CR` by default (#937).** `BS` and `DEL` are resolved — see *In
   scope* — because they have no legitimate use in text. A `CR` that is not part of a
-  `CRLF` and not at end of text is a rendering overwrite in a terminal and a **classic Mac
-  OS line ending** in a file from before 2001, and the two are byte-identical. Resolving
+  `CRLF` and not at end of text is a rendering overwrite in a terminal, a **classic Mac
+  OS line ending** in a file from before 2001, and a stray `CR` pasted into a prompt, and
+  they are byte-identical. A `CR` before a Markdown hard line break, two spaces and a line
+  feed, hides two cells and is not reported. Resolving
   `line1<CR>line2` to `line2` is right for one reading and destroys the other, so no
   preset or profile makes that call: `TextPipeline(resolve_deletions=True,
   resolve_cr=True)` does. The detector reports it either way, as kind `deletion`.

@@ -212,6 +212,7 @@ def test_the_hebrew_cache_key_covers_what_decides_the_bytes():
     key = caches[0]["with"]["key"]
     assert "scripts/bootstrap_dicts.sh" in key
     assert "scripts/build_hebrew_dict.py" in key
+    assert "scripts/context_words.py" in key
 
 
 def test_a_cached_hebrew_dictionary_is_still_held_to_its_pin():
@@ -235,6 +236,7 @@ def test_the_rollup_requires_the_job():
         "scripts/build_arabic_dict.py",
         "scripts/build_hebrew_dict.py",
         "scripts/build_persian_dict.py",
+        "scripts/context_words.py",
         "scripts/bootstrap_dicts.sh",
         "tests/test_context_hebrew.py",
         ".github/workflows/ci.yml",

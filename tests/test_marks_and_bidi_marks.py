@@ -14,6 +14,7 @@ Invisible characters are written as escapes, per #802.
 from __future__ import annotations
 
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -175,6 +176,124 @@ def test_a_keycap_on_something_else_keeps_its_mark() -> None:
 def test_a_bare_keycap_mark_still_reports_after_canonicalize() -> None:
     """It reported on the way in, so the output reports nothing new."""
     assert _kinds(disarm.canonicalize("1\u20e32\u20e3")) == ["enclosing_mark"]
+
+
+def _on_each(text: str, marks: str) -> str:
+    return "".join(c + marks if c != " " else c for c in text)
+
+
+_CYRILLIC = "\u043f\u0430\u0440\u043e\u043b\u044c"
+_IDEOGRAPHS = "\u6f22\u5b57\u4eee\u540d"
+_SEQUENCE = "\ufe0f\u20e3"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        _on_each("Ignore", _SEQUENCE),
+        _on_each("ab", _SEQUENCE),
+        _on_each("the cat", _SEQUENCE),
+        _on_each(_IDEOGRAPHS, _SEQUENCE),
+        _on_each(_CYRILLIC, _SEQUENCE),
+        f"{_SEQUENCE}{_SEQUENCE}",
+    ],
+    ids=["ignore", "two-letters", "two-words", "ideographs", "cyrillic", "no-base"],
+)
+def test_the_keycap_sequence_on_anything_else_is_not_a_keycap(text: str) -> None:
+    """`Ignore` with `U+FE0F U+20E3` on each letter read clean, and its output did not (#1195).
+
+    The detector exempted the sequence on any base and the fold reads only a digit, `#` or
+    `*`, so `canonicalize` kept every mark and reported what its input had not.
+    """
+    assert "enclosing_mark" in _kinds(text), ascii(text)
+    assert has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize("base", [*"0123456789#*"])
+def test_every_base_the_fold_reads_is_a_keycap_to_the_detector(base: str) -> None:
+    text = _keycap(base) + _keycap(base)
+    assert not has_anomalies(text), ascii(text)
+    assert not has_anomalies(disarm.canonicalize(text)), ascii(text)
+
+
+@pytest.mark.parametrize("base", [*"a\u0661\uff11\u00b9\u2460@"])
+def test_a_base_the_fold_does_not_read_is_no_keycap_to_the_detector(base: str) -> None:
+    """Both halves read one definition, so a non-ASCII digit is no keycap to either."""
+    text = _keycap(base) + _keycap(base)
+    assert "enclosing_mark" in _kinds(text), ascii(text)
+    if base in "a\u0661@":
+        # The others are compatibility digits, which NFKC folds to a digit first.
+        assert "\u20e3" in disarm.canonicalize(_keycap(base)), ascii(text)
+
+
+def test_the_keycap_bases_are_written_down_once() -> None:
+    """Restating them is how the fold and the detector came to disagree (#1195)."""
+    source = Path(__file__).resolve().parent.parent / "src"
+    spelled = "'0'..='9' | '#' | '*'"
+    sites = {
+        path.relative_to(source).as_posix(): path.read_text(encoding="utf-8").count(spelled)
+        for path in source.rglob("*.rs")
+        if spelled in path.read_text(encoding="utf-8")
+    }
+    assert sites == {"emoji.rs": 1}
+
+
+def test_one_letter_with_the_sequence_stays_clean() -> None:
+    """One is still a character someone may have typed, and its output reports nothing."""
+    text = _keycap("a")
+    assert not has_anomalies(text)
+    assert not has_anomalies(disarm.canonicalize(text))
+    assert disarm.canonicalize(_keycap("x")) == "x\u20e3"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        _on_each("Ignore", _SEQUENCE),
+        _on_each("ab", _SEQUENCE),
+        _on_each(_IDEOGRAPHS, _SEQUENCE),
+        _on_each("the cat", _SEQUENCE),
+        _on_each(_CYRILLIC, _SEQUENCE),
+        _on_each(_CYRILLIC, "\u20e3"),
+        _on_each(_CYRILLIC, "\u20dd"),
+    ],
+    ids=["ignore", "two-letters", "ideographs", "two-words", "cyrillic", "bare", "circle"],
+)
+def test_canonicalize_reports_nothing_its_input_did_not(text: str) -> None:
+    gained = set(_kinds(disarm.canonicalize(text))) - set(_kinds(text))
+    assert gained == set(), ascii(text)
+
+
+@pytest.mark.parametrize("mark", ["\u20e3", "\u20dd", "\u20e0", "\u1abe"])
+def test_a_mark_that_is_no_cyrillic_notation_reports_on_cyrillic(mark: str) -> None:
+    """The exemption covers the marks historic Cyrillic uses, not every enclosing mark (#1195)."""
+    assert "enclosing_mark" in _kinds(_on_each(_CYRILLIC, mark)), f"U+{ord(mark):04X}"
+
+
+@pytest.mark.parametrize("mark", ["\u0488", "\u0489", "\ua670", "\ua671", "\ua672"])
+def test_the_five_cyrillic_notation_marks_stay_exempt_on_cyrillic(mark: str) -> None:
+    assert not has_anomalies(_on_each(_CYRILLIC, mark)), f"U+{ord(mark):04X}"
+
+
+@pytest.mark.parametrize("mark", ["\u0488", "\u0489", "\ua670", "\ua671", "\ua672"])
+def test_the_five_cyrillic_notation_marks_report_on_latin(mark: str) -> None:
+    assert "enclosing_mark" in _kinds(_on_each("Ignore", mark)), f"U+{ord(mark):04X}"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        _on_each("Ignore", _SEQUENCE),
+        _on_each("ab", _SEQUENCE),
+        _on_each(_IDEOGRAPHS, _SEQUENCE),
+        _on_each(_CYRILLIC, _SEQUENCE),
+        _on_each(_CYRILLIC, "\u20e3"),
+        _on_each("Ignore", "\u20e3"),
+        _on_each("Ignore", "\u20dd"),
+    ],
+)
+def test_llm_guardrail_still_removes_the_mark_from_every_row(text: str) -> None:
+    assert "\u20e3" not in disarm.get_pipeline("llm_guardrail")(text), ascii(text)
 
 
 def test_a_rendering_surface_keeps_the_keycap_whole() -> None:

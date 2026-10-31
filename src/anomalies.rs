@@ -213,6 +213,9 @@ const ENCLOSING_MARKS: &[char] = &[
     '\u{0488}', '\u{0489}', '\u{1ABE}', '\u{20DD}', '\u{20DE}', '\u{20DF}', '\u{20E0}', '\u{20E2}',
     '\u{20E3}', '\u{20E4}', '\u{A670}', '\u{A671}', '\u{A672}',
 ];
+/// The members of [`ENCLOSING_MARKS`] that historic Cyrillic writes, spared on a Cyrillic base.
+const CYRILLIC_ENCLOSING_MARKS: &[char] =
+    &['\u{0488}', '\u{0489}', '\u{A670}', '\u{A671}', '\u{A672}'];
 /// Fewest folding characters before a wholly non-ASCII token is called a disguise (#815).
 ///
 /// Below this sit IPA fragments and linguistic notation — `\u{026a}\u{0274}` is two
@@ -441,8 +444,9 @@ pub enum AnomalyKind {
     ///
     /// Keycap sequences are exempt: `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation
     /// selector is what makes it an RGI keycap rather than a bare enclosing mark — the
-    /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
-    /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
+    /// same shape as the subdivision-flag allowlist. The base has to be a digit, `#` or `*`,
+    /// so the sequence on a letter reports (#1195). The five marks of historic Cyrillic
+    /// notation on a Cyrillic base are exempt too: `U+0488`, `U+0489`, `U+A670`-`U+A672`.
     EnclosingMark,
     /// A token drawing digits from more than one decimal numbering system — UTS #39 §5.3
     /// *Mixed Numbers*.
@@ -1334,15 +1338,17 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
 /// - **Keycaps.** `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what
 ///   makes it an RGI keycap rather than a bare enclosing mark — the same distinction
 ///   `crate::invisibles` draws for a subdivision flag. A `U+20E3` with no `U+FE0F` before
-///   it is not a keycap.
+///   it is not a keycap, and neither is the sequence on a base other than a digit, `#` or
+///   `*`, which are the bases the `canonicalize` fold reads (#1195).
 /// - **Cyrillic.** `U+0488`, `U+0489`, `U+A670`-`U+A672` are historic Cyrillic notation.
-///   On a Cyrillic base they are orthography; on a Latin one they are a disguise.
+///   On a Cyrillic base they are orthography; on a Latin one they are a disguise. Those
+///   five and no other: no notation puts `U+20DD` or `U+20E3` on Cyrillic letters, and
+///   `canonicalize` keeps those marks while it folds the letters to Latin (#1195).
 ///
 /// Two are required rather than one. A single enclosing mark on a single base is a
 /// character someone may have typed; encircling *every* letter of a word is not something
 /// any orthography does, and that is the shape #724 measures.
 fn enclosing_marks(tok: &str) -> Vec<char> {
-    const KEYCAP: char = '\u{20E3}';
     const VS16: char = '\u{FE0F}';
     let chars: Vec<char> = tok.chars().collect();
     let mut out = Vec::new();
@@ -1350,7 +1356,11 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         if !ENCLOSING_MARKS.contains(&c) {
             continue;
         }
-        if c == KEYCAP && i > 0 && chars[i - 1] == VS16 {
+        if c == crate::emoji::KEYCAP
+            && i >= 2
+            && chars[i - 1] == VS16
+            && crate::emoji::is_keycap_base(chars[i - 2])
+        {
             continue;
         }
         // The base is the last character before it that is not a combining mark of any
@@ -1373,7 +1383,7 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
             .rev()
             .find(|b| !unicode_normalization::char::is_combining_mark(**b))
             .is_some_and(|b| crate::scripts::detect_char_script(*b) == "Cyrillic");
-        if base_is_cyrillic {
+        if CYRILLIC_ENCLOSING_MARKS.contains(&c) && base_is_cyrillic {
             continue;
         }
         out.push(c);

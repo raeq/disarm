@@ -151,7 +151,7 @@ fn demojize_impl(
                 // keycap was left behind as an orphan mark (#996 review). A keycap base
                 // claimed on its own takes the rest of its keycap with it.
                 let consumed = match win.as_slice() {
-                    ['0'..='9' | '#' | '*', ..] if consumed == 1 => {
+                    [base, ..] if consumed == 1 && crate::emoji::is_keycap_base(*base) => {
                         presentation_len_at(win.as_slice()).unwrap_or(1)
                     }
                     _ => consumed,

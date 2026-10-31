@@ -765,6 +765,13 @@ fn main() {
         &out_dir.join("emoji_yes_ranges.rs"),
         "EMOJI_YES_RANGES",
     );
+    // #1135: which base a selector may follow, as `(base, selector)` pairs rather than
+    // ranges. The same sorted-pair shape, searched for the pair itself.
+    generate_range_set(
+        &data_dir.join("variation_sequences.tsv"),
+        &out_dir.join("variation_sequences.rs"),
+        "VARIATION_SEQUENCES",
+    );
     // #774: the assigned-ness gate in front of the block-range script table.
     generate_range_set(
         &data_dir.join("assigned_ranges.tsv"),

@@ -42,8 +42,9 @@ assert detect_encoding("Привет".encode("utf-16-le"))[0] != "UTF-16LE"  # n
 
 Such input decodes as a single-byte encoding and yields mojibake, with `had_errors=False`
 and no `strict=True` error, because windows-1252 maps every byte to something. Guessing
-from script frequency instead would be exactly the ambiguous-bytes case
-[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) scopes out.
+from script frequency instead would not answer it, because the same bytes can be read more
+than one way: see *Charset confusion between two decoders* in
+[THREAT_MODEL.md](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md).
 Supply the encoding explicitly when you know the source emits BOM-less UTF-16 — Windows
 tooling and several database exports do.
 
@@ -280,6 +281,13 @@ where four stacked marks is ordinary, pass a higher `max_marks` — the paramete
 exactly that, and `is_zalgo`'s `threshold` is its counterpart. Note that a base can carry
 more than `max_marks` in total, because the cap applies at each position: a mark above and
 a mark below are two positions, not one.
+
+The detector adds two shapes the cap cannot see, both under `zalgo` (#1156). A word with an
+overlay on every letter, a strikethrough, slash or underline, carries one mark per letter and no
+stack at all. A Latin word with three marks on every letter passes the cap by spreading them
+across classes, and the gate on Latin is what keeps the Burmese evidence above out of it. Neither
+changes what the surfaces do: `canonicalize` keeps an overlay and at most three marks at each
+position, and `llm_guardrail` and `strip_obfuscation` remove them.
 
 The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
 unaffected by the default.

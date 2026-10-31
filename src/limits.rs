@@ -25,8 +25,11 @@ pub const MAX_REPLACEMENTS: usize = 10_000;
 /// (overwrite) does not count toward this limit.
 pub const MAX_REGISTERED_LANGS: usize = 100;
 
-/// Maximum iterations for unique slug generation before giving up.
-/// Prevents infinite loops when all candidates are rejected.
+/// Maximum candidates one `UniqueSlugifier` call may offer to `check` beyond the first.
+/// Prevents an endless walk when `check` rejects every candidate.
+///
+/// A candidate that is already in the instance's own `seen` is not an attempt: `seen` is
+/// finite, so that part of the walk ends by itself, and a base has no capacity (#1102).
 pub const MAX_UNIQUE_ATTEMPTS: u64 = 10_000;
 
 /// Maximum byte length of a caller-supplied regex pattern.

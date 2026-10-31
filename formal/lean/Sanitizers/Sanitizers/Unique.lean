@@ -5,8 +5,12 @@ import Sanitizers.Slug
 
 `_UniqueSlugifier::slugify` without a `check` callback (the path the per-base hint is
 used on), over the ASCII slug model. `seen` and `next_counter` are association lists.
-`MAX_UNIQUE_ATTEMPTS` is a parameter (`src/limits.rs` L30 sets it to 10,000) so the
-bounded checks can use a small one.
+
+`walk`, before the fix of Finding 9, compares the counter with `MAX_UNIQUE_ATTEMPTS`, a
+parameter (`src/limits.rs` sets it to 10,000) so the bounded checks can use a small one; a
+candidate could be cut down to one it had already tried, so it needs a bound to end. The
+code follows `walkFixed`, which has no such parameter: since #1102 the limit counts what
+`check` is asked, and the model has no `check`.
 -/
 
 namespace Sanitizers.Unique
@@ -129,31 +133,31 @@ def candidateFixed (sep base : List Char) (maxLen counter : Nat) : Option (List 
         if head.isEmpty then none else some (head ++ suffix)
     else some c
 
-def walkFixed (sep base : List Char) (maxLen maxAttempts : Nat) (seen : List (List Char)) :
+def walkFixed (sep base : List Char) (maxLen : Nat) (seen : List (List Char)) :
     Nat → Nat → Except Err (Nat × List Char)
   | 0, _ => .error .attemptsExceeded
   | fuel + 1, counter =>
-    if counter > maxAttempts then .error .attemptsExceeded
-    else
-      match candidateFixed sep base maxLen counter with
-      | none => if counter == 0 then .ok (0, base) else .error .maxLengthTooSmall
-      | some cand =>
-        if base.isEmpty then .ok (0, base)
-        else if !seen.contains cand then .ok (counter, cand)
-        else walkFixed sep base maxLen maxAttempts seen fuel (counter + 1)
+    match candidateFixed sep base maxLen counter with
+    | none => if counter == 0 then .ok (0, base) else .error .maxLengthTooSmall
+    | some cand =>
+      if base.isEmpty then .ok (0, base)
+      else if !seen.contains cand then .ok (counter, cand)
+      else walkFixed sep base maxLen seen fuel (counter + 1)
 
-def stepFixed (cfg : Config) (maxAttempts : Nat) (st : St) (text : List Char) :
+/-- One more step than `seen` has entries: distinct counters give distinct candidates, so
+one of them is fresh, and the fuel is not what ends the walk. -/
+def stepFixed (cfg : Config) (st : St) (text : List Char) :
     Except Err (List Char) × St :=
   -- the base is the fixed slug (Finding 5), so it does not end in a partial separator
   let base := slugifyFixed cfg text
   let h := hintOf st.hint base
-  match walkFixed cfg.sep base cfg.maxLen maxAttempts st.seen (maxAttempts + 2) h with
+  match walkFixed cfg.sep base cfg.maxLen st.seen (st.seen.length + 1) h with
   | .ok (k, c) =>
     if c.isEmpty then (.ok c, st) else (.ok c, ⟨c :: st.seen, setHint st.hint base (k + 1)⟩)
   | .error e => (.error e, st)
 
-def runFixed (cfg : Config) (maxAttempts : Nat) (ts : List (List Char)) :
+def runFixed (cfg : Config) (ts : List (List Char)) :
     List (Except Err (List Char)) :=
-  runAll (stepFixed cfg maxAttempts) St.empty ts
+  runAll (stepFixed cfg) St.empty ts
 
 end Sanitizers.Unique

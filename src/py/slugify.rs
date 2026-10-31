@@ -331,6 +331,12 @@ fn is_free(py: Python<'_>, check: Option<&Py<PyAny>>, candidate: &str) -> PyResu
 /// The candidates are tried in rising counter order and `check` is asked about
 /// exactly those that are not in `seen`, which is what a walk from counter 0 does.
 /// An error leaves `walk` at the counter it stopped on, so the next call asks again.
+///
+/// `MAX_UNIQUE_ATTEMPTS` bounds what `check` is asked in this call and nothing else. It
+/// used to be compared with the counter (#1102), so a base gave 10,001 slugs and then
+/// raised before trying anything, with or without a `check`. Without a `check` this
+/// always ends at the first counter not in `seen`. With one, `refused` holds at most the
+/// candidates one call may ask about, so the first pass below cannot overrun the bound.
 fn take_first_free(
     py: Python<'_>,
     base: &str,
@@ -340,6 +346,7 @@ fn take_first_free(
     check: Option<&Py<PyAny>>,
     walk: &mut SuffixWalk,
 ) -> PyResult<String> {
+    let mut attempts: u64 = 0;
     let mut pending = walk.refused.first().copied();
     while let Some(counter) = pending {
         pending = walk.refused.range(counter + 1..).next().copied();
@@ -347,7 +354,10 @@ fn take_first_free(
         if seen.contains(&candidate) {
             // Another base has produced this slug since. It stays taken.
             walk.refused.remove(&counter);
-        } else if is_free(py, check, &candidate)? {
+            continue;
+        }
+        attempts += 1;
+        if is_free(py, check, &candidate)? {
             walk.refused.remove(&counter);
             seen.insert(candidate.clone());
             return Ok(candidate);
@@ -358,16 +368,17 @@ fn take_first_free(
     // never alias, and the former M1 `lossy` tracking has nothing left to detect.
     loop {
         let counter = walk.next;
-        if counter > MAX_UNIQUE_ATTEMPTS {
-            tl_warn!("unique_slug_attempts_exceeded: max={MAX_UNIQUE_ATTEMPTS}");
-            return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
-                max: MAX_UNIQUE_ATTEMPTS,
-                text: text.to_owned(),
-            }
-            .into());
-        }
         let candidate = candidate_at(base, counter, config)?;
         if !seen.contains(&candidate) {
+            if attempts > MAX_UNIQUE_ATTEMPTS {
+                tl_warn!("unique_slug_attempts_exceeded: max={MAX_UNIQUE_ATTEMPTS}");
+                return Err(crate::ErrorRepr::UniqueSlugAttemptsExceeded {
+                    max: MAX_UNIQUE_ATTEMPTS,
+                    text: text.to_owned(),
+                }
+                .into());
+            }
+            attempts += 1;
             if is_free(py, check, &candidate)? {
                 seen.insert(candidate.clone());
                 walk.next = counter + 1;
@@ -445,8 +456,8 @@ impl _UniqueSlugifier {
 
     /// Generate a unique slug, appending numeric suffixes as needed.
     ///
-    /// Bounded to `MAX_UNIQUE_ATTEMPTS` iterations to prevent infinite loops
-    /// when a `check` callback always rejects candidates. The candidates are
+    /// The calls of `check` in one call are bounded by `MAX_UNIQUE_ATTEMPTS`, to
+    /// prevent an endless walk when it rejects every candidate. The candidates are
     /// built by the core (`crate::slugify::unique_slug_candidate`).
     fn slugify(&mut self, py: Python<'_>, text: &str) -> PyResult<String> {
         let base = self.inner.slugify(text);

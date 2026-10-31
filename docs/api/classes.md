@@ -129,6 +129,8 @@ unique = UniqueSlugifier(check=exists_in_db)
 
 The `check` callback is called for each candidate slug. If it returns `True`, the slugifier increments the suffix and tries again. An empty slug (an input with nothing sluggable) is returned as it is, without calling `check`.
 
+One call asks `check` about 10,001 candidates at most, and then raises `ResourceLimitError`. That is the only limit: a base has no capacity, with or without `check`, and a slug the instance has already given costs no attempt.
+
 ---
 
 ## TextPipeline

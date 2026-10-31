@@ -146,10 +146,21 @@ theorem f9_empty_base :
     run (cfg ['-'] 0 false []) 10000 [['!'], ['!']] = [.ok [], .ok ['-', '1']] := by decide
 
 theorem f9_fixed :
-    runFixed (cfg ['-'] 5 false []) 10000 [['a', 'b', ' ', 'c', 'd'], ['a', 'b', ' ', 'c', 'd']] =
+    runFixed (cfg ['-'] 5 false []) [['a', 'b', ' ', 'c', 'd'], ['a', 'b', ' ', 'c', 'd']] =
         [.ok ['a', 'b', '-', 'c', 'd'], .ok ['a', 'b', '-', '1']] ∧
-      runFixed (cfg ['-'] 2 false []) 10000 [['a', 'b'], ['a', 'b']] =
+      runFixed (cfg ['-'] 2 false []) [['a', 'b'], ['a', 'b']] =
         [.ok ['a', 'b'], .error .maxLengthTooSmall] ∧
-      runFixed (cfg ['-'] 0 false []) 10000 [['!'], ['!']] = [.ok [], .ok []] := by decide
+      runFixed (cfg ['-'] 0 false []) [['!'], ['!']] = [.ok [], .ok []] := by decide
+
+/-- #1102: a base has no capacity. `run` with its limit at 12 gives this base 13 slugs and
+then fails; the fixed walk has no limit to reach, and every slug is distinct. -/
+theorem fixed_base_has_no_capacity :
+    (run (cfg ['-'] 0 false []) 12 (List.replicate 14 ['a'])).getLast? =
+        some (.error .attemptsExceeded) ∧
+      ((runFixed (cfg ['-'] 0 false []) (List.replicate 64 ['a'])).all fun r =>
+        match r with
+        | .ok _ => true
+        | .error _ => false) = true := by
+  native_decide
 
 end Sanitizers.Findings

@@ -320,7 +320,8 @@ pub enum AnomalyKind {
     Invisible,
     /// A bidi override, or a bidi control inside a majority-Latin token (Trojan Source).
     Bidi,
-    /// Excessive stacked combining marks.
+    /// Excessive stacked combining marks, an overlay on every letter of a word, or three marks
+    /// on every letter of a Latin word.
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
@@ -1090,6 +1091,61 @@ fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
     ) && detect_scripts(word).iter().any(|s| CJK_SCRIPTS.contains(s))
 }
 
+/// Whether a mark draws over or under a letter: strikethrough, a slash, an underline (#1156).
+fn is_overlay_mark(c: char) -> bool {
+    matches!(c, '\u{0332}'..='\u{0338}')
+}
+
+/// The overlay on a word with one on every letter, or `None` (#1156).
+///
+/// One mark per base is below every count, the same blind spot #724 closed for enclosing
+/// marks, and these are `Mn` so that rule did not reach them. The shape is what no orthography
+/// does. Two letters at least, since one slashed letter is linguistic or math notation, and
+/// letters only, so `a=\u{338}b` stays the negation it is (#749).
+fn overlaid_word(word: &str) -> Option<char> {
+    let (mut letters, mut overlaid) = (0usize, 0usize);
+    let mut this_letter = false;
+    let mut found = None;
+    for c in word.chars() {
+        if is_overlay_mark(c) {
+            if letters > 0 && !this_letter {
+                this_letter = true;
+                overlaid += 1;
+                found.get_or_insert(c);
+            }
+        } else if c.is_alphabetic() && !unicode_normalization::char::is_combining_mark(c) {
+            letters += 1;
+            this_letter = false;
+        }
+    }
+    (letters >= 2 && overlaid == letters)
+        .then_some(found)
+        .flatten()
+}
+
+/// The marks on a Latin word carrying three or more per letter, or `None` (#1156).
+///
+/// The cap is per combining class, so four marks in four classes pass it, and it has to stay
+/// that way: counting every mark on a base flagged 142 Burmese place names (#842). Those are
+/// not Latin, and the discriminator here is exactly that. No orthography written in Latin
+/// letters carries three marks on every letter of a word, and Vietnamese, the heaviest, tops
+/// out at two.
+fn heavily_marked_latin_word(word: &str) -> Option<usize> {
+    let (mut letters, mut marks) = (0usize, 0usize);
+    // Decomposed, or `e` + `U+0301` + two more counts as `\u{e9}` + two (Finding 3).
+    for c in word.nfd() {
+        if unicode_normalization::char::is_combining_mark(c) {
+            marks += 1;
+        } else if c.is_alphabetic() {
+            if !is_ascii_letter_base(c) {
+                return None;
+            }
+            letters += 1;
+        }
+    }
+    (letters >= 3 && marks >= 3 * letters).then_some(marks)
+}
+
 /// The first stacking mark that appears twice in a row on one base (#835).
 ///
 /// Compared over NFD. Canonical ordering sorts a base's marks by combining class between
@@ -1545,6 +1601,20 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
                 AnomalyKind::EnclosingMark,
                 format!("{} \u{d7}{}", codepoint(enclosing[0]), enclosing.len()),
             ));
+        }
+        for part in word_parts(tok) {
+            if let Some(mark) = overlaid_word(part) {
+                return Some(mk(
+                    AnomalyKind::Zalgo,
+                    format!("{} on every letter", codepoint(mark)),
+                ));
+            }
+            if let Some(marks) = heavily_marked_latin_word(part) {
+                return Some(mk(
+                    AnomalyKind::Zalgo,
+                    format!("{marks} marks across combining classes"),
+                ));
+            }
         }
         if is_zalgo(tok, ZALGO_THRESHOLD) {
             return Some(mk(

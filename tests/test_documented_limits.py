@@ -191,8 +191,10 @@ def test_a_partly_folded_word_is_what_the_seam_check_sees() -> None:
     assert not disarm.has_anomalies(disarm.get_pipeline("rag_ingest")(RUSSIAN))
 
 
-def test_the_0_18_0_note_names_the_profiles_that_moved() -> None:
-    flat = " ".join((ROOT / "CHANGELOG.md").read_text(encoding="utf-8").split())
+def test_the_next_release_note_names_the_profiles_that_moved() -> None:
+    """The guard on `CHANGELOG.md` lets only a release assembly edit it, so the 0.18.0 note takes
+    this sentence in the release PR. Until then the fragment carries it to the same reader."""
+    flat = " ".join((ROOT / "changelog.d/1183.docs.md").read_text(encoding="utf-8").split())
     assert (
         "The profiles move too, and the fixture does not track them: `llm_guardrail` and "
         "`ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`, "

@@ -14,6 +14,7 @@ false-positive argument, which is why they land together (R7 in #762).
 from __future__ import annotations
 
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -22,6 +23,7 @@ from disarm import (
     find_confusables,
     has_anomalies,
     inspect_anomalies,
+    is_canonical,
     is_confusable,
     normalize_confusables,
 )
@@ -282,3 +284,138 @@ def test_a_delimiter_only_string_is_not_reported() -> None:
     # With a letter present it is reported, which is the contrast that makes the gate
     # a scope rather than a hole.
     assert _kinds("ord∶end") == ["confusable"]
+
+
+# ── #1153: ordinary typography ───────────────────────────────────────────────
+
+HAN = "\u7684\u6a21\u578b"
+LSQUO, RSQUO, LDQUO, RDQUO, BDQUO = "\u2018", "\u2019", "\u201c", "\u201d", "\u201e"
+HYPHENS_AND_DASHES = [chr(cp) for cp in range(0x2010, 0x2016)]
+MINUS = "\u2212"
+ELLIPSIS = "\u2026"
+#: The sentence punctuation of a Chinese text, in its fullwidth form.
+CJK_SENTENCE_PUNCTUATION = ["\uff0c", "\uff1a", "\uff1f", "\uff01", "\uff08", "\uff09", "\uff1b"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"don{RSQUO}t",
+        f"l{RSQUO}ami",
+        f"{LSQUO}hello{RSQUO}",
+        f"{LDQUO}hello{RDQUO}",
+        f"{BDQUO}hallo{LDQUO}",
+        f"well{ELLIPSIS}",
+        f"a{MINUS}b",
+        *(f"yes{mark}no" for mark in HYPHENS_AND_DASHES),
+    ],
+)
+def test_ordinary_typography_does_not_report(text: str) -> None:
+    """On 13,735 regular prompts these made up most of a 13.7% rate (#1153)."""
+    assert not has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "folded"),
+    [(f"don{RSQUO}t", "don't"), (f"well{ELLIPSIS}", "well...")],
+)
+def test_canonicalize_still_folds_what_no_longer_reports(text: str, folded: str) -> None:
+    assert canonicalize(text) == folded
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"p\u0251ypal{RSQUO}s",
+        f"g\u0131thub{ELLIPSIS}",
+        f"\uff41dmin{RDQUO}",
+    ],
+)
+def test_a_letter_fold_beside_typography_still_reports(text: str) -> None:
+    assert has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [
+        ("ord\u2236end", "confusable"),
+        ("\uff41dmin", "compat_fold"),
+        ("K\u00f8benhavn", "confusable"),
+    ],
+)
+def test_what_the_rule_was_built_for_still_reports(text: str, kind: str) -> None:
+    assert _kinds(text) == [kind]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ex\u2010ample.com",  # CVE-2017-5383's own vector
+        f"exam{RSQUO}ple.com",
+        "pay\u2013pal.co",
+    ],
+)
+def test_a_word_shaped_like_a_host_name_still_reports(text: str) -> None:
+    """Punycode display missed these, and the fold puts the ASCII the host now spells."""
+    assert _kinds(text) == ["confusable"], ascii(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"{LDQUO}example.com{RDQUO}",
+        f"{LDQUO}U.S.{RDQUO}",
+        f"end.{LDQUO}Next",
+        f"{LDQUO}I{RDQUO}",
+        f"{LSQUO}a{RSQUO}",
+    ],
+)
+def test_quotes_around_a_word_are_not_part_of_its_shape(text: str) -> None:
+    assert not has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize("mark", ["\u2010", "\u2013", RSQUO])
+def test_a_mark_splitting_single_letters_still_reports(mark: str) -> None:
+    """That is not how anyone writes prose, whichever mark it is."""
+    assert _kinds(mark.join("qxzvbn")) == ["confusable"], ascii(mark)
+
+
+def test_a_quote_at_a_sink_is_not_this_detector_to_catch() -> None:
+    """The rule only ever saw a sink shape with a letter beside the quote.
+
+    `admin` + `U+2019` + `--` reported and `U+2019` + ` OR 1=1` did not. A caller guarding a
+    sink needs `is_canonical`, which is False on both.
+    """
+    for text in (f"admin{RSQUO}--", f"{RSQUO} OR 1=1"):
+        assert not has_anomalies(text), ascii(text)
+        assert not is_canonical(text), ascii(text)
+
+
+@pytest.mark.parametrize("mark", CJK_SENTENCE_PUNCTUATION)
+@pytest.mark.parametrize("letters", [HAN, "\u30c7\u30fc\u30bf", "\ud55c\uae00"])
+def test_cjk_sentence_punctuation_in_a_cjk_token_does_not_report(letters: str, mark: str) -> None:
+    """A Chinese sentence has no spaces, so one token spans it and holds any Latin word in it."""
+    assert not has_anomalies(f"GPT{letters}{mark}"), ascii(mark)
+
+
+@pytest.mark.parametrize("mark", CJK_SENTENCE_PUNCTUATION)
+def test_the_same_mark_with_no_cjk_beside_it_still_reports(mark: str) -> None:
+    assert _kinds(f"GPT{mark}x") == ["compat_fold"], ascii(mark)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"\uff1cscript\uff1e{HAN}",
+        f"\uff41dmin{HAN}\uff1a",
+    ],
+)
+def test_a_cjk_token_is_not_a_pass_for_anything_else(text: str) -> None:
+    assert _kinds(text) == ["compat_fold"], ascii(text)
+
+
+def test_the_guide_says_what_typography_does_not_report() -> None:
+    guide = Path(__file__).resolve().parent.parent / "docs/user-guide/anomaly-detection.md"
+    flat = " ".join(guide.read_text(encoding="utf-8").split())
+    assert "ordinary typography" in flat
+    assert "`is_canonical`" in flat

@@ -181,6 +181,38 @@ pub(crate) fn generate_range_set(tsv_path: &Path, out_path: &Path, name: &str) {
     fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
 }
 
+/// Emit the registered ideographic variation sequences as a sorted `u32` array (#1196).
+///
+/// `base << 8 | (selector - U+E0100)` for each row, so 29,642 of them take four bytes each and
+/// not the eight a `(u32, u32)` pair would, which is what a table this size is weighed on.
+pub(crate) fn generate_ideographic_sequences(tsv_path: &Path, out_path: &Path, name: &str) {
+    let content = fs::read_to_string(tsv_path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", tsv_path.display()));
+    let mut rows: Vec<u32> = Vec::new();
+    for line in content.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut it = t.split('\t');
+        let base = parse_hex(it.next().unwrap_or(""), tsv_path);
+        let selector = parse_hex(it.next().unwrap_or(""), tsv_path);
+        assert!(
+            (0xE0100..=0xE01EF).contains(&selector) && base <= 0x00FF_FFFF,
+            "{}: {base:X} {selector:X} does not pack",
+            tsv_path.display()
+        );
+        rows.push(base << 8 | (selector - 0xE0100));
+    }
+    rows.sort_unstable();
+    let mut code = format!("static {name}: &[u32] = &[\n");
+    for row in &rows {
+        writeln!(code, "    0x{:04X}_{:04X},", row >> 16, row & 0xFFFF).unwrap();
+    }
+    code.push_str("];\n");
+    fs::write(out_path, code).unwrap_or_else(|e| panic!("write {}: {e}", out_path.display()));
+}
+
 /// Emit the decimal-numbering-system zeros as a sorted array (#777).
 ///
 /// A system spans ten code points from its zero, so the array is the whole table: a digit

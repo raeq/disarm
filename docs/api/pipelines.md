@@ -369,9 +369,10 @@ Returns a fresh `TextPipeline` configured for the named profile. Raises `DisarmE
 every other mark, which `strip_zalgo=0` and `strip_accents=True` do not. Three stay, directly after
 a base where they mean something: `U+FE0E` and `U+FE0F` after a base Unicode registers them for,
 and a Mongolian free variation selector after a Mongolian letter. An ideographic selector goes even
-after an ideograph, because the IVD is not shipped. `strip_plane14` owns the TAG block, so this
-step leaves it. With `normalize` set, the pipeline normalizes again after this step, because
-removing a joiner from before a mark leaves text that is not in normal form.
+after an ideograph, registered or not, since naming this step gives up the variant. `strip_plane14`
+owns the TAG block, so this step leaves it. With `normalize` set, the pipeline normalizes again
+after this step, because removing a joiner from before a mark leaves text that is not in normal
+form.
 
 A profile runs its steps again until the output stops changing (bounded), so calling it on
 its own output returns that output. One pass was not always enough (Findings 3 and 4 of the

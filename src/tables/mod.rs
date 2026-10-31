@@ -864,6 +864,10 @@ include!(concat!(env!("OUT_DIR"), "/emoji_property_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/emoji_yes_ranges.rs"));
 // `(base, selector)` pairs in `generate_range_set`'s shape, sorted (#1135).
 include!(concat!(env!("OUT_DIR"), "/variation_sequences.rs"));
+include!(concat!(
+    env!("OUT_DIR"),
+    "/ideographic_variation_sequences.rs"
+));
 
 /// Binary search a sorted, non-overlapping `(start, end)` range table.
 #[inline]
@@ -921,6 +925,20 @@ pub(crate) fn is_registered_variation(base: char, selector: char) -> bool {
     VARIATION_SEQUENCES
         .binary_search(&(base as u32, selector as u32))
         .is_ok()
+}
+
+/// Whether the IVD registers `selector` after `base`, in the release that
+/// `scripts/gen_ivd_sequences.py` pins (#1196). Packed as `generate_ideographic_sequences` says.
+#[inline]
+pub(crate) fn is_registered_ideographic_variation(base: char, selector: char) -> bool {
+    (selector as u32)
+        .checked_sub(0xE0100)
+        .filter(|offset| *offset <= 0xEF)
+        .is_some_and(|offset| {
+            IDEOGRAPHIC_VARIATION_SEQUENCES
+                .binary_search(&((base as u32) << 8 | offset))
+                .is_ok()
+        })
 }
 
 /// Whether this CLDR name row carries no Unicode emoji property at all (#757).

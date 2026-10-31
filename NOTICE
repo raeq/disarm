@@ -38,6 +38,7 @@ Unicode data
       Python's unicodedata module
     Unicode Security Mechanisms (UTS #39): confusables.txt (vendored as
       data/confusables.txt)
+    The Ideographic Variation Database (IVD): IVD_Sequences.txt
     Unicode CLDR emoji annotations: common/annotations/en.xml and
       common/annotationsDerived/en.xml (vendored as data/cldr/en.xml and
       data/cldr/en_derived.xml)

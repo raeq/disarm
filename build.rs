@@ -46,8 +46,8 @@ use phf_tables::{
     generate_excluded_compositions_map, generate_str_str_map,
 };
 use ranges::{
-    generate_bidi_strong_ranges, generate_decimal_digit_zeros, generate_prototype_census,
-    generate_range_set, generate_width_ranges,
+    generate_bidi_strong_ranges, generate_decimal_digit_zeros, generate_ideographic_sequences,
+    generate_prototype_census, generate_range_set, generate_width_ranges,
 };
 use readers::{
     read_char_set_tsv, read_char_str_tsv, read_confusables_version, read_range_tsv,
@@ -771,6 +771,12 @@ fn main() {
         &data_dir.join("variation_sequences.tsv"),
         &out_dir.join("variation_sequences.rs"),
         "VARIATION_SEQUENCES",
+    );
+    // #1196: the same question of a selector after an ideograph, answered by the IVD.
+    generate_ideographic_sequences(
+        &data_dir.join("ideographic_variation_sequences.tsv"),
+        &out_dir.join("ideographic_variation_sequences.rs"),
+        "IDEOGRAPHIC_VARIATION_SEQUENCES",
     );
     // #774: the assigned-ness gate in front of the block-range script table.
     generate_range_set(

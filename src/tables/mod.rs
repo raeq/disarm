@@ -862,6 +862,8 @@ pub fn is_word_joiner(ch: char) -> bool {
 include!(concat!(env!("OUT_DIR"), "/emoji_presentation_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/emoji_property_ranges.rs"));
 include!(concat!(env!("OUT_DIR"), "/emoji_yes_ranges.rs"));
+// `(base, selector)` pairs in `generate_range_set`'s shape, sorted (#1135).
+include!(concat!(env!("OUT_DIR"), "/variation_sequences.rs"));
 
 /// Binary search a sorted, non-overlapping `(start, end)` range table.
 #[inline]
@@ -910,6 +912,15 @@ pub(crate) fn is_emoji_property(ch: char) -> bool {
 #[inline]
 pub(crate) fn is_emoji_yes(ch: char) -> bool {
     in_range_set(EMOJI_YES_RANGES, ch as u32)
+}
+
+/// Whether Unicode registers `selector` after `base`: `emoji-variation-sequences.txt` or
+/// `StandardizedVariants.txt`, for the selectors `U+FE00` to `U+FE0F` (#1135).
+#[inline]
+pub(crate) fn is_registered_variation(base: char, selector: char) -> bool {
+    VARIATION_SEQUENCES
+        .binary_search(&(base as u32, selector as u32))
+        .is_ok()
 }
 
 /// Whether this CLDR name row carries no Unicode emoji property at all (#757).

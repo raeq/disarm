@@ -442,6 +442,10 @@ Read so far, so the next search starts from here:
 | promptfoo | MIT | not read | |
 | ST3GG `examples/` at `35f8b2b8` | AGPL-3.0 | `st3gg-text-examples` | eleven text techniques with a cover its generator fixes; its `README.md` hides 122 zero-width characters and no suite reads it |
 | CL4R1T4S | none checked | not read | holds system prompts, judged from its description only |
+| FlipAttack at `c53880b4` | MIT | read and left out | reordered words and letters: ordinary ASCII, named in `THREAT_MODEL.md`'s out-of-scope entry |
+| CipherChat at `6fce7891` | MIT | read and left out | classical ciphers and character codes: ordinary ASCII, named in the same entry |
+| ArtPrompt at `6eb86644` | MIT | read and left out | ASCII art, whose 16,424 ViTC rows hold no non-ASCII; named in the same entry |
+| BitBypass at `9dcdba5a` | MIT | read and left out | binary spelled in ASCII; named in the same entry |
 
 ## Adding a benchmark
 

@@ -17,6 +17,7 @@ import unicodedata
 
 import pytest
 
+import disarm
 from disarm import canonicalize, has_anomalies, inspect_anomalies, is_zalgo, strip_obfuscation
 
 
@@ -131,6 +132,57 @@ def test_the_finding_names_the_mark_and_the_count() -> None:
 )
 def test_a_keycap_sequence_is_exempt(text: str, why: str) -> None:
     assert not has_anomalies(text), why
+
+
+def _keycap(digit: str) -> str:
+    return f"{digit}\ufe0f\u20e3"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        _keycap("1"),
+        _keycap("1") + _keycap("2"),
+        _keycap("1") + _keycap("2") + _keycap("3"),
+        f"{_keycap('#')}{_keycap('*')}",
+        f"step {_keycap('1')} then {_keycap('2')}",
+    ],
+    ids=["one", "two", "three", "hash-and-star", "in-prose"],
+)
+def test_a_keycap_folds_to_its_digit_so_the_output_reports_nothing(text: str) -> None:
+    """`canonicalize` removed the `U+FE0F` that exempts a keycap, and kept the mark (#1158).
+
+    So two adjacent keycaps read clean and their canonical form reported `enclosing_mark`:
+    the sanitizer created the finding. The selector and the mark go together now.
+    """
+    assert not has_anomalies(text)
+    output = disarm.canonicalize(text)
+    assert not has_anomalies(output), ascii(output)
+    assert "\u20e3" not in output
+    assert "\ufe0f" not in output
+    assert disarm.canonicalize(output) == output
+
+
+def test_a_keycap_compares_equal_to_its_digit() -> None:
+    assert disarm.canonicalize(_keycap("1") + _keycap("2")) == "12"
+
+
+def test_a_keycap_on_something_else_keeps_its_mark() -> None:
+    """The fold applies only after a digit, `#` or `*`, the bases a keycap can have."""
+    assert "\u20e3" in disarm.canonicalize("x\ufe0f\u20e3")
+
+
+def test_a_bare_keycap_mark_still_reports_after_canonicalize() -> None:
+    """It reported on the way in, so the output reports nothing new."""
+    assert _kinds(disarm.canonicalize("1\u20e32\u20e3")) == ["enclosing_mark"]
+
+
+def test_a_rendering_surface_keeps_the_keycap_whole() -> None:
+    assert disarm.strip_format(_keycap("1")) == _keycap("1")
+
+
+def test_enclosing_marks_on_letters_still_report() -> None:
+    assert has_anomalies("I\u20ddg\u20ddn\u20dd")
 
 
 def test_a_bare_keycap_mark_is_not_a_keycap() -> None:

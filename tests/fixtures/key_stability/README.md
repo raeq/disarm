@@ -6,7 +6,7 @@ key-builder output; a minor release may.*
 
 | file | what it is |
 |---|---|
-| `corpus.txt` | 23,339 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) + 25 NFKC-image rows (#833) + 58 negative-enclosed rows (#815) + 34 deletion-class rows (#937) + 2 measured-visual rows (#738) + 13 non-emoji-symbol rows (#990) + 5 selector-on-a-text-symbol rows (#991 follow-up) + 5 line-break and zero-width erase rows (Lean model) + 2 Unicode line-separator rows + 6 Kirat Rai composition rows (Lean model, `formal/lean/Confusables`) + 3 separated-composition rows (Lean model, `formal/lean/Presets`) + 3 control-separated Kirat Rai rows (#1040 fuzzing) + 11 Brahmic consonant-slot rows (#1094) + 108 Unicode 18 rows (#1121) + 12 reserved default-ignorable rows (#1103) |
+| `corpus.txt` | 23,345 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) + 25 NFKC-image rows (#833) + 58 negative-enclosed rows (#815) + 34 deletion-class rows (#937) + 2 measured-visual rows (#738) + 13 non-emoji-symbol rows (#990) + 5 selector-on-a-text-symbol rows (#991 follow-up) + 5 line-break and zero-width erase rows (Lean model) + 2 Unicode line-separator rows + 6 Kirat Rai composition rows (Lean model, `formal/lean/Confusables`) + 3 separated-composition rows (Lean model, `formal/lean/Presets`) + 3 control-separated Kirat Rai rows (#1040 fuzzing) + 11 Brahmic consonant-slot rows (#1094) + 108 Unicode 18 rows (#1121) + 12 reserved default-ignorable rows (#1103) + 6 keycap rows (#1158) |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
 Regenerate with `python scripts/gen_key_fixture.py`, and read
@@ -72,6 +72,9 @@ through both changes.
 **What `KEY_SCHEMA_VERSION` 12 records (#1103).** 12 rows hold the reserved
 `Default_Ignorable_Code_Point` code points inside a word, alone, in a payload run after a
 word, and between a base and a mark.
+
+**What `KEY_SCHEMA_VERSION` 13 records (#1158).** 6 rows hold a keycap alone, in a run, after
+and before a letter, and in prose. The corpus held none, so the fixture could not see this.
 
 `tests/test_key_stability.py` asserts a floor per class and the row count in the table
 above, rather than this paragraph, so adding rows stays free and losing a class fails.

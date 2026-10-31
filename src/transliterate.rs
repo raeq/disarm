@@ -310,6 +310,16 @@ pub(crate) fn transliterate_context(
     let text = apply_replacements_bounded(text)?;
     let text = text.as_ref();
 
+    // #1149: the dictionary below, the skeletons and the error's language name all
+    // read `lang`, so "auto" has to become a language before any of them.
+    let detected;
+    let lang = if lang == Some("auto") {
+        detected = crate::scripts::resolve_auto_lang(text);
+        detected.as_deref()
+    } else {
+        lang
+    };
+
     // #107: Try to get the appropriate context dictionary, distinguishing
     // "corrupt" (file present but malformed) from "absent" (not found).
     // Persian: try Persian dict first, fall back to Arabic (shared loanwords).

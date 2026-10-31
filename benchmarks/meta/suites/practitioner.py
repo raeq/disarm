@@ -30,17 +30,19 @@ import re
 import shutil
 import statistics
 import subprocess
+import unicodedata
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import combinations
 from pathlib import Path
+from typing import ClassVar
 
 from .. import damage
 from ..base import FETCH_CACHE, SuiteBase, add, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Evidence, Family, Outcome, Provenance
-from ..subjects import Job, Role
+from ..subjects import Capability, Job, Role
 
 #: Filed as this pull request, because no separate issue exists for the tier.
 TIER_ISSUE = 1131
@@ -806,6 +808,20 @@ PROMPT_CORPORA = (
 )
 
 
+class _CorporaSuite(_FixtureSuite):
+    """A fixture over files declared as `_Corpus`, reading whichever of them are cached."""
+
+    CORPORA: tuple[_Corpus, ...] = ()
+
+    def read_corpora(self) -> dict[str, list[str]]:
+        """Each corpus that is in the cache. An absent one is left out, and counted."""
+        return {
+            corpus.name: corpus.read(FETCH_CACHE / corpus.source.filename)
+            for corpus in self.CORPORA
+            if (FETCH_CACHE / corpus.source.filename).exists()
+        }
+
+
 def _always_raises(_text: str) -> str:
     raise ValueError("a surface that always raises, to show the sweep can see one")
 
@@ -814,7 +830,7 @@ def _always_grows(text: str) -> str:
     return text + "x"
 
 
-class LabelFreeInvariants(_FixtureSuite):
+class LabelFreeInvariants(_CorporaSuite):
     """Three questions whose answer comes from the library's contract, not from a label.
 
     Does a surface raise, is its output a fixed point, and does a sanitizer's output
@@ -867,14 +883,6 @@ class LabelFreeInvariants(_FixtureSuite):
         "strip_obfuscation",
         "profile:rag_ingest",
     )
-
-    def read_corpora(self) -> dict[str, list[str]]:
-        """Each corpus that is in the cache. An absent one is left out, and counted."""
-        return {
-            corpus.name: corpus.read(FETCH_CACHE / corpus.source.filename)
-            for corpus in self.CORPORA
-            if (FETCH_CACHE / corpus.source.filename).exists()
-        }
 
     @staticmethod
     def _sweep(surface: Callable[[str], str], texts: list[str]) -> tuple[int, int, int]:
@@ -965,9 +973,824 @@ class LabelFreeInvariants(_FixtureSuite):
                 add(outcome, f"gained_kind:{name}:{kind}", count, of=len(texts))
 
 
+_SPIKEE_COMMIT = "8f8e9ad3b684e5f3e2f9b507cae550bdc8372514"
+_PROMPTS = {corpus.name: corpus for corpus in PROMPT_CORPORA}
+#: The first word long enough to split, for a measure that does not need a label.
+_PLANTABLE = re.compile(r"[A-Za-z]{4,}")
+
+
+def _palisade_benign(path: Path) -> list[str]:
+    rows = (json.loads(line) for line in _nonblank_lines(path))
+    return [row["text"] for row in rows if row["label"] == "benign"]
+
+
+def _plant_zero_width(text: str) -> str | None:
+    """`text` with a `U+200B` inside its first long word, or None if it has none."""
+    found = _PLANTABLE.search(text)
+    if found is None:
+        return None
+    at = found.start() + 2
+    return f"{text[:at]}\u200b{text[at:]}"
+
+
+def _fires(detector: Callable[[str], bool], text: str) -> bool:
+    try:
+        return bool(detector(text))
+    except Exception:  # noqa: BLE001 - a rival may refuse an input, which is not a finding
+        return False
+
+
+class BenignControls(_CorporaSuite):
+    """Text people type into a model, which `gutenberg-benign` is not."""
+
+    name = "benign-controls"
+    JOB = Job.CLEAN_COST
+    REQUIRES_ANY = (Capability.TRANSFORM, Capability.DETECT)
+    summary = "Prompts their upstream labels regular or benign: fires and rewrites, per set."
+    provenance = Provenance(
+        origin="practitioner repositories",
+        citation=(
+            "verazuo/jailbreak_llms, cyberark/FuzzyAI, RootVandal/palisade, ReversecLabs/spikee"
+        ),
+        url="https://gist.github.com/raeq/3bfb88e7db7d249fbe23602d3baf322d",
+        version=(
+            f"commits {_JAILBREAK_LLMS_COMMIT[:8]}, {_FUZZYAI_COMMIT[:8]}, "
+            f"{_PALISADE_COMMIT[:8]}, {_SPIKEE_COMMIT[:8]}"
+        ),
+        licence="MIT, Apache-2.0, MIT and Apache-2.0, per source",
+        issues=(1154, 1153, 1155, 759),
+        evidence=Evidence.FIXTURE,
+        finding=(
+            "On 0.18.0 `has_anomalies` fires on 1,881 of the 13,735 prompts jailbreak_llms "
+            "labels regular, and 1,658 of those come from curly quotes, the ellipsis and "
+            "fullwidth punctuation. That led to #1153 and #1155."
+        ),
+        notes=(
+            "Each set is reported alone, because pooling would let 13,735 rows hide 24. An "
+            "upstream label says regular or benign and not free of obfuscation, so a rate here "
+            "is a ceiling and every number is a census. Silence has a degenerate solution, a "
+            "detector that never fires, so each detector is also shown what it does with a "
+            "`U+200B` planted inside the first long word of the same rows. The sets were fixed "
+            "before a score was read. jailbreak_llms says its data can hold personal "
+            "information and reports in aggregate, so this fetches by commit and digest, "
+            "vendors nothing, and no row reaches a report."
+        ),
+    )
+    CORPORA = (
+        _PROMPTS["jailbreak_llms:regular_prompts_2023_12_25"],
+        _PROMPTS["jailbreak_llms:regular_prompts_2023_05_07"],
+        _PROMPTS["fuzzyai:benign_prompts"],
+        replace(_PROMPTS["palisade:benchmark"], name="palisade:benign", read=_palisade_benign),
+        _Corpus(
+            name="spikee:seeds-investment-advice-fp",
+            source=Source(
+                url=(
+                    f"https://raw.githubusercontent.com/ReversecLabs/spikee/{_SPIKEE_COMMIT}"
+                    "/spikee/data/workspace/datasets/seeds-investment-advice-fp"
+                    "/standalone_user_inputs.jsonl"
+                ),
+                filename="practitioner-corpora/spikee/seeds-investment-advice-fp.jsonl",
+                licence="Apache-2.0",
+                sha256="ae518e6861365a04f043fa2df0edb1901a38129c2c05d03ff73f9552c6092e2b",
+            ),
+            read=_jsonl_text,
+        ),
+    )
+    SOURCES = tuple(corpus.source for corpus in CORPORA)
+
+    def census(self, outcome: Outcome, limit: int | None) -> None:
+        corpora = {name: rows[: limit or None] for name, rows in self.read_corpora().items()}
+        outcome.population = sum(map(len, corpora.values()))
+        if not outcome.population:
+            raise ValueError("no benign rows to count")
+        detectors = self.detect()
+        sanitizer = self._sanitizer()
+        record(
+            outcome,
+            domain=f"{outcome.population} rows from {len(corpora)} provisioned sets",
+            predicates=[self.JOB, *sorted(detectors)],
+            commit=self.provenance.version,
+            evidence="fixture: every number here is a census",
+        )
+        add(outcome, "sets_read", len(corpora), of=len(self.CORPORA), unit="sets")
+        for name, rows in corpora.items():
+            self._count_set(outcome, name, rows, detectors, sanitizer)
+
+    @staticmethod
+    def _count_set(
+        outcome: Outcome,
+        name: str,
+        rows: list[str],
+        detectors: dict[str, Callable[[str], bool]],
+        sanitizer: Callable[[str], str] | None,
+    ) -> None:
+        total = len(rows)
+        add(outcome, f"rows:{name}", total, unit="rows")
+        add(outcome, f"non_ascii:{name}", sum(not text.isascii() for text in rows), of=total)
+        planted = [p for p in map(_plant_zero_width, rows) if p is not None]
+        for detector_name, detector in sorted(detectors.items()):
+            fires = sum(_fires(detector, text) for text in rows)
+            found = sum(_fires(detector, text) for text in planted)
+            add(outcome, f"fires:{detector_name}:{name}", fires, of=total)
+            add(outcome, f"planted_detected:{detector_name}:{name}", found, of=len(planted))
+        if sanitizer is not None:
+            rewritten = sum(damage.apply(sanitizer, text) != text for text in rows)
+            add(outcome, f"rewritten:{name}", rewritten, of=total)
+        deleted = sum(_delete_everything(text) != text for text in rows)
+        add(outcome, f"control_delete_everything_rewritten:{name}", deleted, of=total)
+        unchanged = sum(_identity(text) != text for text in rows)
+        add(outcome, f"control_identity_rewritten:{name}", unchanged, of=total)
+
+
+_GHOSTCHARS_COMMIT = "6ea70c64c0a01092e8243f71da1ded2c62cb2e7a"
+
+
+class GhostcharsLabels(_KnownAnswerSuite):
+    """Another project's hand labels, including the class of text a detector gets wrong."""
+
+    name = "ghostchars-labels"
+    REQUIRES_ANY = (Capability.TRANSFORM, Capability.DETECT)
+    summary = "468 hand-labelled excerpts and 75 fixtures from another detector's own studies."
+    provenance = Provenance(
+        origin="antonsoo",
+        citation="ghostchars, studies/",
+        url="https://github.com/antonsoo/ghostchars",
+        version=f"commit {_GHOSTCHARS_COMMIT[:12]}",
+        licence="MIT",
+        issues=(1161, 1134, 1153),
+        evidence=Evidence.KNOWN_ANSWER,
+        finding=(
+            "On 0.18.0 `has_anomalies` fires on 40 of the 49 excerpts labelled ordinary "
+            "orthography and on all 26 labelled as ghostchars' own tool errors, which is "
+            "independent evidence for #1153. Markup, typography and legacy control bytes read "
+            "0 of 17, 0 of 16 and 0 of 10, and all 24 flag cases agree on findings."
+        ),
+        notes=(
+            "The excerpts were selected by another detector firing, so a class count says "
+            "nothing about prevalence and no rate here should be quoted as one. What each "
+            "label asks was fixed from the study's README before a score was read: O should "
+            "fire, L, T, M and A should stay silent, and the rest are a census. H is on that "
+            "list because an excerpt lacks the hidden text it was labelled for, so its count "
+            "is no detection rate. The flag cases are known answers from `cases.json`. The "
+            "code-identifier studies ask a different question, since disarm's presets are not "
+            "code-safe, so every study's fixtures are counted and not scored. Counts only: no "
+            "excerpt reaches a report."
+        ),
+    )
+    SOURCES = (
+        Source(
+            url=f"https://codeload.github.com/antonsoo/ghostchars/tar.gz/{_GHOSTCHARS_COMMIT}",
+            filename="ghostchars",
+            licence="MIT",
+            kind="tar.gz",
+            member=f"ghostchars-{_GHOSTCHARS_COMMIT}/studies",
+            note="Cached, never vendored. Pinned to a commit; the tree is digest-checked.",
+        ),
+    )
+    #: Digest of `studies/` at the pinned commit. A mismatch refuses to report.
+    TREE_SHA256 = "95e4b7c0ad1ec0423184c4f459470b4f7372b930b7d86ea41bd82f279f985373"
+    SHOULD_FIRE = frozenset({"O"})
+    SHOULD_STAY_SILENT = frozenset({"L", "T", "M", "A"})
+
+    def available(self) -> tuple[bool, str]:
+        ready, reason = super().available()
+        if not ready:
+            return ready, reason
+        root = self.locate()
+        assert root is not None
+        digest = tree_digest(root)
+        if digest != self.TREE_SHA256:
+            return False, (f"tree digest {digest[:16]} is not the pinned {self.TREE_SHA256[:16]}")
+        return True, ""
+
+    def _direction(self, label: str) -> bool | None:
+        if label in self.SHOULD_FIRE:
+            return True
+        return False if label in self.SHOULD_STAY_SILENT else None
+
+    def _repair_surfaces(self) -> dict[str, Callable[[str], str]]:
+        """What a subject ships to clean text, and what it ships for text a person reads."""
+        assert self.subject is not None
+        return {
+            **self.subject.role(Role.SANITIZER),
+            **self.subject.role(Role.SANITIZER, job=Job.REVIEW_DISPLAY),
+        }
+
+    def scored(self, outcome: Outcome, limit: int | None) -> None:
+        root = self.locate()
+        assert root is not None
+        census = json.loads((root / "prompt-census/classification.json").read_text("utf-8"))
+        rows = next(value for value in census.values() if isinstance(value, list))
+        rows = rows[: limit or None]
+        cases = json.loads((root / "flag-tag-payloads/cases.json").read_text("utf-8"))
+        studies = {
+            study.name: [path.read_text("utf-8") for path in sorted(study.glob("fixtures/*"))]
+            for study in sorted(root.iterdir())
+            if (study / "fixtures").is_dir()
+        }
+        detectors = self.detect()
+        outcome.population = len(rows) + sum(map(len, studies.values()))
+        record(
+            outcome,
+            domain=f"{len(rows)} labelled excerpts and {len(studies)} studies' fixtures",
+            predicates=sorted(detectors),
+            commit=_GHOSTCHARS_COMMIT,
+            evidence="known answers where a label or a case fixes one, and a census elsewhere",
+        )
+        self._labels(outcome, rows, detectors)
+        self._flag_cases(outcome, cases, detectors)
+        self._studies(outcome, studies, detectors)
+
+    def _labels(
+        self, outcome: Outcome, rows: list[dict], detectors: dict[str, Callable[[str], bool]]
+    ) -> None:
+        add(outcome, "labelled_rows", len(rows), unit="rows")
+        by_label: dict[str, list[str]] = {}
+        for row in rows:
+            by_label.setdefault(row["label"], []).append(row.get("excerpt") or "")
+        for label, excerpts in sorted(by_label.items()):
+            add(outcome, f"label_{label}_rows", len(excerpts), unit="rows")
+            for name, detector in sorted(detectors.items()):
+                fired = sum(bool(text) and _fires(detector, text) for text in excerpts)
+                add(
+                    outcome,
+                    f"label_{label}_fired:{name}",
+                    fired,
+                    of=len(excerpts),
+                    higher_is_better=self._direction(label),
+                )
+
+    def _flag_cases(
+        self, outcome: Outcome, cases: list[dict], detectors: dict[str, Callable[[str], bool]]
+    ) -> None:
+        total = len(cases)
+        for name, detector in sorted(detectors.items()):
+            agree = sum(bool(c["findings"]) == _fires(detector, c["text"]) for c in cases)
+            add(
+                outcome,
+                f"flag_findings_agree:{name}",
+                agree,
+                of=total,
+                higher_is_better=True,
+            )
+        for name, surface in sorted(self._repair_surfaces().items()):
+            matched = sum(damage.apply(surface, c["text"]) == c["expected"] for c in cases)
+            add(
+                outcome,
+                f"flag_expected_matched:{name}",
+                matched,
+                of=total,
+                higher_is_better=True,
+            )
+        deleted = sum(_delete_everything(c["text"]) == c["expected"] for c in cases)
+        add(outcome, "control_delete_everything", deleted, of=total)
+        untouched = sum(_identity(c["text"]) == c["expected"] for c in cases)
+        add(outcome, "control_identity", untouched, of=total)
+
+    @staticmethod
+    def _studies(
+        outcome: Outcome,
+        studies: dict[str, list[str]],
+        detectors: dict[str, Callable[[str], bool]],
+    ) -> None:
+        for study, texts in studies.items():
+            add(outcome, f"fixtures:{study}", len(texts), unit="fixtures")
+            for name, detector in sorted(detectors.items()):
+                fired = sum(_fires(detector, text) for text in texts)
+                add(outcome, f"fixtures_fired:{name}:{study}", fired, of=len(texts))
+
+
+_PYRIT_COMMIT = "d3446e045960b5ebee4641aa70fdeb03af186587"
+_GARAK_SMUGGLING_COMMIT = "4b7761c2108446043012549cbe8f7c942cabb26d"
+
+
+class TokenSmugglingConstructions(_KnownAnswerSuite):
+    """What two red-team tools ship, rebuilt from their descriptions, against a known cover.
+
+    Neither package is imported. PyRIT has about 100 converters behind about 50
+    dependencies, Python has no sandbox like the one Node's generator runs in, and these
+    constructions are short and fully specified.
+    """
+
+    name = "token-smuggling-constructions"
+    availability = Availability.DERIVED
+    summary = "Seven Unicode constructions from PyRIT and garak, each with a known cover."
+    provenance = Provenance(
+        origin="microsoft/PyRIT, NVIDIA/garak",
+        citation="PyRIT token-smuggling converters; garak smuggling probes",
+        url="https://github.com/microsoft/PyRIT",
+        version=f"commits {_PYRIT_COMMIT[:8]} and {_GARAK_SMUGGLING_COMMIT[:8]}",
+        licence="MIT and Apache-2.0, quoted and not vendored",
+        issues=(1143, 1136, 701),
+        evidence=Evidence.KNOWN_ANSWER,
+        finding=(
+            "On 0.18.0 the prompt-hygiene surface recovers all seven, unidecode and anyascii "
+            "six each and decancer one. Sneaky bits appeared in no suite before this one, and "
+            "`decode_smuggled` has no scheme for it, which is #1136."
+        ),
+        notes=(
+            "Sources. Sneaky bits, fixed eight bits: PyRIT `SneakyBitsSmugglerConverter`. Sneaky "
+            "bits, unpadded with `U+200B` for a space: garak `InjectSneakyBits`, scored apart "
+            "because a letter takes seven bits and a digit six. Variation-selector bytes on an "
+            "emoji: PyRIT `VariationSelectorSmugglerConverter` and garak "
+            "`InjectUnicodeVariantSelectors`. Tag characters: PyRIT `AsciiSmugglerConverter` and "
+            "garak `InjectUnicodeTagChars`. Bidi wraps: PyRIT `BidiConverter`. `U+200B` between "
+            "every character: PyRIT `ZeroWidthConverter`. The rest of both tools does not earn a "
+            "row: their zalgo, homoglyph, leetspeak and Arabic forms repeat "
+            "`p4rs3lt0ngv3-transforms` and promptfoo's maps. `constructions_decoded` is a census "
+            "for disarm alone and moves when #1136 lands."
+        ),
+    )
+    COVER = "the quick brown fox jumps over the lazy dog"
+    PAYLOAD = "hidden"
+    EMOJI = "\U0001f60a"
+
+    @staticmethod
+    def sneaky_bits(text: str, *, pad: bool) -> str:
+        """`U+2062` for 0 and `U+2064` for 1, in either of the two framings."""
+
+        def carrier(bits: str) -> str:
+            return "".join("\u2064" if bit == "1" else "\u2062" for bit in bits)
+
+        if pad:
+            return carrier("".join(format(byte, "08b") for byte in text.encode("utf-8")))
+        return "".join("\u200b" if ch == " " else carrier(format(ord(ch), "b")) for ch in text)
+
+    def _constructions(self) -> dict[str, tuple[str, str]]:
+        """Each construction's text, and the cover it has to come back to."""
+        cover = self.COVER
+        payload = self.PAYLOAD.encode("utf-8")
+        selectors = "".join(
+            chr(0xFE00 + byte) if byte < 16 else chr(0xE0100 + byte - 16) for byte in payload
+        )
+        tags = "".join(chr(0xE0000 + byte) for byte in payload)
+        return {
+            "sneaky bits, fixed eight": (cover + self.sneaky_bits(self.PAYLOAD, pad=True), cover),
+            "variation-selector bytes on an emoji": (
+                cover + self.EMOJI + selectors,
+                cover + self.EMOJI,
+            ),
+            "tag characters": (cover + tags, cover),
+            "bidi override wrap": (f"\u202e{cover}\u202c", cover),
+            "bidi embedding wrap": (f"\u202b{cover}\u202c", cover),
+            "bidi isolate wrap": (f"\u2067{cover}\u2069", cover),
+            "U+200B between every character": ("\u200b".join(cover), cover),
+        }
+
+    def scored(self, outcome: Outcome, limit: int | None) -> None:
+        cases = self._constructions()
+        unpadded = self.COVER + self.sneaky_bits(self.PAYLOAD, pad=False)
+        total = len(cases)
+        outcome.population = total + 1
+        record(
+            outcome,
+            domain=f"{total} constructions and one further framing, on one fixed cover",
+            predicates=[self.JOB],
+            pyrit=_PYRIT_COMMIT,
+            garak=_GARAK_SMUGGLING_COMMIT,
+            evidence="known answer: the cover each construction was applied to",
+        )
+        fn = self._sanitizer() or _identity
+        recovered = {
+            name: int(damage.collides([fn], attack, answer))
+            for name, (attack, answer) in cases.items()
+        }
+        add(
+            outcome,
+            "constructions_recovered",
+            sum(recovered.values()),
+            of=total,
+            higher_is_better=True,
+        )
+        add(
+            outcome,
+            "sneaky_bits_unpadded_recovered",
+            int(damage.collides([fn], unpadded, self.COVER)),
+            of=1,
+            higher_is_better=True,
+        )
+        for key, surface in (
+            ("control_delete_everything", _delete_everything),
+            ("control_identity", _identity),
+        ):
+            add(
+                outcome,
+                key,
+                sum(damage.collides([surface], a, b) for a, b in cases.values()),
+                of=total,
+            )
+        outcome.extra = {"recovered_by_construction": recovered}
+        if outcome.method.subject == "disarm":
+            self._decoded(outcome, [*(attack for attack, _ in cases.values()), unpadded])
+
+    @staticmethod
+    def _decoded(outcome: Outcome, attacks: list[str]) -> None:
+        import disarm
+
+        decode = getattr(disarm, "decode_smuggled", None)
+        if decode is None:
+            return
+        add(
+            outcome,
+            "constructions_decoded",
+            sum(bool(decode(attack)) for attack in attacks),
+            of=len(attacks),
+        )
+
+
+_ST3GG_COMMIT = "35f8b2b8529a74091c97ce622ee0cbf1ae3bd260"
+
+
+def _without(*code_points: int) -> Callable[[str], str]:
+    table: dict[int, None] = dict.fromkeys(code_points)
+    return lambda text: text.translate(table)
+
+
+def _spaced(*code_points: int) -> Callable[[str], str]:
+    table = dict.fromkeys(code_points, " ")
+    return lambda text: text.translate(table)
+
+
+def _without_trailing_whitespace(text: str) -> str:
+    return "\n".join(line.rstrip() for line in text.split("\n"))
+
+
+def _bold_to_ascii(text: str) -> str:
+    """The generator's math alphanumeric style, `U+1D400` to `U+1D433`, undone."""
+    out = []
+    for ch in text:
+        cp = ord(ch)
+        if 0x1D400 <= cp <= 0x1D419:
+            out.append(chr(cp - 0x1D400 + ord("A")))
+        elif 0x1D41A <= cp <= 0x1D433:
+            out.append(chr(cp - 0x1D41A + ord("a")))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _nfc(text: str) -> str:
+    return unicodedata.normalize("NFC", text)
+
+
+def _literal_dict(source: str, name: str) -> dict[str, str]:
+    """A module-level dict from Python source, read without running any of it."""
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == name:
+            return ast.literal_eval(node.value)
+    return {}
+
+
+class St3ggTextExamples(_KnownAnswerSuite):
+    """Static example files, each with a cover its generator's constants fix."""
+
+    name = "st3gg-text-examples"
+    summary = "ST3GG's eleven Unicode text examples: recovery against a known cover."
+    provenance = Provenance(
+        origin="elder-plinius",
+        citation="ST3GG, examples/",
+        url="https://github.com/elder-plinius/ST3GG",
+        version=f"commit {_ST3GG_COMMIT[:12]}",
+        licence="AGPL-3.0, cached and never vendored",
+        issues=(1141, 1134),
+        evidence=Evidence.KNOWN_ANSWER,
+        finding=(
+            "On 0.18.0 the prompt-hygiene surface recovers 11 of 11, and decancer, unidecode "
+            "and anyascii 7 each. `has_anomalies` is silent on 5, and two of those, the spread "
+            "variation selector and spread `U+034F`, are the real gap in #1134."
+        ),
+        notes=(
+            "Each cover is derived from the example by undoing what the generator's constants "
+            "say it did, and that per-file mapping in `TECHNIQUES` is the one part that is ours. "
+            "A derivation that changes nothing is an error. The generator is parsed with `ast` "
+            "and never run, and the files are read as data, so no upstream code runs. "
+            "Capitalization, misspelling, word choice, sentence length, emoji substitution, "
+            "emoji skin tone, Morse, base32, Punycode, Braille and the QR text carry no invisible "
+            "signal, so they are counted and not scored. The repository's README hides 122 "
+            "zero-width characters and invites decoding them, and this suite reads neither it "
+            "nor the README under `examples`."
+        ),
+    )
+    SOURCES = (
+        Source(
+            url=f"https://codeload.github.com/elder-plinius/ST3GG/tar.gz/{_ST3GG_COMMIT}",
+            filename="st3gg",
+            licence="AGPL-3.0",
+            kind="tar.gz",
+            member=f"ST3GG-{_ST3GG_COMMIT}/examples",
+            note="Cached, never vendored. Its README hides a payload; do not read it.",
+        ),
+    )
+    #: Digest of `examples/` at the pinned commit. A mismatch refuses to report.
+    TREE_SHA256 = "d223ad5c033993d973d3a922c8eefdd0b37bf472b3b7c28992f1aeab74238b2c"
+    GENERATOR = "generate_examples.py"
+    #: Technique, file, and how the generator's constants say the cover comes back.
+    TECHNIQUES: ClassVar[dict[str, tuple[str, Callable[[str], str] | None]]] = {
+        "zero width": ("example_zero_width.txt", _without(0x200B, 0x200C, 0x200D)),
+        "tag characters": ("example_invisible_ink.txt", _without(*range(0xE0000, 0xE0080))),
+        "variation selector, spread": ("example_variation_selector.txt", _without(0xFE01)),
+        "U+034F, spread": ("example_combining_diacritics.txt", _without(0x34F)),
+        "directional override": (
+            "example_directional_override.txt",
+            _without(0x202C, 0x202D, 0x202E),
+        ),
+        "hangul filler": ("example_hangul_filler.txt", _spaced(0x3164)),
+        "confusable whitespace": (
+            "example_confusable_whitespace.txt",
+            _spaced(0x2002, 0x2003, 0x2009),
+        ),
+        "trailing whitespace": ("example_whitespace.txt", _without_trailing_whitespace),
+        #: None: this one reads `HOMOGLYPH_MAP` out of the generator.
+        "homoglyph": ("example_homoglyph.txt", None),
+        "math alphanumeric": ("example_math_alphanumeric.txt", _bold_to_ascii),
+        "NFC against NFD": ("example_normalization.txt", _nfc),
+    }
+    BOUNDARY_FILES = (
+        "example_capitalization.txt",
+        "example_misspelling.txt",
+        "example_word_choice.txt",
+        "example_sentence_length.txt",
+        "example_emoji_substitution.txt",
+        "example_emoji_skin_tone.txt",
+        "example_morse.txt",
+        "example_multibase.txt",
+        "example_punycode.txt",
+        "example_braille.txt",
+        "example_qr_steg.txt",
+    )
+
+    def available(self) -> tuple[bool, str]:
+        ready, reason = super().available()
+        if not ready:
+            return ready, reason
+        root = self.locate()
+        assert root is not None
+        digest = tree_digest(root)
+        if digest != self.TREE_SHA256:
+            return False, f"tree digest {digest[:16]} is not the pinned {self.TREE_SHA256[:16]}"
+        return True, ""
+
+    def _cases(self, root: Path) -> dict[str, tuple[str, str]]:
+        """Each technique's example and the cover derived from it."""
+        generator = (root / self.GENERATOR).read_text(encoding="utf-8")
+        homoglyphs = {
+            ord(glyph): letter
+            for letter, glyph in _literal_dict(generator, "HOMOGLYPH_MAP").items()
+        }
+        cases: dict[str, tuple[str, str]] = {}
+        for technique, (filename, derive) in self.TECHNIQUES.items():
+            with open(root / filename, encoding="utf-8", newline="") as fh:
+                text = fh.read()
+            cover = derive(text) if derive else text.translate(homoglyphs)
+            if cover == text:
+                raise ValueError(f"{technique}: the derived cover is the example itself")
+            cases[technique] = (text, cover)
+        return cases
+
+    def scored(self, outcome: Outcome, limit: int | None) -> None:
+        root = self.locate()
+        assert root is not None
+        cases = self._cases(root)
+        total = len(cases)
+        outcome.population = total
+        detectors = self.detect()
+        record(
+            outcome,
+            domain=f"{total} static text examples at the pinned commit",
+            predicates=[self.JOB, *sorted(detectors)],
+            commit=_ST3GG_COMMIT,
+            evidence="known answer: a cover the generator's constants fix",
+        )
+        fn = self._sanitizer() or _identity
+        recovered = {
+            technique: int(damage.collides([fn], text, cover))
+            for technique, (text, cover) in cases.items()
+        }
+        add(
+            outcome,
+            "techniques_recovered",
+            sum(recovered.values()),
+            of=total,
+            higher_is_better=True,
+        )
+        for name, detector in sorted(detectors.items()):
+            fired = sum(_fires(detector, text) for text, _ in cases.values())
+            add(outcome, f"techniques_detected:{name}", fired, of=total)
+        for key, surface in (
+            ("control_delete_everything", _delete_everything),
+            ("control_identity", _identity),
+        ):
+            add(
+                outcome,
+                key,
+                sum(damage.collides([surface], a, b) for a, b in cases.values()),
+                of=total,
+            )
+        present = sum((root / name).is_file() for name in self.BOUNDARY_FILES)
+        add(outcome, "boundary_files", present, unit="files")
+        outcome.extra = {"recovered_by_technique": recovered}
+
+
+class ArcanumTaxonomy(_FixtureSuite):
+    """A named technique per example, which an unlabelled corpus cannot say.
+
+    It holds no covers, so it can say whether a technique is seen or changed, and not
+    whether the cover comes back.
+    """
+
+    name = "arcanum-taxonomy"
+    REQUIRES_ANY = (Capability.TRANSFORM, Capability.DETECT)
+    summary = "Arcanum's 104 non-ASCII examples under 27 named techniques: seen, and changed."
+    provenance = Provenance(
+        origin="Arcanum Information Security",
+        citation="Arc PI Taxonomy, docs/data/taxonomy.json",
+        url="https://github.com/Arcanum-Sec/arc_pi_taxonomy",
+        version=f"commit {_ARCANUM_COMMIT[:12]}",
+        licence="CC-BY-4.0",
+        issues=(1160, 1138, 1156),
+        evidence=Evidence.FIXTURE,
+        finding=(
+            "On 0.18.0 `has_anomalies` fires on 41 of the 104 non-ASCII examples, and most of "
+            "the silent titles are the right answer. Strikethrough reads 0 of 4 and zalgo 1 of "
+            "4, which is #1156."
+        ),
+        notes=(
+            "Attribution: Arcanum Information Security, Arc PI Taxonomy, CC-BY-4.0. The classes "
+            "were chosen by Claude on 2026-10-31 from each title's name, for #1160, whose census "
+            "table had already been read, so they are not blind. Do not move a title to improve "
+            "a number. A disguise is what a character-level sanitizer should answer, a style "
+            "restyles letters that a fold may or may not bring back, and the boundary is "
+            "ciphers, encodings, other languages and markup. Examples are counted and never "
+            "printed, and a raw 41 of 104 means nothing without the classes."
+        ),
+    )
+    SOURCES = (_PROMPTS["arcanum:taxonomy"].source,)
+    CLASSES: ClassVar[dict[str, frozenset[str]]] = {
+        "disguise": frozenset(
+            {
+                "ANSI Escape Concealment (Terminal Codes)",
+                "Bidirectional Text Override (Trojan Source)",
+                "Homoglyphs",
+                "Invisible Text",
+                "Metacharacter Confusion",
+                "Spaces / Whitespace",
+                "Strikethrough / Underline / Overlay",
+                "Zalgo Text",
+            }
+        ),
+        "style": frozenset(
+            {
+                "Bubble / Enclosed Text",
+                "Fullwidth Characters",
+                "Mathematical Unicode",
+                "Regional Indicators",
+                "Small Caps / Subscript / Superscript",
+                "Upside Down Text",
+                "Vertical Text",
+                "Wingdings / Symbol Fonts",
+            }
+        ),
+        "boundary": frozenset(
+            {
+                "A1Z26 Number Substitution",
+                "ASCII",
+                "Acrostics",
+                "Adversarial Poetry",
+                "Alternative Base Encodings (Base32 / Base58 / Base85)",
+                "Alternative Language",
+                "Ancient Scripts",
+                "Baconian Cipher",
+                "Base64",
+                "Bijection Learning",
+                "Binary",
+                "Braille",
+                "Brainfuck / Esoteric Languages",
+                "Case Changing",
+                "Cipher",
+                "Code Switching / Randomizer",
+                "Code-Structure Encoding (CodeAttack)",
+                "Compression Encoding (gzip / zlib)",
+                "Delimiter",
+                "Emoji",
+                "Fictional & Constructed Languages",
+                "Graph Nodes",
+                "HTML Entities",
+                "Hexadecimal",
+                "JSON",
+                "Japanese Scripts",
+                "Layered Encoding (Encoding Chains)",
+                "Legacy Charset Confusion (GB18030 / UTF-7)",
+                "Link Smuggling",
+                "Markdown",
+                "Morse Code",
+                "NATO Phonetic Alphabet",
+                "Numeric Code-Point Encoding (Octal / Decimal)",
+                "Phonetic Substitution",
+                "Query-Language Encoding (QueryAttack)",
+                "Rail Fence Cipher",
+                "Reverse",
+                "Semaphore",
+                "Splats",
+                "Steganography",
+                "Symbolic Math Encoding (MathPrompt)",
+                "Synonyms / Word Substitution",
+                "Tap Code",
+                "Truncation & Misspelling",
+                "URL Encoding",
+                "Waveforms / Frequencies",
+                "XML",
+            }
+        ),
+    }
+
+    def _class_of(self, title: str) -> str:
+        for name, titles in self.CLASSES.items():
+            if title in titles:
+                return name
+        raise ValueError(f"unclassed title {title!r}: a pinned file has none")
+
+    def census(self, outcome: Outcome, limit: int | None) -> None:
+        path = self.locate()
+        assert path is not None
+        items = json.loads(path.read_text(encoding="utf-8"))["evasions"]
+        by_title = {
+            item["title"]: [
+                example if isinstance(example, str) else json.dumps(example, ensure_ascii=False)
+                for example in item.get("examples", [])
+            ]
+            for item in items
+        }
+        wide = {
+            title: [text for text in examples if not text.isascii()]
+            for title, examples in by_title.items()
+        }
+        classes = {title: self._class_of(title) for title in by_title}
+        total = sum(map(len, wide.values()))
+        outcome.population = total
+        detectors = self.detect()
+        sanitizer = self._sanitizer()
+        record(
+            outcome,
+            domain=f"{total} non-ASCII examples under {len(by_title)} titles",
+            predicates=[self.JOB, *sorted(detectors)],
+            commit=_ARCANUM_COMMIT,
+            evidence="fixture: a named technique and no cover, so every number is a census",
+        )
+        add(outcome, "titles", len(by_title), unit="titles")
+        add(outcome, "titles_with_non_ascii", sum(bool(v) for v in wide.values()), unit="titles")
+        add(outcome, "non_ascii_examples", total, unit="examples")
+        for name, detector in sorted(detectors.items()):
+            fired = sum(_fires(detector, text) for rows in wide.values() for text in rows)
+            add(outcome, f"fired:{name}", fired, of=total)
+        for cls in self.CLASSES:
+            rows = [
+                text for title, texts in wide.items() if classes[title] == cls for text in texts
+            ]
+            self._count_class(outcome, cls, rows, detectors, sanitizer)
+        outcome.extra = {
+            "by_title": {
+                title: {
+                    "class": classes[title],
+                    "examples": len(texts),
+                    "fired": {
+                        name: sum(_fires(detector, text) for text in texts)
+                        for name, detector in sorted(detectors.items())
+                    },
+                }
+                for title, texts in wide.items()
+                if texts
+            }
+        }
+
+    @staticmethod
+    def _count_class(
+        outcome: Outcome,
+        cls: str,
+        rows: list[str],
+        detectors: dict[str, Callable[[str], bool]],
+        sanitizer: Callable[[str], str] | None,
+    ) -> None:
+        total = len(rows)
+        add(outcome, f"examples:{cls}", total, unit="examples")
+        for name, detector in sorted(detectors.items()):
+            add(outcome, f"fired:{name}:{cls}", sum(_fires(detector, t) for t in rows), of=total)
+        if sanitizer is not None:
+            changed = sum(damage.apply(sanitizer, text) != text for text in rows)
+            add(outcome, f"changed:{cls}", changed, of=total)
+        deleted = sum(_delete_everything(text) != text for text in rows)
+        add(outcome, f"control_delete_everything_changed:{cls}", deleted, of=total)
+        untouched = sum(_identity(text) != text for text in rows)
+        add(outcome, f"control_identity_changed:{cls}", untouched, of=total)
+
+
 SUITES = [
     P4rs3lt0ngv3Transforms(),
     GarakAnsiEscapes(),
     L1b3rt4sFixtures(),
     LabelFreeInvariants(),
+    BenignControls(),
+    GhostcharsLabels(),
+    TokenSmugglingConstructions(),
+    St3ggTextExamples(),
+    ArcanumTaxonomy(),
 ]

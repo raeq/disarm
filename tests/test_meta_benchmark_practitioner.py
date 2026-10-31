@@ -6,14 +6,17 @@ every run, and a copyleft source is cached from a pinned commit and never vendor
 
 Nothing here reaches the network or needs the real corpora. Upstream's transforms
 are replaced by stubs, and the fixture corpus is synthetic. The driver tests need
-Node with its permission model and skip without it, and a test that reads a cached
-upstream skips when it is absent.
+Node with its permission model and skip without it, except in CI's sandbox job, which
+sets `DISARM_REQUIRE_NODE` so that a missing or old Node fails. A test that reads a
+cached upstream skips when it is absent.
 """
 
 from __future__ import annotations
 
+import fnmatch
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +24,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
+import yaml
 
 from benchmarks.meta import fetch, registry, subjects
 from benchmarks.meta.base import REPO_ROOT
@@ -51,6 +55,8 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 DISARM = "disarm"
 CONTROLS = ("null-baseline", "identity")
+SANDBOX_JOB = "practitioner-sandbox"
+REQUIRE_NODE = "DISARM_REQUIRE_NODE"
 PROVENANCE = Provenance(
     origin="test",
     citation="test",
@@ -520,6 +526,8 @@ def _node_or_skip() -> None:
     node = shutil.which("node")
     major = P4rs3lt0ngv3Transforms._node_major(node) if node else None
     if major is None or major < P4rs3lt0ngv3Transforms.MIN_NODE_MAJOR:
+        if os.environ.get(REQUIRE_NODE):
+            pytest.fail(f"{REQUIRE_NODE} is set and Node's major version is {major}")
         pytest.skip("needs Node with the permission model")
 
 
@@ -608,6 +616,106 @@ def test_the_permission_model_stops_an_escape_from_the_context(stub_tree, name):
     assert result["outputs"] == []
     assert "restricted" in result["error"]
     assert not (parent / "w").exists()
+
+
+# --- the sandbox on CI (#1144) ----------------------------------------------
+
+
+def _ci() -> dict:
+    return yaml.safe_load((REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+
+
+def _sandbox_job() -> dict:
+    return _ci()["jobs"][SANDBOX_JOB]
+
+
+def _sandbox_pytest_step() -> dict:
+    job = _sandbox_job()
+    found = [s for s in job["steps"] if str(s.get("run", "")).startswith("pytest ")]
+    assert len(found) == 1, f"{SANDBOX_JOB} has {len(found)} pytest steps, not one"
+    return found[0]
+
+
+def _with_node(monkeypatch, major: int | None) -> None:
+    found = None if major is None else "/usr/bin/node"
+    monkeypatch.setattr(shutil, "which", lambda _name: found)
+    monkeypatch.setattr(P4rs3lt0ngv3Transforms, "_node_major", staticmethod(lambda _n: major))
+
+
+@pytest.mark.parametrize("major", [None, P4rs3lt0ngv3Transforms.MIN_NODE_MAJOR - 1])
+def test_a_contributor_without_a_new_node_skips(monkeypatch, major):
+    monkeypatch.delenv(REQUIRE_NODE, raising=False)
+    _with_node(monkeypatch, major)
+    with pytest.raises((pytest.skip.Exception, pytest.fail.Exception)) as outcome:
+        _node_or_skip()
+    assert outcome.type is pytest.skip.Exception
+
+
+@pytest.mark.parametrize("major", [None, P4rs3lt0ngv3Transforms.MIN_NODE_MAJOR - 1])
+def test_the_sandbox_job_fails_without_a_new_node(monkeypatch, major):
+    """A skip is how these six tests went unnoticed on every CI run."""
+    monkeypatch.setenv(REQUIRE_NODE, "1")
+    _with_node(monkeypatch, major)
+    with pytest.raises((pytest.skip.Exception, pytest.fail.Exception)) as outcome:
+        _node_or_skip()
+    assert outcome.type is pytest.fail.Exception
+
+
+def test_a_new_enough_node_neither_skips_nor_fails(monkeypatch):
+    monkeypatch.setenv(REQUIRE_NODE, "1")
+    _with_node(monkeypatch, P4rs3lt0ngv3Transforms.MIN_NODE_MAJOR)
+    _node_or_skip()
+
+
+def test_ci_gives_the_sandbox_job_a_node_with_the_permission_model():
+    versions = [
+        step["with"]["node-version"]
+        for step in _sandbox_job()["steps"]
+        if "actions/setup-node" in step.get("uses", "")
+    ]
+    assert len(versions) == 1, versions
+    assert int(versions[0]) >= P4rs3lt0ngv3Transforms.MIN_NODE_MAJOR
+
+
+def test_ci_makes_an_old_node_a_failure_in_the_sandbox_job():
+    assert _sandbox_pytest_step()["env"][REQUIRE_NODE]
+
+
+def test_ci_runs_this_module_in_the_sandbox_job():
+    assert "tests/test_meta_benchmark_practitioner.py" in _sandbox_pytest_step()["run"].split()
+
+
+def test_ci_leaves_the_requirement_out_of_the_test_job():
+    """Its Node stays what it is, so these tests skip there on purpose."""
+    assert REQUIRE_NODE not in yaml.safe_dump(_ci()["jobs"]["test"])
+
+
+def test_the_rollup_requires_the_sandbox_job():
+    rollup = _ci()["jobs"]["all-ok"]
+    assert SANDBOX_JOB in rollup["needs"]
+    script = "\n".join(str(step.get("run", "")) for step in rollup["steps"])
+    assert f"needs['{SANDBOX_JOB}'].result" in script
+    assert "needs.changes.outputs.sandbox" in script
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "benchmarks/meta/suites/practitioner_driver.js",
+        "benchmarks/meta/suites/practitioner.py",
+        "tests/test_meta_benchmark_practitioner.py",
+        ".github/workflows/ci.yml",
+    ],
+)
+def test_a_change_to_the_sandbox_alone_starts_its_job(path):
+    """`code` has no `*.js`, so a driver-only change would start nothing that runs it."""
+    assert (REPO_ROOT / path).is_file(), path
+    jobs = _ci()["jobs"]
+    assert "needs.changes.outputs.sandbox" in jobs[SANDBOX_JOB]["if"]
+    assert jobs["changes"]["outputs"]["sandbox"] == "${{ steps.filter.outputs.sandbox }}"
+    step = next(s for s in jobs["changes"]["steps"] if s.get("id") == "filter")
+    patterns = yaml.safe_load(step["with"]["filters"])["sandbox"]
+    assert any(fnmatch.fnmatch(path, pattern) for pattern in patterns), patterns
 
 
 def test_the_pinned_tree_still_matches_when_it_is_cached():

@@ -88,9 +88,8 @@ STRIPPING = (
     "scholarly_cyrillic_iso9",
 )
 
-#: The two that do not. `code_context` exists to preserve its input, so that is by
-#: design. `normalize_web_input` is a screening profile and its silence here is not
-#: obviously intended — see the test below, which records rather than changes it.
+#: The two that do not, both by decision. `code_context` exists to preserve its input.
+#: `normalize_web_input` is not a screen: #1123 kept the carrier.
 NOT_STRIPPING = ("code_context", "normalize_web_input")
 
 
@@ -102,13 +101,13 @@ def test_every_stripping_profile_still_strips(profile: str) -> None:
 
 @pytest.mark.parametrize("profile", NOT_STRIPPING)
 def test_the_two_non_stripping_profiles_are_unchanged(profile: str) -> None:
-    """Both halves. `code_context` is deliberate; `normalize_web_input` is worth a look.
+    """Both are deliberate: `code_context` since #914, `normalize_web_input` since #1123.
 
-    It sets neither `demojize` nor `transliterate`, so it never stripped the carrier and
-    this change does not alter that — #914 scope item 2 says no shipped profile moves.
-    Recorded here so the omission is visible rather than incidental: a profile named for
-    screening web input passes a concealment channel through, and deciding that is a
-    separate call from adding the capability.
+    `normalize_web_input` sets neither `demojize` nor `transliterate`, so it never stripped
+    the carrier. It also keeps bidi controls and zalgo marks, and its page sends adversarial
+    input to `canonicalize_strict`, so #1123 decided against moving a shipped profile that
+    is not a screen. `docs/policy-templates.md` says so, and
+    `tests/test_profile_carrier_claims.py` holds the page to it.
     """
     assert "\U000e0042" in disarm.get_pipeline(profile)(CONCEALED)
 

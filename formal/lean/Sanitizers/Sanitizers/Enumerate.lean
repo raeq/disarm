@@ -151,7 +151,7 @@ def slugShape (cfg : Slug.Config) : Except Err (List Char) → Bool
   | .error _ => true
 
 def fixedShape (x : Slug.Config × List (List Char)) : Bool :=
-  (runFixed x.1 12 x.2).all (slugShape x.1)
+  (runFixed x.1 x.2).all (slugShape x.1)
 
 def curShape (x : Slug.Config × List (List Char)) : Bool :=
   (run x.1 12 x.2).all (slugShape x.1)

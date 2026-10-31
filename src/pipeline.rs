@@ -817,8 +817,9 @@ struct ProfileSpec {
     /// `true` for the six profiles that already strip it as a side effect of `demojize`
     /// or `transliterate`, so none of them changes behaviour. `false` for `code_context`,
     /// which exists to preserve its input, and for `normalize_web_input`, which never
-    /// stripped it — recorded rather than changed here, because whether a profile named
-    /// for screening web input should pass a concealment carrier is a separate call.
+    /// stripped it. #1123 kept that: the profile also keeps bidi controls and zalgo marks,
+    /// its page sends adversarial input to `canonicalize_strict`, and removing a carrier
+    /// here would move a shipped profile without making it a screen.
     strip_plane14: bool,
 }
 
@@ -954,6 +955,10 @@ fn profile_spec(name: &str) -> Option<ProfileSpec> {
         //
         // No NFKC either: it rewrites fullwidth forms and ligatures, which changes source
         // text, and the compatibility class is reported by the `compat_fold` kind.
+        //
+        // Variation selectors and `U+034F` stay too (#1122), as the Private Use Area
+        // (#413) and the TAG block (#914) do: `U+FE0F` on an emoji in a string literal is
+        // source text. `inspect_anomalies` reports a run of tags or selectors as `smuggled`.
         "code_context" => ProfileSpec {
             purpose: "Screening source code without rewriting it: the homoglyph class is reported rather than folded, because line structure, indentation and case are the contract.",
             strip_bidi: true,

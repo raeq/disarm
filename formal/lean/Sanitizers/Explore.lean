@@ -28,7 +28,7 @@ def showRes : Except Unique.Err (List Char) → String
   | .error e => (repr e).pretty
 
 def showU (x : Slug.Config × List (List Char)) : String :=
-  s!"texts={x.2.map str} sep={str x.1.sep} max_length={x.1.maxLen} -> current {(Unique.run x.1 12 x.2).map showRes}, no hint {(Unique.runNoHint x.1 12 x.2).map showRes}, fixed {(Unique.runFixed x.1 12 x.2).map showRes}"
+  s!"texts={x.2.map str} sep={str x.1.sep} max_length={x.1.maxLen} -> current {(Unique.run x.1 12 x.2).map showRes}, no hint {(Unique.runNoHint x.1 12 x.2).map showRes}, fixed {(Unique.runFixed x.1 x.2).map showRes}"
 
 def main (args : List String) : IO Unit := do
   let n := (args.head? >>= String.toNat?).getD 5

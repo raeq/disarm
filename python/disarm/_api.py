@@ -868,6 +868,9 @@ class UniqueSlugifier:
     not suffixed, not recorded, and ``check`` is not called for it. Pass
     ``default`` to get a unique fallback instead.
 
+    A base has no limit on its slugs. ``ResourceLimitError`` is raised only
+    when ``check`` refuses 10,001 candidates in one call.
+
     One instance can be shared between threads: calls are serialised, so each
     waits for the one in progress, ``check`` included. ``check`` must not call
     the same instance; that raises ``RuntimeError``.

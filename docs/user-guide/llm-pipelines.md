@@ -425,10 +425,33 @@ assert "    if user.is_admin:" in cleaned  # indentation intact
 
 | class | `code_context` | why |
 |---|---|---|
-| bidi controls, zero-width, C0/C1 controls | **removed** | none is source syntax, and each is the carrier for Trojan Source |
+| bidi controls, C0/C1 controls outside the whitespace set (#433), zero-width characters | **removed** | none is source syntax, and each is the carrier for Trojan Source |
+| Private Use Area, TAG block, variation selectors, `U+034F` | **kept** | it exists to preserve its input |
 | homoglyph confusables | **reported only** | see below |
 | compatibility forms | **reported only** | NFKC rewrites fullwidth forms and ligatures, which changes source text |
-| whitespace, case | **untouched** | they are the structure |
+| whitespace, including VT, FF, FS, GS, RS, US and NEL, and case | **untouched** | they are the structure |
+
+The **kept** row is a decision: #413 for the Private Use Area, #914 for the TAG block, #1122
+for the selectors and `U+034F`. `U+FE0F` on an emoji in a string literal and an ideographic
+variation sequence in a UI string are source text, so removing them would rewrite the file.
+They are also a concealment channel, and that half is what the detector is for: a run of
+tags or selectors is reported as `smuggled`, and `decode_smuggled` reads it back. One
+selector alone is not a run, and [is not reported](../limitations.md).
+
+```python
+from disarm import decode_smuggled, get_pipeline, has_anomalies, inspect_anomalies
+
+code = get_pipeline("code_context")
+tags = "".join(chr(0xE0000 + byte) for byte in b"hidden")
+selectors = "".join(chr(0xE0100 + byte - 16) for byte in b"hidden")  # VS17 carries 0x10
+for run in (tags, selectors):
+    src = "# fine" + run
+    assert code(src) == src  # kept
+    assert "smuggled" in inspect_anomalies(src).kinds  # and reported
+    assert decode_smuggled(src)[0].text == "hidden"
+
+assert not has_anomalies("A\U000e0100")  # a single selector is not reported
+```
 
 **Byte-for-byte on 149 of 155 files (#745).** Measured over this repository's own Python
 sources: `canonicalize`, `strip_format` and `normalize_confusables` round-trip **0** of
@@ -469,9 +492,11 @@ rewriting out on quality grounds anyway.
 
 !!! warning "A clean `code_context` result is not a claim about homoglyphs"
 
-    It removes the invisible classes and leaves the visible ones. Pair it with
-    `inspect_anomalies`, `is_confusable` or `is_mixed_script`, and treat the finding as a
-    signal to review the region rather than as something to fix by rewriting.
+    It removes bidi controls and most zero-width and control characters, and leaves the
+    visible classes. It also keeps the Private Use Area, the TAG block and every variation
+    selector, because it exists to preserve its input. Pair it with `inspect_anomalies`,
+    `is_confusable` or `is_mixed_script`, and treat the finding as a signal to review the
+    region rather than as something to fix by rewriting.
 
 ## Which path, and when NOT to use disarm
 

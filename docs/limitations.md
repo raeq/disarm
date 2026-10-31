@@ -210,10 +210,13 @@ glyph was meant, and a key built from it cannot distinguish two registered varia
 ideograph. For a comparison key that is usually what you want — the variants *are* the same
 character. For anything that round-trips text it is not.
 
-The other direction is the security-relevant one and is not covered either: `A` +
-`U+E0100` is a base carrying an ignorable selector that no registration justifies, which
-is the shape of a smuggling carrier. `canonicalize` removes it, so it does not survive into
-a key; nothing *reports* it, so a caller inspecting rather than transforming sees nothing.
+The other direction is the security-relevant one: `A` + `U+E0100` is a base carrying an
+ignorable selector that no registration justifies, which is the shape of a smuggling carrier.
+`canonicalize` removes it, so it does not survive into a key. One of them reports nothing, so a
+caller inspecting rather than transforming sees nothing. Eight spread through a text report
+`invisible`, and so do eight `U+034F` before a non-mark (#1134). A selector in the ideographic
+range after an ideograph reports only when a text uses eight different ones, because the IVD is
+not shipped and registered variants repeat.
 
 Every other CJK fidelity loss on this page is documented — the single-reading pinyin
 mapping, the missing tone marks, the character-level word boundaries. This one was not.

@@ -950,7 +950,11 @@ class LabelFreeInvariants(_FixtureSuite):
             reports = rows = 0
             gained: Counter[str] = Counter()
             for text in texts:
-                after = set(inspect(surface(text)).kinds)
+                try:
+                    output = surface(text)
+                except Exception:  # noqa: BLE001 - no output to inspect, and `raised:` counts it
+                    continue
+                after = set(inspect(output).kinds)
                 reports += bool(after)
                 new = after - set(inspect(text).kinds)
                 rows += bool(new)

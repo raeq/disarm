@@ -744,6 +744,15 @@ def test_a_sanitizer_that_gains_nothing_says_so():
     assert _measured(outcome, "output_reports:profile:rag_ingest") == (0, 3)
 
 
+def test_a_sanitizer_that_raises_is_counted_and_does_not_end_the_run():
+    """A raise is what `raised:<surface>` exists to report, for a sanitizer as for any other."""
+    outcome = _invariants({"canonicalize": _raises}).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "raised:canonicalize") == (3, 3)
+    assert _measured(outcome, "gained_a_kind:canonicalize") == (0, 3)
+    assert _measured(outcome, "output_reports:canonicalize") == (0, 3)
+
+
 def test_a_subject_with_no_detector_omits_the_gained_kinds():
     """Scoring another tool's output with disarm's own detector would be circular."""
     surfaces = {"canonicalize": str}

@@ -226,6 +226,13 @@ assert inspect_anomalies(normalize_confusables(hostile)).kinds == ["invisible"]
     for your input.** A false result does not mean you chose right — the anomaly
     panel does not cover every class a transform can leave behind.
 
+    Non-Latin text is one such case. `canonicalize`, `llm_guardrail` and
+    `strip_obfuscation` fold letters that have a Latin look-alike and keep the others, so
+    a clean Russian or Hebrew word usually comes back as a mix that reports `mixed_script`
+    or `bidi_mixed`. Use `rag_ingest` to romanize it, or leave it alone if it goes straight
+    to a multilingual model. See
+    [the LLM guide](llm-pipelines.md) for the same case from the other side.
+
     Reported recall across 645 adversarial vectors is **42.6%**: 130 of 305
     wrong-choice failures are visible at the seam, at zero false positives,
     splitting as confusables 43%, bidi 58%, PUA 0%. Those figures are not ours and

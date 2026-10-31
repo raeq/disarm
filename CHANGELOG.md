@@ -41,7 +41,12 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
   `canonicalize("\u209d")` was `"\u209d"` and is `"w"`. The 37 new marks move `search_key`,
   `catalog_key`, `strip_obfuscation` and `ml_normalize`, which remove marks:
   `search_key("\u0b53")` was `"\u0b53"` and is `""`. `normalize_confusables` and `fold_case` do
-  not move.
+  not move. The profiles move too, and the fixture does not track them: `llm_guardrail` and
+  `ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`,
+  `library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do
+  `normalize_user_input` and `security_clean`, on the 68. If you stored a key built with
+  `search_index` or `library_catalog_key_eu` from text that can hold a character new in
+  Unicode 18, recompute it.
 - **A Brahmic slot with no inherent `a` opens no consonant context (#1094).** `search_key` and
   `catalog_key` move on 2,380 of the 1,638,400 pairs, and nothing else does. Each pair ends in
   one of 28 unassigned code points at a vowel sign's offset, so no pair of assigned characters

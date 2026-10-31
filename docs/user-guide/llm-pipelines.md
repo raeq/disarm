@@ -504,7 +504,7 @@ Being explicit about the path is what earns credibility with this audience —
 the wrong path actively destroys signal:
 
 ```python
-from disarm import get_pipeline
+from disarm import get_pipeline, has_anomalies
 
 # WRONG: the guardrail fold mangles legitimate Cyrillic — its confusable step
 # rewrites real letters to Latin look-alikes, here producing the plausible-but-
@@ -513,6 +513,13 @@ assert get_pipeline("llm_guardrail")("Москва") == "mockba"
 
 # RIGHT: the ingestion path romanises the same input cleanly:
 assert get_pipeline("rag_ingest")("Москва") == "Moskva"
+
+# More often the word folds only in part, and that is what a seam check sees: a clean
+# word came back as a mix, so the output reports `mixed_script` and the input did not.
+assert get_pipeline("llm_guardrail")("привет") == "npиbet"
+assert not has_anomalies("привет")
+assert has_anomalies("npиbet")
+assert not has_anomalies(get_pipeline("rag_ingest")("привет"))
 ```
 
 Do **not** reach for disarm when:

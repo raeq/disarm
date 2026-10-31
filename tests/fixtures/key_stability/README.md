@@ -9,6 +9,10 @@ key-builder output; a minor release may.*
 | `corpus.txt` | 23,339 rows: 22,478 natural word forms + 499 hand-built adversarial rows + 75 small-capital rows (#815) + 25 NFKC-image rows (#833) + 58 negative-enclosed rows (#815) + 34 deletion-class rows (#937) + 2 measured-visual rows (#738) + 13 non-emoji-symbol rows (#990) + 5 selector-on-a-text-symbol rows (#991 follow-up) + 5 line-break and zero-width erase rows (Lean model) + 2 Unicode line-separator rows + 6 Kirat Rai composition rows (Lean model, `formal/lean/Confusables`) + 3 separated-composition rows (Lean model, `formal/lean/Presets`) + 3 control-separated Kirat Rai rows (#1040 fuzzing) + 11 Brahmic consonant-slot rows (#1094) + 108 Unicode 18 rows (#1121) + 12 reserved default-ignorable rows (#1103) |
 | `golden_keys.tsv.gz` | the corpus crossed with eight key-producing functions, generated on a pinned build |
 
+`KEY_SCHEMA_VERSION` speaks for the eight functions this fixture tracks, and not for a profile,
+so a profile can move with no bump. An upgrade note that moves a key also measures the profiles
+and says which moved, because a profile can build a stored key too (#1139).
+
 Regenerate with `python scripts/gen_key_fixture.py`, and read
 [that script's docstring](../../../scripts/gen_key_fixture.py) before you do —
 running it to make a red test go green is the one use it does not have.

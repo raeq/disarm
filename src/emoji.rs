@@ -19,6 +19,16 @@ pub(crate) const VS15: char = '\u{FE0E}';
 /// Combining Enclosing Keycap — the third code point of `1\u{FE0F}\u{20E3}`.
 pub(crate) const KEYCAP: char = '\u{20E3}';
 
+/// The bases a keycap sequence can have.
+///
+/// One definition, because `canonicalize`'s fold and the detector's exemption disagreed: the
+/// fold read these and the exemption read any base, so `Ignore` with the sequence on each
+/// letter read clean and its output did not (#1158, #1195).
+#[inline]
+pub(crate) const fn is_keycap_base(c: char) -> bool {
+    matches!(c, '0'..='9' | '#' | '*')
+}
+
 // #112: key_buf and sep_positions were stack-allocated to avoid two heap
 // allocations per emoji-multi-starter character in the former hex-key matcher.
 // #242 item 4: the production matcher now walks the code-point trie

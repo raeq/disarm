@@ -302,6 +302,7 @@ const UNITS: &[&str] = &[
 
 /// The kind of anomaly a [`Finding`] records.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AnomalyKind {
     /// A zero-width / invisible formatting codepoint inside a Latin word.
     Invisible,

@@ -14,6 +14,8 @@ The three schemes and the printable-only rule follow `juriku/untrace`'s `interna
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import disarm
@@ -357,3 +359,138 @@ class TestPercentEscape:
         assert visible == "%E2%82%AC%E2%82%AC"
         [f] = disarm.decode_smuggled(visible)
         assert f.text == "€€"
+
+
+# --- Sneaky bits (#1136) -------------------------------------------------------
+
+_ZERO, _ONE, _SPACE = "\u2062", "\u2064", "\u200b"
+
+
+def _carrier(bits: str) -> str:
+    return "".join(_ONE if bit == "1" else _ZERO for bit in bits)
+
+
+def _fixed_eight(text: str) -> str:
+    """PyRIT: each UTF-8 byte as a fixed eight bits, most significant first."""
+    return _carrier("".join(format(byte, "08b") for byte in text.encode("utf-8")))
+
+
+def _unpadded(text: str) -> str:
+    """garak and Augustus: each character's bits unpadded, `U+200B` for a space."""
+    return "".join(_SPACE if ch == " " else _carrier(format(ord(ch), "b")) for ch in text)
+
+
+@pytest.mark.parametrize(
+    ("carrier", "word"),
+    [
+        (_fixed_eight, "hidden"),
+        (_unpadded, "hidden"),
+        (_unpadded, "two words"),
+        (_fixed_eight, "two words"),
+        (_fixed_eight, "caf\u00e9"),
+    ],
+    ids=["fixed-eight", "unpadded", "unpadded-two-words", "fixed-eight-two-words", "fixed-utf8"],
+)
+def test_sneaky_bits_decode_in_both_framings(carrier, word: str) -> None:
+    found = disarm.decode_smuggled("cover" + carrier(word))
+    assert len(found) == 1
+    assert found[0].text == word
+    assert found[0].scheme == "sneaky_bits"
+
+
+def test_the_detector_reports_a_decodable_run() -> None:
+    for carrier in (_fixed_eight, _unpadded):
+        kinds = disarm.inspect_anomalies("cover" + carrier("hidden")).kinds
+        assert "smuggled" in kinds
+        assert "invisible" in kinds
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["a1", "x9z", "ab12"],
+)
+def test_an_unpadded_mix_of_letters_and_digits_has_no_single_reading(text: str) -> None:
+    """A letter takes seven bits and a digit six, so more than one split of the run reads."""
+    found = disarm.decode_smuggled("cover" + _unpadded(text))
+    assert len(found) == 1
+    assert found[0].text is None
+    assert found[0].scheme == "sneaky_bits"
+
+
+def test_a_delimiter_settles_what_a_mix_cannot() -> None:
+    found = disarm.decode_smuggled("cover" + _unpadded("ab 12"))
+    assert found[0].text == "ab 12"
+
+
+def test_the_detector_still_fires_on_an_ambiguous_run() -> None:
+    assert "smuggled" in disarm.inspect_anomalies("cover" + _unpadded("a1")).kinds
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"2{_ZERO}x",
+        f"a{_ZERO}b{_ZERO}c{_ZERO}d{_ZERO}e",
+        "cover" + _ZERO * 8,
+        "cover" + _ONE * 8,
+        "cover" + _carrier("00000001" * 3),
+        "cover" + _carrier("1" * 5),
+        "cover" + _fixed_eight("h"),
+        "cover" + _unpadded("h"),
+    ],
+    ids=[
+        "an-operator-in-a-formula",
+        "operators-between-letters",
+        "eight-zero-bits",
+        "eight-one-bits",
+        "non-printable-bytes",
+        "too-short",
+        "one-byte",
+        "one-letter",
+    ],
+)
+def test_a_run_that_spells_nothing_is_not_a_payload(text: str) -> None:
+    assert disarm.decode_smuggled(text) == []
+    assert "smuggled" not in disarm.inspect_anomalies(text).kinds
+
+
+def test_a_lone_operator_still_reports_invisible() -> None:
+    assert disarm.inspect_anomalies(f"2{_ZERO}x").kinds == ["invisible"]
+
+
+@pytest.mark.parametrize("carrier", [_fixed_eight, _unpadded])
+def test_canonicalize_still_removes_the_carrier(carrier) -> None:
+    assert disarm.canonicalize("cover" + carrier("hidden")) == "cover"
+
+
+def test_a_sneaky_bits_span_covers_the_run_and_nothing_else() -> None:
+    text = "cover" + _unpadded("hi") + "tail"
+    found = disarm.decode_smuggled(text)[0]
+    encoded = text.encode("utf-8")
+    assert encoded[: found.start] == b"cover"
+    assert encoded[found.end :] == b"tail"
+
+
+def test_a_trailing_zero_width_space_is_not_part_of_the_run() -> None:
+    text = "cover" + _unpadded("hi") + _SPACE + "tail"
+    found = disarm.decode_smuggled(text)
+    assert found[0].text == "hi"
+    assert text.encode("utf-8")[found[0].end :].decode("utf-8").endswith("tail")
+
+
+def test_a_long_ambiguous_run_stays_linear() -> None:
+    """Splits of a run multiply, so the count has to be capped and not enumerated."""
+    text = "cover" + _unpadded("a1" * 2000)
+    assert disarm.decode_smuggled(text)[0].scheme == "sneaky_bits"
+
+
+@pytest.mark.parametrize(
+    ("path", "name"),
+    [("src/smuggled.rs", "PayloadScheme"), ("src/anomalies.rs", "AnomalyKind")],
+)
+def test_the_public_enums_can_gain_a_variant(path: str, name: str) -> None:
+    """`docs/RUST_API.md` says every public enum is `#[non_exhaustive]`, and these were not."""
+    root = Path(__file__).resolve().parent.parent
+    source = (root / path).read_text(encoding="utf-8")
+    head = source[: source.index(f"pub enum {name} {{")].rstrip().splitlines()[-2:]
+    assert "#[non_exhaustive]" in head

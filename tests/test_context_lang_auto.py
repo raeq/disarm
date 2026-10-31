@@ -62,7 +62,7 @@ def test_auto_reads_the_dictionary_of_the_language_it_detects(tmp_path, code):
     got = _ask(
         tmp_path,
         ["ar", "he", "fa"],
-        [("auto", skeleton, "auto"), ("explicit", skeleton, code), ("free", skeleton, None)],
+        [("auto", skeleton, "auto"), ("explicit", skeleton, code)],
     )
     assert got["auto"] == got["explicit"]
 

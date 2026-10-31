@@ -31,7 +31,7 @@ TASHKEELA_DIR="Tashkeela-arabic-diacritized-text-utf8-0.3"
 # SHA256 of the downloaded corpus archive, verified before it feeds the builders
 # (#62). "skip" is fail-closed: the build aborts unless ALLOW_UNVERIFIED_CORPUS=1.
 # Pin this to the computed value (the script prints it) on first verified download.
-TASHKEELA_ARCHIVE_SHA256="skip"
+TASHKEELA_ARCHIVE_SHA256="ef41cee7d5f9b284a5c5e2a482657969d5a6b61883368ea63cdb50a2190648a3"
 
 # Project Ben Yehuda: Hebrew public domain texts with niqqud
 # https://github.com/projectbenyehuda/public_domain_dump
@@ -61,8 +61,8 @@ PERSIAN_STATS="$DICT_DIR/persian_dict_stats.json"
 
 # Expected output checksums (updated by running with --update-checksums)
 # These ensure the build is deterministic: same corpus + same params = same output
-ARABIC_DICT_SHA256="84b68b453404d9a663ef222bf280273009c0f8006fd7c8342d4bf07b4b8dfa83"
-HEBREW_DICT_SHA256="57347d264fe2c6afb8c89572a58c1203479e80ba4b52706da3d54fd832e94e49"
+ARABIC_DICT_SHA256="c91cd8a8420902c5005894eeb1f359eef8d2e5a56f8c0da07ee1b2380497d94f"
+HEBREW_DICT_SHA256="173e5f9288b9d0a3951906b3336eaac10bc65047c5883d9e01088e1fc8dfb3d3"
 PERSIAN_DICT_SHA256="a03388ced00f1befde526d4efadf38f7a05fac9632a172b2d11cd3510ed7b1c5"
 
 # ============================================================================

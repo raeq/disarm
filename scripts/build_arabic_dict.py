@@ -27,6 +27,11 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+# Run as a script or loaded by path, this directory is not always on `sys.path`.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from context_words import is_context_boundary, word_runs  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Arabic diacritic handling
 # ---------------------------------------------------------------------------
@@ -69,14 +74,6 @@ def is_diacritized(word: str) -> bool:
     return any(c in ARABIC_DIACRITICS for c in word)
 
 
-def tokenize(text: str) -> list[str]:
-    """Split Arabic text into words on whitespace and punctuation."""
-    import re
-
-    # Split on whitespace, keeping words with diacritics intact
-    return [w for w in re.split(r"\s+", text.strip()) if w]
-
-
 # ---------------------------------------------------------------------------
 # Corpus processing
 # ---------------------------------------------------------------------------
@@ -95,28 +92,31 @@ def process_file(
         print(f"  Skipping {path}: {e}", file=sys.stderr)
         return
 
-    words = tokenize(text)
     prev_skeleton: str | None = None
 
-    for word in words:
-        if not is_arabic_word(word):
-            prev_skeleton = None
+    for is_word, span in word_runs(text):
+        if not is_word:
+            if is_context_boundary(span):
+                prev_skeleton = None
             continue
 
-        if not is_diacritized(word):
+        skeleton = strip_tashkeel(span)
+        if not skeleton:
+            continue
+
+        if not is_arabic_word(span) or not is_diacritized(span):
             # Undiacritized word — can't learn from it, but track as skeleton
-            prev_skeleton = strip_tashkeel(word)
+            prev_skeleton = skeleton
             continue
 
         total_words[0] += 1
-        skeleton = strip_tashkeel(word)
 
         # Record unigram: skeleton → diacritized form
-        unigram_counts[skeleton][word] += 1
+        unigram_counts[skeleton][span] += 1
 
         # Record bigram: (prev_skeleton, skeleton) → diacritized form
         if prev_skeleton is not None:
-            bigram_counts[(prev_skeleton, skeleton)][word] += 1
+            bigram_counts[(prev_skeleton, skeleton)][span] += 1
 
         prev_skeleton = skeleton
 

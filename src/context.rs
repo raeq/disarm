@@ -383,6 +383,18 @@ fn is_arabic_char(c: char) -> bool {
         0x08A0..=0x08FF |
         0xFB50..=0xFDFF |
         0xFE70..=0xFEFF
+    ) && !is_arabic_punctuation(c)
+}
+
+/// Punctuation inside the Arabic blocks, which is not part of a word (#1146, #1147).
+///
+/// On the word, `\u{060C}` split a word's readings from its bare form, and `\u{061F}`
+/// and `\u{06D4}` never reached [`is_context_boundary`]. `scripts/context_words.py`
+/// holds the same list for the dictionary builders, and a test compares the two.
+fn is_arabic_punctuation(c: char) -> bool {
+    matches!(c as u32,
+        0x0609 | 0x060A | 0x060C | 0x060D | 0x061B | 0x061D..=0x061F |
+        0x066A..=0x066D | 0x06D4 | 0xFD3E | 0xFD3F
     )
 }
 
@@ -742,6 +754,38 @@ mod tests {
     #[test]
     fn test_strip_tatweel() {
         assert_eq!(strip_arabic_diacritics("كـتـاب"), "كتاب");
+    }
+
+    #[test]
+    fn arabic_punctuation_is_not_part_of_a_word() {
+        // #1146, #1147: on the word it hid the bare form from the dictionary, and the
+        // two sentence-final marks never reached `is_context_boundary`.
+        for mark in ["،", "؛", "؟", "۔"] {
+            let text = format!("كتب{mark} درس");
+            let tokens = tokenize(&text);
+            assert_eq!(tokens[0].text, "كتب", "{mark}");
+            assert!(tokens[0].is_word, "{mark}");
+            assert!(!tokens[1].is_word, "{mark}");
+            assert!(tokens[1].text.contains(mark), "{mark}");
+        }
+    }
+
+    #[test]
+    fn hebrew_marks_inside_a_word_stay_in_it() {
+        // Maqaf joins a compound, and geresh and gershayim sit inside words and acronyms.
+        for word in ["בית־ספר", "צ׳יפס", "תנ״ך"] {
+            let tokens = tokenize(word);
+            assert_eq!(tokens.len(), 1, "{word}");
+            assert!(tokens[0].is_word, "{word}");
+        }
+    }
+
+    #[test]
+    fn a_sentence_end_in_the_arabic_block_is_a_boundary_and_a_comma_is_not() {
+        assert!(is_context_boundary("؟ "));
+        assert!(is_context_boundary("۔ "));
+        assert!(!is_context_boundary("، "));
+        assert!(!is_context_boundary("؛ "));
     }
 
     #[test]

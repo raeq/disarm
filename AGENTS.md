@@ -287,7 +287,10 @@ bash scripts/bootstrap_dicts.sh         # download corpus + build + verify check
 bash scripts/bootstrap_dicts.sh verify  # verify existing dicts match expected checksums
 ```
 
-Requires `pip install kaggle` + Kaggle API credentials.
+Requires `pip install kaggle` + Kaggle API credentials for Arabic. CI has none, so its
+`context-dictionaries` job builds Persian and Hebrew for real and Arabic from
+`tests/fixtures/context_dicts/arabic.txt` (#1151). Without a dictionary its tests skip,
+and with `DISARM_REQUIRE_CONTEXT_DICTS` set they fail, as they do in that job.
 `scripts/bootstrap_dicts.sh` is the single source of truth for dictionary
 production: same corpus + same parameters = same binary = same SHA256. Never
 hand-edit dictionary files. All outputs (`data/corpora/`, `data/*_dict.bin`,

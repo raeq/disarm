@@ -33,6 +33,7 @@ jobs:
       node: ${{ steps.filter.outputs.node }}
       java: ${{ steps.filter.outputs.java }}
       cabi: ${{ steps.filter.outputs.cabi }}
+      sandbox: ${{ steps.filter.outputs.sandbox }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -113,6 +114,12 @@ jobs:
               - 'build.rs'
               - 'codegen/**'
               - 'Cargo.toml'
+              - '.github/workflows/ci.yml'
+            # The sandbox around third-party JavaScript (#1144). `code` has no `*.js`, so
+            # a change to the driver alone would start nothing that runs it.
+            sandbox:
+              - 'benchmarks/meta/**'
+              - 'tests/test_meta_benchmark_practitioner.py'
               - '.github/workflows/ci.yml'
 
 
@@ -477,6 +484,50 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+
+
+  # ── The practitioner sandbox (#1144) ────────────────────────────
+  # `generate` runs upstream's JavaScript under Node's permission model, which denies
+  # the network from Node 25. The test job's Node is the image's, 22, so the tests that
+  # hold that sandbox skip there, and a lost `--permission` would ship green. They run
+  # here on a Node that has the model, and `DISARM_REQUIRE_NODE` turns the skip into a
+  # failure. The suite itself runs nothing from upstream in CI: these use stubs.
+  practitioner-sandbox:
+    name: Practitioner sandbox (Node 26)
+    needs: changes
+    if: needs.changes.outputs.sandbox == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: "26"
+          package-manager-cache: false
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable
+      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+
+      - name: Build wheel and install
+        # `tests/conftest.py` imports disarm, so these tests need it installed even
+        # though what they exercise is the driver and the command that starts it.
+        run: |
+          pip install maturin[patchelf]
+          maturin build --release --out dist
+          pip install dist/*.whl
+          pip install ".[test]"
+
+      - name: Run the module, with a missing or old Node as a failure
+        # The whole module and not a `-k` list, so a renamed test cannot drop out.
+        env:
+          DISARM_REQUIRE_NODE: "1"
+        run: pytest tests/test_meta_benchmark_practitioner.py -q --tb=short -rs
 
 
   # ── Cookbook doc-tests (#154: executable, asserted recipes) ─────
@@ -941,7 +992,7 @@ jobs:
   all-ok:
     name: All checks passed
     if: always()
-    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi]
+    needs: [changes, lint, test, doc-tests, changelog, cargo-audit, cargo-deny, workflow-lint, ruby, node, java, cabi, practitioner-sandbox]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate every language gate
@@ -1009,5 +1060,13 @@ jobs:
           check_binding Node "${{ needs.changes.outputs.node }}" "${{ needs.node.result }}"
           check_binding Java "${{ needs.changes.outputs.java }}" "${{ needs.java.result }}"
           check_binding "C ABI" "${{ needs.changes.outputs.cabi }}" "${{ needs.cabi.result }}"
+
+          # ── The practitioner sandbox (#1144) ───────────────────────────────
+          if [[ "${{ needs.changes.outputs.sandbox }}" == "true" ]]; then
+            SANDBOX="${{ needs['practitioner-sandbox'].result }}"
+            [[ "$SANDBOX" == "success" ]] || fail "practitioner sandbox" "the sandbox tests failed ($SANDBOX)"
+          else
+            echo "practitioner sandbox: nothing it covers changed — not required"
+          fi
 
           exit "$failed"

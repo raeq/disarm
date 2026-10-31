@@ -391,6 +391,10 @@ is the base class for these.
 **An unlabelled corpus stays a fixture.** Nothing outside disarm says what the right output
 is, so every number is a census. It can catch a regression and it cannot reach a ranking.
 `_FixtureSuite` turns a directed measurement into an error.
+It can still answer three questions that need no label: whether a surface raises, whether its
+output is a fixed point, and whether a sanitizer's output reports what its input did not. None
+of them can rank a tool, and all of them can catch a regression. `label-free-invariants` asks
+them over whichever of its corpora are provisioned.
 
 **The delete-everything control runs on every run**, including a run that scores only
 disarm, rather than only when `--subject all` happens to include `null-baseline`. A
@@ -421,6 +425,7 @@ Read so far, so the next search starts from here:
 | P4RS3LT0NGV3 | AGPL-3.0 per `LICENSE` | `p4rs3lt0ngv3-transforms` | a generator: of 222 transforms, 35 are scored, 143 are counted and 44 are text utilities left out |
 | garak `resources/ansi.py` | Apache-2.0 | `garak-ansi-escapes` | a payload list that ships the tokens to detect it by |
 | L1B3RT4S | AGPL-3.0 | `l1b3rt4s-fixtures` | unlabelled: 169 of 182 sections carry no Unicode obfuscation |
+| jailbreak_llms, FuzzyAI, palisade, Arc PI Taxonomy | MIT, Apache-2.0, MIT, CC-BY-4.0 | `label-free-invariants` | 22,897 texts that need no label for three contract questions, pinned by commit and digest |
 | garak `badchars` | Apache-2.0 | not a suite | follows the Bad Characters paper, already wired as `bad-characters` |
 | garak `encoding`, `smuggling` | Apache-2.0 | not a suite yet | zalgo, tag, variant-selector, sneaky-bits and homoglyph probes have known answers, and they are code: Python has no sandbox like Node's, and garak's package is heavy to pin |
 | PyRIT | MIT | not read | its converters were not at the path its older layout used |

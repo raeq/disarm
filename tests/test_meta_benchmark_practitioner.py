@@ -43,6 +43,7 @@ from benchmarks.meta.suites import practitioner
 from benchmarks.meta.suites.practitioner import (
     GarakAnsiEscapes,
     L1b3rt4sFixtures,
+    LabelFreeInvariants,
     P4rs3lt0ngv3Transforms,
     _FixtureSuite,
     _KnownAnswerSuite,
@@ -121,7 +122,12 @@ def _stubs() -> dict:
 
 def test_the_tier_is_registered_external_and_selectable():
     names = {s.name for s in registry.select(families=["practitioner"])}
-    assert names == {"p4rs3lt0ngv3-transforms", "garak-ansi-escapes", "l1b3rt4s-fixtures"}
+    assert names == {
+        "p4rs3lt0ngv3-transforms",
+        "garak-ansi-escapes",
+        "l1b3rt4s-fixtures",
+        "label-free-invariants",
+    }
     for suite in practitioner.SUITES:
         assert suite.family is Family.PRACTITIONER
         assert suite.provenance.external
@@ -616,6 +622,204 @@ def test_the_permission_model_stops_an_escape_from_the_context(stub_tree, name):
     assert result["outputs"] == []
     assert "restricted" in result["error"]
     assert not (parent / "w").exists()
+
+
+# --- label-free invariants (#1163) ------------------------------------------
+
+#: A clean Russian word. `canonicalize` folds part of it, so its output reports `mixed_script`.
+RUSSIAN = "\u043f\u0440\u0438\u0432\u0435\u0442"
+SECRET = "UNIQUEMARKERXYZ"
+
+
+def _invariants(*surfaces: dict, corpora: dict | None = None) -> LabelFreeInvariants:
+    suite = LabelFreeInvariants()
+    suite.locate = lambda: None
+    suite.available = lambda: (True, "")
+    suite.read_corpora = lambda: corpora or {"one": ["plain", SECRET], "two": [RUSSIAN]}
+    if surfaces:
+        suite.transforms = lambda: surfaces[0]
+    return suite
+
+
+def _raises(_text: str) -> str:
+    raise ValueError("this surface always raises")
+
+
+def _grows(text: str) -> str:
+    return text + "x"
+
+
+def test_the_sweep_counts_a_call_per_text_and_surface():
+    surfaces = {"same": str, "other": str}
+    outcome = _invariants(surfaces).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.OK, outcome.error
+    assert _measured(outcome, "texts")[0] == 3
+    assert _measured(outcome, "surfaces")[0] == 2
+    assert _measured(outcome, "calls")[0] == 6
+    assert _measured(outcome, "corpora_read")[0] == 2
+
+
+def test_a_surface_that_raises_is_counted_per_surface():
+    surfaces = {"boom": _raises, "fine": str}
+    outcome = _invariants(surfaces).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "raised:boom") == (3, 3)
+    assert _measured(outcome, "raised:fine") == (0, 3)
+    assert _measured(outcome, "raised") == (3, 6)
+
+
+def test_a_surface_that_is_not_a_fixed_point_is_counted_per_surface():
+    surfaces = {"grows": _grows, "fine": str}
+    outcome = _invariants(surfaces).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "not_fixed_point:grows") == (3, 3)
+    assert _measured(outcome, "not_fixed_point:fine") == (0, 3)
+    assert _measured(outcome, "not_fixed_point") == (3, 6)
+
+
+def test_a_sweep_whose_call_count_is_wrong_fails_loudly(monkeypatch):
+    """An earlier sweep printed 0 moved because a broad `except` hid every failure."""
+    real = LabelFreeInvariants._sweep
+
+    def short(surface, texts):
+        """Honest on the one-text probe, so only the count can catch it."""
+        return real(surface, texts) if len(texts) == 1 else (0, 0, 0)
+
+    monkeypatch.setattr(LabelFreeInvariants, "_sweep", staticmethod(short))
+    outcome = _invariants({"fine": str}).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+    assert "calls" in outcome.error
+
+
+def test_a_sweep_that_cannot_see_a_failure_fails_loudly(monkeypatch):
+    """The call count is right here, and the sweep still reports nothing it could not see."""
+
+    def blind(_surface, texts):
+        return len(texts), 0, 0
+
+    monkeypatch.setattr(LabelFreeInvariants, "_sweep", staticmethod(blind))
+    outcome = _invariants({"fine": str}).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+    assert "cannot see" in outcome.error
+
+
+def test_a_limit_caps_the_texts_a_sweep_reads():
+    outcome = _invariants({"fine": str}).run(limit=1, subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "texts")[0] == 1
+    assert _measured(outcome, "calls")[0] == 1
+
+
+def test_no_surfaces_is_an_error_and_not_a_clean_result():
+    outcome = _invariants({}).run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.ERROR
+
+
+def test_no_texts_is_an_error_and_not_a_clean_result():
+    suite = _invariants({"fine": str}, corpora={"one": []})
+    assert suite.run(subject=subjects.by_name(DISARM)).status is Status.ERROR
+
+
+@pytest.mark.parametrize("subject", [DISARM, *CONTROLS])
+def test_every_invariant_is_a_census(subject):
+    """They have a right answer, and deleting everything earns it, so they cannot rank."""
+    outcome = _invariants().run(subject=subjects.by_name(subject))
+    assert outcome.status is Status.OK, outcome.error
+    assert all(m.higher_is_better is None for m in outcome.measurements)
+
+
+def test_the_invariants_run_the_delete_everything_control():
+    outcome = _invariants({"fine": str}).run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "control_delete_everything_raised") == (0, 3)
+    assert _measured(outcome, "control_delete_everything_not_fixed_point") == (0, 3)
+
+
+def test_a_sanitizer_gaining_a_kind_is_reported_per_kind():
+    outcome = _invariants().run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "gained_a_kind:canonicalize") == (1, 3)
+    assert _measured(outcome, "gained_kind:canonicalize:mixed_script") == (1, 3)
+    assert _measured(outcome, "output_reports:canonicalize") == (1, 3)
+
+
+def test_a_sanitizer_that_gains_nothing_says_so():
+    outcome = _invariants().run(subject=subjects.by_name(DISARM))
+    assert _measured(outcome, "gained_a_kind:profile:rag_ingest") == (0, 3)
+    assert _measured(outcome, "output_reports:profile:rag_ingest") == (0, 3)
+
+
+def test_a_subject_with_no_detector_omits_the_gained_kinds():
+    """Scoring another tool's output with disarm's own detector would be circular."""
+    surfaces = {"canonicalize": str}
+    outcome = _invariants(surfaces).run(subject=subjects.by_name("identity"))
+    assert outcome.status is Status.OK, outcome.error
+    assert not [m.key for m in outcome.measurements if "gained" in m.key or "output_" in m.key]
+
+
+def test_a_corpus_text_never_reaches_a_report():
+    report = run([_invariants()], registered=1, subjects=[subjects.by_name(DISARM)])
+    assert report.outcomes[0].status is Status.OK
+    assert SECRET not in render_markdown(report)
+    assert SECRET not in render_json(report)
+
+
+def test_the_invariants_skip_with_a_reason_when_nothing_is_provisioned(monkeypatch):
+    suite = LabelFreeInvariants()
+    monkeypatch.setattr(suite, "locate", lambda: None)
+    outcome = suite.run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.SKIPPED
+    assert outcome.skip_reason
+
+
+def test_the_invariants_read_only_the_corpora_that_are_provisioned(tmp_path, monkeypatch):
+    monkeypatch.setattr(practitioner, "FETCH_CACHE", tmp_path)
+    suite = LabelFreeInvariants()
+    corpus = next(c for c in suite.CORPORA if c.source.filename.endswith("benign_prompts.txt"))
+    path = tmp_path / corpus.source.filename
+    path.parent.mkdir(parents=True)
+    path.write_text("first\n\nsecond\n", encoding="utf-8")
+    assert suite.read_corpora() == {corpus.name: ["first", "second"]}
+
+
+def test_each_corpus_is_pinned_to_a_commit_and_a_digest():
+    for corpus in LabelFreeInvariants().CORPORA:
+        assert re.search(r"/[0-9a-f]{40}/", corpus.source.url), corpus.source.url
+        assert re.fullmatch(r"[0-9a-f]{64}", corpus.source.sha256 or ""), corpus.name
+        assert corpus.source.licence
+
+
+def test_a_csv_corpus_reads_the_prompt_column(tmp_path):
+    path = tmp_path / "prompts.csv"
+    path.write_text('id,prompt\n1,"one, with a comma"\n2,\n3,three\n', encoding="utf-8")
+    assert practitioner._csv_prompts(path) == ["one, with a comma", "three"]
+
+
+def test_a_jsonl_corpus_reads_the_text_field(tmp_path):
+    path = tmp_path / "rows.jsonl"
+    path.write_text('{"text": "one"}\n\n{"text": "two"}\n', encoding="utf-8")
+    assert practitioner._jsonl_text(path) == ["one", "two"]
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        lambda items: items,
+        lambda items: {"title": "not this", "items": items},
+    ],
+)
+def test_a_taxonomy_corpus_reads_every_example(tmp_path, shape):
+    items = [{"examples": ["one", {"a": 1}]}, {"examples": ["two"]}, {"title": "none"}]
+    path = tmp_path / "taxonomy.json"
+    path.write_text(json.dumps({"evasions": shape(items)}), encoding="utf-8")
+    assert practitioner._taxonomy_examples(path) == ["one", '{"a": 1}', "two"]
+
+
+def test_the_readme_says_what_an_unlabelled_corpus_can_answer():
+    readme = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    flat = " ".join(readme.split())
+    assert (
+        "It can still answer three questions that need no label: whether a surface raises, "
+        "whether its output is a fixed point, and whether a sanitizer's output reports what "
+        "its input did not. None of them can rank a tool, and all of them can catch a "
+        "regression."
+    ) in flat
+    assert "`label-free-invariants`" in readme
 
 
 # --- the sandbox on CI (#1144) ----------------------------------------------

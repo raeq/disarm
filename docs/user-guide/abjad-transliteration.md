@@ -114,9 +114,11 @@ The system uses a three-tier fallback for each word:
 
 | Language | Source corpus | Size | License |
 |---|---|---|---|
-| Arabic | [Tashkeela](https://www.kaggle.com/datasets/linuxscout/tashkeela) — 65.7M diacritized words from 97 books | 182K unigrams, 200K bigrams | CC-BY |
-| Hebrew | [Project Ben Yehuda](https://github.com/projectbenyehuda/public_domain_dump) — 11.4M niqqud-pointed words from 26K literary texts | 227K unigrams, 200K bigrams | Public domain |
+| Arabic | [Tashkeela](https://www.kaggle.com/datasets/linuxscout/tashkeela) — 65.7M diacritized words from 97 books | 173K unigrams, 200K bigrams | CC-BY |
+| Hebrew | [Project Ben Yehuda](https://github.com/projectbenyehuda/public_domain_dump) — 11.6M niqqud-pointed words from 26K literary texts | 168K unigrams, 200K bigrams | Public domain |
 | Persian | Curated vocabulary — 266 common words with diacritics applied per BGN/PCGN 1958 | 257 unigrams | Hand-curated |
+
+The builders and `context=True` read a word the same way: a run of script letters and marks, with punctuation outside it, so `(كتاب).` is looked up as `كتاب`. The Arabic comma, semicolon, question mark and full stop are punctuation too, and the last two end the previous word's context as `.` and `?` do. A dictionary built before 0.19.0 holds keys with their punctuation attached, which `context=True` no longer asks for, so run `bash scripts/bootstrap_dicts.sh` again after upgrading.
 
 Dictionaries are built reproducibly from source corpora via `scripts/bootstrap_dicts.sh`. All parameters and expected checksums are pinned. See [Building dictionaries](#building-dictionaries) below.
 
@@ -261,7 +263,7 @@ For words not in the curated vocabulary, the system falls back to the Arabic con
 
 ### Limitations specific to Persian
 
-- **Smaller dictionary**: 266 curated entries vs Arabic's 182K corpus-derived entries. Common words are covered; rare words fall back to context-free.
+- **Smaller dictionary**: 266 curated entries vs Arabic's 173K corpus-derived entries. Common words are covered; rare words fall back to context-free.
 - **No ezafe prediction**: The ezafe construction (-e/-ye connecting nouns to adjectives/possessors) is not predicted. It would require syntactic analysis beyond dictionary lookup.
 - **Waw ambiguity**: و serves as both consonant (/v/) and vowel (/o, u/). The `lang="fa"` override maps it to v; the context dictionary provides the correct vowel form for known words.
 
@@ -322,7 +324,7 @@ transliterate("שלום", lang="he", context=True)  # "shalvom"
 |---|---|---|
 | Vowel marks | Tashkeel (fatha, kasra, damma, etc.) | Niqqud (patach, segol, hiriq, etc.) |
 | Gemination | Shadda (ّ) | Dagesh (ּ) |
-| Dictionary size | 182K unigrams (65.7M-word corpus) | 227K unigrams (11.4M-word corpus) |
+| Dictionary size | 173K unigrams (65.7M-word corpus) | 168K unigrams (11.6M-word corpus) |
 | Ambiguity level | High (many homographs) | Moderate (fewer morphological patterns) |
 
 ### Limitations specific to Hebrew

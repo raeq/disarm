@@ -345,13 +345,16 @@ pub enum AnomalyKind {
     /// the detector was silent, because the same `is_fold_whitespace` call that spares
     /// TAB and LF spared this too (#739).
     ///
-    /// A `CR` is reported only when it can actually overwrite something: it must be
-    /// followed by a character other than `LF` (so `CRLF` line endings and a trailing
-    /// `CR` never fire) and there must be text between it and the start of its line — for
-    /// every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`, `PS`,
-    /// `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file, which
-    /// used a lone `CR` as its line ending until 2001. The report is a technical fact, as
-    /// with `is_case_fold_stable` and `groß` — the judgement is the caller's.
+    /// A `CR` is reported only when it can actually overwrite something: something other
+    /// than more `CR`s must follow it on the line (so `CRLF`, `CR CR LF` and a trailing `CR`
+    /// never fire), and spaces alone count only if there are enough to blank the whole line,
+    /// so the stray `CR` before a Markdown hard line break, which is two spaces and a line
+    /// feed, does not fire (#1155). There must also be text between it and the start of its
+    /// line — for every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`,
+    /// `PS`, `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file,
+    /// which used a lone `CR` as its line ending until 2001, and a stray `CR` pasted in front
+    /// of ordinary text. The report is a technical fact, as with `is_case_fold_stable` and
+    /// `groß` — the judgement is the caller's.
     Deletion,
     /// A run of smuggling carriers that **decodes to readable text** (#701).
     ///
@@ -694,19 +697,13 @@ fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Carried
 /// `has_anomalies_matches_inspect` asserts they never do, and a rule stated twice is the
 /// way that assertion starts failing.
 ///
-/// The three guards are all necessary, and each spares an ordinary use:
-/// * followed by `LF` — a `CRLF` line ending, which overwrites nothing;
-/// * at end of text — nothing follows to paint over the line;
-/// * nothing between it and the line start — a leading `CR` has no prefix to hide, for
-///   every line break in [`is_line_break`] and not just `LF`.
+/// A leading `CR` has no prefix to hide, for every line break in [`is_line_break`] and not
+/// just `LF`. [`paints_over`] decides the rest.
 fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
     let mut line_start = 0;
     for (i, c) in text.char_indices() {
-        if c == '\r' {
-            let overwrites = text[i + 1..].chars().next().is_some_and(|n| n != '\n');
-            if overwrites && i > line_start {
-                return Some((line_start, &text[line_start..i]));
-            }
+        if c == '\r' && i > line_start && paints_over(&text[line_start..i], &text[i + 1..]) {
+            return Some((line_start, &text[line_start..i]));
         }
         if is_line_break(c) {
             // A `CR` starts a line too, so a run of them collapses to one line start.
@@ -714,6 +711,30 @@ fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
         }
     }
     None
+}
+
+/// Whether what follows a `CR` overwrites `line`, the text before it.
+///
+/// Further `CR`s only move the cursor to a column it is about to leave, so they are read
+/// through (#1155). What remains, up to the next line break or the end of text, is what a
+/// terminal paints:
+/// * nothing — `CRLF`, `CR CR LF`, or a trailing `CR`, which overwrite nothing;
+/// * spaces alone — these blank one cell each, so they hide the line only if there are as
+///   many as it has cells. Two spaces after `line one` is a Markdown hard line break with a
+///   stray `CR` in front of it, which was 247 of the 250 bare `CR`s in 13,735 regular
+///   prompts, and it hides two cells;
+/// * anything else — paints over the start of the line, however long it is.
+fn paints_over(line: &str, after: &str) -> bool {
+    let after = after.trim_start_matches('\r');
+    let painted = after.find(is_line_break).map_or(after, |end| &after[..end]);
+    if painted.is_empty() {
+        return false;
+    }
+    if painted.chars().all(|c| c == ' ') {
+        let cells = line.trim_end_matches(' ').chars().count();
+        return cells > 0 && painted.chars().count() >= cells;
+    }
+    true
 }
 
 fn codepoint(c: char) -> String {
@@ -954,6 +975,61 @@ fn whole_token_compat_is_ordinary(ch: char) -> bool {
     )
 }
 
+/// Punctuation that ordinary prose cannot avoid, and that folds to ASCII all the same (#1153).
+///
+/// `don\u{2019}t` reported `confusable` and `well\u{2026}` reported `compat_fold`, and on
+/// 13,735 regular prompts these made up most of a 13.7% rate. The fold is real and stays:
+/// `canonicalize` still returns `don't`. What goes is the report, because the rule only ever
+/// saw a sink shape with a letter beside the quote. `admin\u{2019}--` reported and
+/// `\u{2019} OR 1=1` did not, and `is_canonical` answers both.
+fn is_ordinary_typography(c: char) -> bool {
+    matches!(
+        c,
+        '\u{2010}'
+            ..='\u{2015}'
+                | '\u{2018}'
+                | '\u{2019}'
+                | '\u{201C}'
+                | '\u{201D}'
+                | '\u{201E}'
+                | '\u{2026}'
+                | '\u{2212}'
+    )
+}
+
+/// Whether a word holding [`is_ordinary_typography`] marks reads as prose, which is when they
+/// are spared.
+///
+/// Two shapes do not. A word shaped like a host name: `ex\u{2010}ample.com` is
+/// CVE-2017-5383's vector, where the fold produces the host the display hid, while quotes
+/// around one leave a non-ASCII end on the last label and are prose. And a mark between
+/// single letters, because `q\u{2010}x\u{2010}z` is not how anyone writes, and that
+/// is the one sign left when no word reassembles (#719).
+fn typography_reads_as_prose(word: &str) -> bool {
+    let shaped_like_a_host = word.rsplit_once('.').is_some_and(|(host, tld)| {
+        !host.is_empty() && tld.len() >= 2 && tld.bytes().all(|b| b.is_ascii_alphabetic())
+    });
+    if shaped_like_a_host {
+        return false;
+    }
+    let mut parts = word.split(is_ordinary_typography).filter(|p| !p.is_empty());
+    let splits_single_letters = parts.clone().count() >= 3 && parts.all(|p| p.chars().count() == 1);
+    !splits_single_letters
+}
+
+/// Fullwidth sentence punctuation in a word that holds CJK, as such a sentence is written (#1153).
+///
+/// A Chinese sentence has no spaces, so one token spans it and holds any Latin word inside
+/// it, and #633's ASCII-letter gate passes. [`CJK_SCRIPTS`] records the same reasoning for
+/// `mixed_script` (#776). `\u{FF1C}` and `\u{FF1E}` are not here: `<script>` is not prose in
+/// any script.
+fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
+    matches!(
+        c,
+        '\u{FF01}' | '\u{FF08}' | '\u{FF09}' | '\u{FF0C}' | '\u{FF1A}' | '\u{FF1B}' | '\u{FF1F}'
+    ) && detect_scripts(word).iter().any(|s| CJK_SCRIPTS.contains(s))
+}
+
 /// The first stacking mark that appears twice in a row on one base (#835).
 ///
 /// Compared over NFD. Canonical ordering sorts a base's marks by combining class between
@@ -992,7 +1068,10 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
         crate::tables::lookup_confusable(c, "latin").filter(|t| t.is_ascii())
     }
     tok.chars().find_map(|c| {
-        if c.is_ascii() {
+        if c.is_ascii()
+            || (is_ordinary_typography(c) && typography_reads_as_prose(tok))
+            || is_cjk_prose_punctuation(c, tok)
+        {
             return None;
         }
         if let Some(target) = ascii_target(c) {
@@ -1524,6 +1603,8 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             let compat: Vec<char> = part
                 .chars()
                 .filter(|c| !c.is_ascii() && c.nfkc().all(|f| f.is_ascii()))
+                .filter(|c| !(is_ordinary_typography(*c) && typography_reads_as_prose(part)))
+                .filter(|c| !is_cjk_prose_punctuation(*c, part))
                 .collect();
             // ALL, not ANY. With `any`, one fullwidth character exempted the whole word:
             // `\u{1D41A}\u{FF41}` mixes a Mathematical Alphanumeric with a fullwidth `a`,
@@ -1616,8 +1697,9 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
 
     // #719, #737: the SECOND ASCII-producing step in `canonicalize`. Same two gates as
     // `CompatFold` — an ASCII letter in the word, and a non-ASCII character folding *to*
-    // ASCII — so #633's false-positive analysis carries over unchanged and `Привет` (no
-    // ASCII letter) stays clean.
+    // ASCII — so `Привет` (no ASCII letter) stays clean. #633's false-positive analysis did
+    // not carry over: it tested fullwidth Latin, and this table also folds to `'`, `''` and
+    // `-`, which ordinary English cannot avoid. `is_ordinary_typography` takes those (#1153).
     //
     // LAST, because it is the least specific rule that fires without a lexicon. Nearly
     // every within-word joiner folds to ASCII — `U+2E40` to `=`, `U+2010` to `-` — so

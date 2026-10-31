@@ -22,6 +22,11 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+# Run as a script or loaded by path, this directory is not always on `sys.path`.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from context_words import is_context_boundary, word_runs  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Hebrew niqqud handling
 # ---------------------------------------------------------------------------
@@ -68,13 +73,6 @@ def has_niqqud(word: str) -> bool:
     return any(c in HEBREW_NIQQUD for c in word)
 
 
-def tokenize(text: str) -> list[str]:
-    """Split Hebrew text into words on whitespace."""
-    import re
-
-    return [w for w in re.split(r"\s+", text.strip()) if w]
-
-
 # ---------------------------------------------------------------------------
 # Corpus processing (same structure as Arabic builder)
 # ---------------------------------------------------------------------------
@@ -93,25 +91,28 @@ def process_file(
         print(f"  Skipping {path.name}: {e}", file=sys.stderr)
         return
 
-    words = tokenize(text)
     prev_skeleton: str | None = None
 
-    for word in words:
-        if not is_hebrew_word(word):
-            prev_skeleton = None
+    for is_word, span in word_runs(text):
+        if not is_word:
+            if is_context_boundary(span):
+                prev_skeleton = None
             continue
 
-        if not has_niqqud(word):
-            prev_skeleton = strip_niqqud(word)
+        skeleton = strip_niqqud(span)
+        if not skeleton:
+            continue
+
+        if not is_hebrew_word(span) or not has_niqqud(span):
+            prev_skeleton = skeleton
             continue
 
         total_words[0] += 1
-        skeleton = strip_niqqud(word)
 
-        unigram_counts[skeleton][word] += 1
+        unigram_counts[skeleton][span] += 1
 
         if prev_skeleton is not None:
-            bigram_counts[(prev_skeleton, skeleton)][word] += 1
+            bigram_counts[(prev_skeleton, skeleton)][span] += 1
 
         prev_skeleton = skeleton
 

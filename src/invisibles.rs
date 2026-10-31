@@ -246,20 +246,6 @@ fn consume_flag_tail(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Op
     }
 }
 
-/// A character that a presentation selector may legitimately follow in the
-/// rendering carve-out: a base that survives **every** downstream strip
-/// `strip_format` runs after this one (control, zero-width, and the
-/// whitespace/blank-render fold). Keeping a VS after a base that a later stage
-/// removes orphans the selector, so a second pass strips it and the preset is
-/// not idempotent (post-0.11 review D-2). Reject those bases here.
-#[inline]
-fn is_presentation_base(ch: char) -> bool {
-    !ch.is_whitespace()
-        && !ch.is_control()
-        && !crate::whitespace::is_blank_render(ch)
-        && !crate::whitespace::is_zero_width(ch)
-}
-
 /// Public helper: strip the Unicode Tags block, **preserving** well-formed emoji
 /// subdivision flag sequences (`U+1F3F4` … `U+E007F`).
 pub(crate) fn strip_tags(text: &str) -> String {
@@ -344,10 +330,16 @@ pub(crate) fn strip_invisible_classes_into(text: &str, policy: StripPolicy, out:
             continue;
         }
         if is_variation_selector(ch) {
-            // Rendering carve-out: keep VS15/VS16 directly after a base.
+            // Rendering carve-out: keep VS15/VS16 directly after a base Unicode registers for
+            // it, where it changes the glyph. After `a` it changes nothing, which is what makes
+            // it a free channel (#1135). No registered base is removed by a later strip, so
+            // the selector is never orphaned and the preset stays a fixed point.
             let keep = policy.keep_presentation_vs
                 && matches!(ch, '\u{FE0E}' | '\u{FE0F}')
-                && out.chars().next_back().is_some_and(is_presentation_base);
+                && out
+                    .chars()
+                    .next_back()
+                    .is_some_and(|base| crate::tables::is_registered_variation(base, ch));
             if keep {
                 out.push(ch);
             }

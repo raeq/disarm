@@ -161,6 +161,55 @@ def test_the_page_records_it() -> None:
     assert "Ideographic Variation Sequences are not distinguished" in page
 
 
+# --- Styles that have no answer in Unicode (#1138) -------------------------------
+
+PARENTHESIZED = "\u24af\u24a3\u24a0"
+REGIONAL = "\U0001f1f9\U0001f1ed\U0001f1ea"
+TURNED = "\u0287\u0265\u01dd"
+
+
+def test_parenthesized_letters_fold_to_their_parentheses() -> None:
+    assert disarm.canonicalize(PARENTHESIZED) == "(t)(h)(e)"
+    assert disarm.has_anomalies(PARENTHESIZED)
+
+
+def test_regional_indicators_have_no_signal_and_two_surfaces_disagree() -> None:
+    assert disarm.canonicalize(REGIONAL) == REGIONAL
+    assert disarm.get_pipeline("llm_guardrail")(REGIONAL) == REGIONAL
+    assert disarm.get_pipeline("rag_ingest")(REGIONAL) == ""
+    assert not disarm.has_anomalies(REGIONAL)
+
+
+def test_turned_letters_are_distinct_letters_and_are_kept() -> None:
+    assert disarm.canonicalize(TURNED) != "the"
+    assert not disarm.has_anomalies(TURNED)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Parenthesized letters fold to `(a)`, because NFKC and UTS #39 define them that way. "
+        "`the` written in `U+24AF U+24A3 U+24A0` becomes `(t)(h)(e)`, so a word filter after the "
+        "fold does not match it. `has_anomalies` reports `compat_fold`.",
+        "Regional indicators have no compatibility mapping and no confusable row. `canonicalize`, "
+        "`search_key` and `llm_guardrail` keep them, `rag_ingest` deletes them, and "
+        "`has_anomalies` is False.",
+        "Turned letters such as `U+0250` and `U+0287` are distinct letters with no decomposition. "
+        "They are kept, and a transliterating surface may give a different letter. A text "
+        "reversed as well as turned has no recoverable form.",
+    ],
+    ids=["parenthesized", "regional", "turned"],
+)
+def test_the_limitations_page_says_what_each_style_does(sentence: str) -> None:
+    assert sentence in " ".join(LIMITATIONS.read_text(encoding="utf-8").split())
+
+
+@pytest.mark.parametrize("name", ["parenthesized letters", "regional indicators", "turned letters"])
+def test_the_corpus_table_names_each_style(name: str) -> None:
+    page = (ROOT / "docs/security/adversarial-corpora.md").read_text(encoding="utf-8")
+    assert f"| `{name}` |" in page
+
+
 # --- The seam guide and the upgrade note (#1157, #1139) --------------------------
 
 RUSSIAN = "\u043f\u0440\u0438\u0432\u0435\u0442"

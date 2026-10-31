@@ -16,6 +16,7 @@ from disarm._api import (
     Slugifier,
     TextPipeline,
     UniqueSlugifier,
+    anomaly_severity,
     casefold,
     clear_replacements,
     collapse_whitespace,
@@ -344,6 +345,7 @@ __all__ = [
     # Anomaly detection (#389)
     "has_anomalies",
     "inspect_anomalies",
+    "anomaly_severity",
     "AnomalyReport",
     "Finding",
     # Reusable anomaly lexicon handle (HAI-SDLC 6.1)

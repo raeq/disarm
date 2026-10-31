@@ -8,6 +8,7 @@ from disarm._boundary import (
     AnomalyReport,
     HostnameAnalysis,
     Lexicon,
+    _anomaly_severity,
     _has_anomalies,
     _has_anomalies_lex,
     _inspect_anomalies,
@@ -218,6 +219,27 @@ def has_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> 
     if isinstance(lexicon, Lexicon):
         return _has_anomalies_lex(text, lexicon)
     return _has_anomalies(text, set(lexicon) if lexicon is not None else None)
+
+
+def anomaly_severity(kind: str) -> str:
+    """The level a finding of this kind carries: ``"error"`` or ``"warning"``.
+
+    Takes the name a report holds, as in ``Finding.kind`` or ``AnomalyReport.kinds``. These are
+    SARIF's level names, so a SARIF writer can use the result as it is.
+
+    ``smuggled`` is the one ``"error"``, because it fires only on a run that decodes to readable
+    text. Every other kind reports a technical fact and leaves the judgement to the caller.
+
+    Raises:
+        InvalidArgumentError: ``kind`` names no anomaly kind.
+
+    Examples:
+        >>> anomaly_severity("smuggled")
+        'error'
+        >>> anomaly_severity("invisible")
+        'warning'
+    """
+    return _anomaly_severity(kind)
 
 
 def inspect_anomalies(text: str, lexicon: Iterable[str] | Lexicon | None = None) -> AnomalyReport:

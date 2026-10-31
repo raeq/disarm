@@ -124,6 +124,16 @@ pub(crate) enum ErrorRepr {
         got: String,
     },
 
+    /// A name that is no anomaly kind (`AnomalyKind::from_str`, #946).
+    #[error(
+        "anomaly kind must be one of {}, got '{got}'",
+        crate::anomalies::AnomalyKind::accepted_tokens()
+    )]
+    InvalidAnomalyKind {
+        /// The offending value.
+        got: String,
+    },
+
     /// Invalid transliteration scheme string (`Scheme::from_str`, #352).
     #[error("scheme must be 'default', 'strict_iso9', or 'gost7034', got '{got}'")]
     InvalidScheme {
@@ -520,6 +530,7 @@ impl ErrorRepr {
             ErrorRepr::InvalidTargetScript { .. } => "invalid_target_script",
             ErrorRepr::InvalidDigitPolicy { .. } => "invalid_digit_policy",
             ErrorRepr::InvalidKeyForm { .. } => "invalid_key_form",
+            ErrorRepr::InvalidAnomalyKind { .. } => "invalid_anomaly_kind",
             ErrorRepr::InvalidScheme { .. } => "invalid_scheme",
             ErrorRepr::InvalidUrlComponent { .. } => "invalid_url_component",
             ErrorRepr::InvalidReverseLang { .. } => "invalid_reverse_lang",
@@ -624,6 +635,7 @@ impl From<ErrorRepr> for pyo3::PyErr {
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidDigitPolicy { .. }
             | ErrorRepr::InvalidKeyForm { .. }
+            | ErrorRepr::InvalidAnomalyKind { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }
@@ -729,6 +741,7 @@ impl Error {
             | ErrorRepr::InvalidTargetScript { .. }
             | ErrorRepr::InvalidDigitPolicy { .. }
             | ErrorRepr::InvalidKeyForm { .. }
+            | ErrorRepr::InvalidAnomalyKind { .. }
             | ErrorRepr::InvalidScheme { .. }
             | ErrorRepr::InvalidUrlComponent { .. }
             | ErrorRepr::InvalidReverseLang { .. }

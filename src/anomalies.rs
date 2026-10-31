@@ -472,6 +472,61 @@ pub enum AnomalyKind {
 }
 
 impl AnomalyKind {
+    /// Every kind, for a caller that builds a table of them.
+    pub const ALL: &'static [AnomalyKind] = &[
+        AnomalyKind::Invisible,
+        AnomalyKind::Bidi,
+        AnomalyKind::Zalgo,
+        AnomalyKind::MixedScript,
+        AnomalyKind::BidiMixed,
+        AnomalyKind::Leet,
+        AnomalyKind::Segmentation,
+        AnomalyKind::Control,
+        AnomalyKind::Deletion,
+        AnomalyKind::Smuggled,
+        AnomalyKind::CompatFold,
+        AnomalyKind::Confusable,
+        AnomalyKind::EnclosingMark,
+        AnomalyKind::MixedNumbers,
+        AnomalyKind::DuplicateMark,
+    ];
+
+    /// The accepted names, quoted and comma-joined, for the `InvalidAnomalyKind` message.
+    pub(crate) fn accepted_tokens() -> String {
+        Self::ALL
+            .iter()
+            .map(|k| format!("'{}'", k.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// How much a finding of this kind asks of the reader (#946).
+    ///
+    /// `Smuggled` is the one [`AnomalySeverity::Error`], because it fires only on a run that
+    /// decodes to readable text. `Deletion` stays a warning even though its presence is not a
+    /// matter of degree: a classic Mac OS file with `CR` line endings is a known false positive,
+    /// so it is not proof in the way a decode is.
+    #[must_use]
+    pub fn severity(self) -> AnomalySeverity {
+        match self {
+            AnomalyKind::Smuggled => AnomalySeverity::Error,
+            AnomalyKind::Invisible
+            | AnomalyKind::Bidi
+            | AnomalyKind::Zalgo
+            | AnomalyKind::MixedScript
+            | AnomalyKind::BidiMixed
+            | AnomalyKind::Leet
+            | AnomalyKind::Segmentation
+            | AnomalyKind::Control
+            | AnomalyKind::Deletion
+            | AnomalyKind::CompatFold
+            | AnomalyKind::Confusable
+            | AnomalyKind::EnclosingMark
+            | AnomalyKind::MixedNumbers
+            | AnomalyKind::DuplicateMark => AnomalySeverity::Warning,
+        }
+    }
+
     /// The lowercase token name.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -492,6 +547,50 @@ impl AnomalyKind {
             AnomalyKind::MixedNumbers => "mixed_numbers",
             AnomalyKind::DuplicateMark => "duplicate_mark",
         }
+    }
+}
+
+/// How much a finding of some [`AnomalyKind`] asks of the reader (#946).
+///
+/// These are SARIF's level names. A consumer that writes SARIF can use [`Self::as_str`] as it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum AnomalySeverity {
+    /// The finding needs no threshold to interpret.
+    Error,
+    /// A technical fact, with the judgement left to the caller.
+    Warning,
+}
+
+impl AnomalySeverity {
+    /// The lowercase level name.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AnomalySeverity::Error => "error",
+            AnomalySeverity::Warning => "warning",
+        }
+    }
+}
+
+impl std::fmt::Display for AnomalySeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for AnomalyKind {
+    type Err = crate::Error;
+
+    /// Parse the name [`AnomalyKind::as_str`] gives, which is what every binding reports.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.as_str() == s)
+            .ok_or_else(|| {
+                crate::Error::from(crate::ErrorRepr::InvalidAnomalyKind { got: s.to_owned() })
+            })
     }
 }
 
@@ -2081,6 +2180,32 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
 
 #[cfg(test)]
 mod tests {
+    use super::{AnomalyKind, AnomalySeverity};
+
+    #[test]
+    fn a_decoded_payload_is_the_one_error() {
+        // #946.
+        for kind in AnomalyKind::ALL {
+            let want = if *kind == AnomalyKind::Smuggled {
+                AnomalySeverity::Error
+            } else {
+                AnomalySeverity::Warning
+            };
+            assert_eq!(kind.severity(), want, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn every_kind_round_trips_through_its_name() {
+        for kind in AnomalyKind::ALL {
+            assert_eq!(kind.as_str().parse::<AnomalyKind>().unwrap(), *kind);
+        }
+        let error = "nope".parse::<AnomalyKind>().unwrap_err();
+        assert_eq!(error.kind(), crate::ErrorKind::InvalidArgument);
+        assert!(error.to_string().contains("'smuggled'"), "{error}");
+        assert!(error.to_string().contains("nope"), "{error}");
+    }
+
     use super::*;
 
     /// `is_wholly_confusable_word` must hold on its own terms, not only where it is called.

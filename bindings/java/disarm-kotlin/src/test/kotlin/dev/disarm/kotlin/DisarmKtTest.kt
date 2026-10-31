@@ -145,6 +145,12 @@ class DisarmKtTest {
     }
 
     @Test
+    fun aDecodedPayloadIsTheOneError() {
+        assertEquals("error", anomalySeverity("smuggled"))
+        assertEquals("warning", anomalySeverity("deletion"))
+    }
+
+    @Test
     fun anomalies() {
         assertTrue("hi\u200bthere".hasAnomalies())
         assertFalse("hello world".hasAnomalies())

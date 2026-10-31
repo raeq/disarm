@@ -552,6 +552,11 @@ listContextLangs() // => ['ar', 'fa', 'he']
 
 ## Anomaly detection
 
+### `anomalySeverity(kind)`
+
+The level a finding of this kind carries, by the name a report holds: `'error'` or `'warning'`.
+`smuggled` is the one `'error'`. See [the anomaly guide](../user-guide/anomaly-detection.md).
+
 ### `hasAnomalies(text, lexicon?)` · `inspectAnomalies(text, lexicon?)`
 
 Flag text carrying out-of-place characters that disguise a real word — a

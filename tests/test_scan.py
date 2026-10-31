@@ -16,7 +16,6 @@ from __future__ import annotations
 import io
 import json
 import os
-import re
 import subprocess
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -29,7 +28,6 @@ from disarm.scan import (
     EXIT_OK,
     EXIT_READ_ERROR,
     MAX_FILE_BYTES,
-    SARIF_LEVELS,
     _portable,
     fingerprint_for,
     iter_files,
@@ -483,23 +481,3 @@ class TestSarif:
         out = io.StringIO()
         run([tmp_path], as_sarif=True, out=out)
         assert json.loads(out.getvalue())["runs"][0]["results"]
-
-    def test_the_level_map_covers_every_kind_the_library_can_produce(self) -> None:
-        """Hard-coded here rather than on `AnomalyKind` (#705 item 4), so this is what
-        keeps it from falling behind the enum: the kinds are read from the Rust source."""
-        src = (Path(__file__).resolve().parent.parent / "src" / "anomalies.rs").read_text(
-            encoding="utf-8"
-        )
-        block = re.search(r"pub fn as_str\(self\) -> &'static str \{.*?\n    \}", src, re.S)
-        assert block, "as_str() not found — update this gate"
-        kinds = set(re.findall(r'=> "([a-z_]+)"', block.group(0)))
-        assert kinds, "no kinds parsed"
-        assert set(SARIF_LEVELS) == kinds, {
-            "kinds with no level": sorted(kinds - set(SARIF_LEVELS)),
-            "levels for no kind": sorted(set(SARIF_LEVELS) - kinds),
-        }
-
-    def test_a_decoded_payload_is_the_one_error(self) -> None:
-        """The one finding that needs no threshold to interpret."""
-        assert SARIF_LEVELS["smuggled"] == "error"
-        assert {v for k, v in SARIF_LEVELS.items() if k != "smuggled"} == {"warning"}

@@ -19,6 +19,16 @@ pub(crate) const VS15: char = '\u{FE0E}';
 /// Combining Enclosing Keycap — the third code point of `1\u{FE0F}\u{20E3}`.
 pub(crate) const KEYCAP: char = '\u{20E3}';
 
+/// The bases a keycap sequence can have.
+///
+/// One definition, because `canonicalize`'s fold and the detector's exemption disagreed: the
+/// fold read these and the exemption read any base, so `Ignore` with the sequence on each
+/// letter read clean and its output did not (#1158, #1195).
+#[inline]
+pub(crate) const fn is_keycap_base(c: char) -> bool {
+    matches!(c, '0'..='9' | '#' | '*')
+}
+
 // #112: key_buf and sep_positions were stack-allocated to avoid two heap
 // allocations per emoji-multi-starter character in the former hex-key matcher.
 // #242 item 4: the production matcher now walks the code-point trie
@@ -633,7 +643,7 @@ fn head_len_at(window: &[char]) -> Option<usize> {
 
     // Keycap: `base + U+FE0F? + U+20E3`. The base is a digit, `#` or `*` — ordinary
     // characters, so the keycap itself is what makes the sequence an emoji.
-    if matches!(first, '0'..='9' | '#' | '*') {
+    if is_keycap_base(first) {
         let after_selector = usize::from(window.get(1) == Some(&VS16));
         return if window.get(1 + after_selector) == Some(&KEYCAP) {
             Some(2 + after_selector)
@@ -679,7 +689,7 @@ pub(crate) fn presentation_len_at(window: &[char]) -> Option<usize> {
 
     // A flag and a keycap take no continuation: UTS #51 defines neither as joinable, and
     // chaining one would swallow a following emoji into it.
-    if is_regional_indicator(first) || matches!(first, '0'..='9' | '#' | '*') {
+    if is_regional_indicator(first) || is_keycap_base(first) {
         return Some(len);
     }
 

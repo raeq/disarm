@@ -134,7 +134,7 @@ pub(crate) fn grapheme_width_opts(cluster: &str, ambiguous_wide: bool) -> usize 
             _ => {}
         }
     }
-    let is_keycap_base = matches!(base, '0'..='9' | '#' | '*');
+    let is_keycap_base = crate::emoji::is_keycap_base(base);
     // A6: VS15 forces text presentation. For an emoji base that is one text glyph
     // (1 column) even when the base is East-Asian-Wide; a stray VS15 on a
     // non-emoji base is ignored and the base's own width applies.

@@ -116,6 +116,11 @@ const SPREAD_CARRIER_FLOOR: usize = 8;
 /// an ideograph cannot be checked against it. What separates the two is variety: a text
 /// repeats the registered variants of its words, and a message's bytes do not repeat.
 const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
+/// How many spaces after a `CR` are spared when they do not blank the whole line (#1193).
+///
+/// Two is a Markdown hard line break, and the whole of the evidence: no set read holds any
+/// other count. One hides less than that. Three is enough to hide `not`.
+const CR_SPARED_SPACES: usize = 2;
 
 /// The carrier classes the run rule counts, each with its own floor.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -208,6 +213,9 @@ const ENCLOSING_MARKS: &[char] = &[
     '\u{0488}', '\u{0489}', '\u{1ABE}', '\u{20DD}', '\u{20DE}', '\u{20DF}', '\u{20E0}', '\u{20E2}',
     '\u{20E3}', '\u{20E4}', '\u{A670}', '\u{A671}', '\u{A672}',
 ];
+/// The members of [`ENCLOSING_MARKS`] that historic Cyrillic writes, spared on a Cyrillic base.
+const CYRILLIC_ENCLOSING_MARKS: &[char] =
+    &['\u{0488}', '\u{0489}', '\u{A670}', '\u{A671}', '\u{A672}'];
 /// Fewest folding characters before a wholly non-ASCII token is called a disguise (#815).
 ///
 /// Below this sit IPA fragments and linguistic notation — `\u{026a}\u{0274}` is two
@@ -363,10 +371,12 @@ pub enum AnomalyKind {
     ///
     /// A `CR` is reported only when it can actually overwrite something: something other
     /// than more `CR`s must follow it on the line (so `CRLF`, `CR CR LF` and a trailing `CR`
-    /// never fire), and spaces alone count only if there are enough to blank the whole line,
-    /// so the stray `CR` before a Markdown hard line break, which is two spaces and a line
-    /// feed, does not fire (#1155). There must also be text between it and the start of its
-    /// line — for every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`,
+    /// never fire), and one or two spaces alone count only if they blank the whole line, so
+    /// the stray `CR` before a Markdown hard line break, which is two spaces and a line feed,
+    /// does not fire (#1155). Three or more always fire, since sparing every run shorter than
+    /// the line let a `CR` blank all but one cell (#1193). There must also be text between it
+    /// and the start of its line — for every UAX #14 mandatory break, not just `LF`, so a `CR`
+    /// after `NEL`, `LS`,
     /// `PS`, `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file,
     /// which used a lone `CR` as its line ending until 2001, and a stray `CR` pasted in front
     /// of ordinary text. The report is a technical fact, as with `is_case_fold_stable` and
@@ -435,8 +445,9 @@ pub enum AnomalyKind {
     ///
     /// Keycap sequences are exempt: `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation
     /// selector is what makes it an RGI keycap rather than a bare enclosing mark — the
-    /// same shape as the subdivision-flag allowlist. Cyrillic `Me` on a Cyrillic base is
-    /// exempt too; `U+0488` is historic Cyrillic notation, not a disguise.
+    /// same shape as the subdivision-flag allowlist. The base has to be a digit, `#` or `*`,
+    /// so the sequence on a letter reports (#1195). The five marks of historic Cyrillic
+    /// notation on a Cyrillic base are exempt too: `U+0488`, `U+0489`, `U+A670`-`U+A672`.
     EnclosingMark,
     /// A token drawing digits from more than one decimal numbering system — UTS #39 §5.3
     /// *Mixed Numbers*.
@@ -834,10 +845,11 @@ fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
 /// through (#1155). What remains, up to the next line break or the end of text, is what a
 /// terminal paints:
 /// * nothing — `CRLF`, `CR CR LF`, or a trailing `CR`, which overwrite nothing;
-/// * spaces alone — these blank one cell each, so they hide the line only if there are as
-///   many as it has cells. Two spaces after `line one` is a Markdown hard line break with a
-///   stray `CR` in front of it, which was 247 of the 250 bare `CR`s in 13,735 regular
-///   prompts, and it hides two cells;
+/// * spaces alone — these blank one cell each. Two spaces after `line one` is a Markdown hard
+///   line break with a stray `CR` in front of it, which was all 330 such `CR`s in 13,735
+///   regular prompts, so up to [`CR_SPARED_SPACES`] are read as that unless they blank the
+///   whole line. More report, whatever is left: 23 after `delete the audit log now` shows a
+///   lone `w` (#1193);
 /// * anything else — paints over the start of the line, however long it is.
 fn paints_over(line: &str, after: &str) -> bool {
     let after = after.trim_start_matches('\r');
@@ -847,7 +859,8 @@ fn paints_over(line: &str, after: &str) -> bool {
     }
     if painted.chars().all(|c| c == ' ') {
         let cells = line.trim_end_matches(' ').chars().count();
-        return cells > 0 && painted.chars().count() >= cells;
+        let spaces = painted.chars().count();
+        return cells > 0 && (spaces > CR_SPARED_SPACES || spaces >= cells);
     }
     true
 }
@@ -1370,15 +1383,17 @@ fn folded_confusable(tok: &str) -> Option<(char, &'static str)> {
 /// - **Keycaps.** `1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what
 ///   makes it an RGI keycap rather than a bare enclosing mark — the same distinction
 ///   `crate::invisibles` draws for a subdivision flag. A `U+20E3` with no `U+FE0F` before
-///   it is not a keycap.
+///   it is not a keycap, and neither is the sequence on a base other than a digit, `#` or
+///   `*`, which are the bases the `canonicalize` fold reads (#1195).
 /// - **Cyrillic.** `U+0488`, `U+0489`, `U+A670`-`U+A672` are historic Cyrillic notation.
-///   On a Cyrillic base they are orthography; on a Latin one they are a disguise.
+///   On a Cyrillic base they are orthography; on a Latin one they are a disguise. Those
+///   five and no other: no notation puts `U+20DD` or `U+20E3` on Cyrillic letters, and
+///   `canonicalize` keeps those marks while it folds the letters to Latin (#1195).
 ///
 /// Two are required rather than one. A single enclosing mark on a single base is a
 /// character someone may have typed; encircling *every* letter of a word is not something
 /// any orthography does, and that is the shape #724 measures.
 fn enclosing_marks(tok: &str) -> Vec<char> {
-    const KEYCAP: char = '\u{20E3}';
     const VS16: char = '\u{FE0F}';
     let chars: Vec<char> = tok.chars().collect();
     let mut out = Vec::new();
@@ -1386,7 +1401,11 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
         if !ENCLOSING_MARKS.contains(&c) {
             continue;
         }
-        if c == KEYCAP && i > 0 && chars[i - 1] == VS16 {
+        if c == crate::emoji::KEYCAP
+            && i >= 2
+            && chars[i - 1] == VS16
+            && crate::emoji::is_keycap_base(chars[i - 2])
+        {
             continue;
         }
         // The base is the last character before it that is not a combining mark of any
@@ -1409,7 +1428,7 @@ fn enclosing_marks(tok: &str) -> Vec<char> {
             .rev()
             .find(|b| !unicode_normalization::char::is_combining_mark(**b))
             .is_some_and(|b| crate::scripts::detect_char_script(*b) == "Cyrillic");
-        if base_is_cyrillic {
+        if CYRILLIC_ENCLOSING_MARKS.contains(&c) && base_is_cyrillic {
             continue;
         }
         out.push(c);

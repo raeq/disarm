@@ -4,30 +4,18 @@ These tests verify that transliterate(text, context=True) produces
 better output than context-free transliteration for Arabic text,
 by restoring vowels from a dictionary-based lookup with bigram context.
 
-Requires: pip install disarm[arabic] (or data/arabic_dict.bin present)
+Requires: data/arabic_dict.bin. CI builds one from a small fixture (#1151).
 """
 
 from __future__ import annotations
 
 import pytest
+from conftest import has_context_dict
 
 from disarm import transliterate
 
-
-def _has_arabic_dict() -> bool:
-    """Check if Arabic context dictionary is available."""
-    try:
-        transliterate("\u0643\u062a\u0628", context=True)
-        return True
-    except Exception as e:
-        # Only a missing dictionary is a skip condition; re-raise real bugs.
-        if "not found" in str(e).lower():
-            return False
-        raise
-
-
 needs_arabic_dict = pytest.mark.skipif(
-    not _has_arabic_dict(),
+    not has_context_dict("\u0643\u062a\u0628"),
     reason="Arabic context dictionary not installed",
 )
 

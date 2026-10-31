@@ -311,6 +311,8 @@ def _transliterate_dispatch(
                  (Arabic/Persian/Hebrew), producing more readable output than
                  the context-free tables. Requires the prebuilt context
                  dictionaries (see ``bootstrap_dicts.sh`` / ``DISARM_DICT_DIR``).
+                 With ``lang="auto"`` it reads the dictionary of the language
+                 detected for the whole string, as if that code had been passed.
                  Forward-only: mutually exclusive with *target*, and cannot be
                  combined with *tones*.
 

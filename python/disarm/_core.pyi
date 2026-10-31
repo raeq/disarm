@@ -156,6 +156,7 @@ class _TextPipeline:
         strip_zalgo: int | None = None,
         strip_pua: bool = False,
         strip_plane14: bool = False,
+        strip_invisible_marks: bool = False,
         resolve_deletions: bool = False,
         resolve_cr: bool = False,
         digit_policy: str = "numeric",

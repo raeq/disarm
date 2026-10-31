@@ -286,11 +286,24 @@ more than `max_marks` in total, because the cap applies at each position: a mark
 a mark below are two positions, not one.
 
 The detector adds two shapes the cap cannot see, both under `zalgo` (#1156). A word with an
-overlay on every letter, a strikethrough, slash or underline, carries one mark per letter and no
-stack at all. A Latin word with three marks on every letter passes the cap by spreading them
-across classes, and the gate on Latin is what keeps the Burmese evidence above out of it. Neither
-changes what the surfaces do: `canonicalize` keeps an overlay and at most three marks at each
-position, and `llm_guardrail` and `strip_obfuscation` remove them.
+overlay across it carries one mark per letter and no stack at all. A Latin word with three marks
+per letter passes the cap by spreading them across classes, and the gate on Latin is what keeps
+the Burmese evidence above out of it. Neither changes what the surfaces do: `canonicalize` keeps
+an overlay and at most three marks at each position, and `llm_guardrail` and `strip_obfuscation`
+remove them.
+
+Both start short of every letter, because one bare letter must not switch them off (#1194). A
+strikethrough or slash, and three marks on a Latin letter, report at two letters and half the
+word, so `U+0336` on every other letter of `password` reports. An underline reports on all
+letters but one and three at the least, because scholarly romanization of Arabic underlines
+digraphs: `S\u0332h\u0332ayk\u0332h\u0332` is four of six and stays clean. The bars leave this
+clean, and only the detector is blind to it, since `llm_guardrail` removes every mark:
+
+- A strike on under half a word, such as every third letter of `password`.
+- An underline on all but two letters.
+- The overline `U+0305` on any word, a vinculum in `V\u0305I\u0305` and an active-low signal in
+  `R\u0305S\u0305T\u0305`.
+- The macron below `U+0331` on any word, a letter in Kwak'wala and Tlingit.
 
 The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
 unaffected by the default.

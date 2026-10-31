@@ -154,12 +154,227 @@ def test_an_overlay_on_every_letter_of_a_word_reports(mark: int) -> None:
     assert disarm.inspect_anomalies(text).kinds == ["zalgo"]
 
 
-def test_an_overlay_on_some_letters_of_a_word_does_not_report() -> None:
+def test_one_struck_letter_of_a_word_does_not_report() -> None:
     assert not disarm.has_anomalies("re\u0336ad please")
 
 
 def test_one_overlaid_letter_alone_does_not_report() -> None:
     assert not disarm.has_anomalies("x\u0338 is not y")
+
+
+# --- How much of a word, and which marks (#1194) --------------------------------
+
+_PASSWORD = "password"
+
+
+def _on(positions: list[int] | range, marks: str, word: str = _PASSWORD) -> str:
+    """`word` with `marks` after each letter at `positions`."""
+    return "".join(c + marks if i in positions else c for i, c in enumerate(word))
+
+
+def _before_each(marks: str, word: str = _PASSWORD) -> str:
+    return "".join(marks + c for c in word)
+
+
+_ALL = range(8)
+_ALL_BUT_LAST = range(7)
+_ALL_BUT_FIRST = range(1, 8)
+_EVERY_OTHER = range(0, 8, 2)
+_EVERY_THIRD = range(0, 8, 3)
+
+_STRIKES = [0x334, 0x335, 0x336, 0x337, 0x338, 0x20D2, 0x20D3, 0x20D8, 0x20D9, 0x20DA, 0x20E5]
+_STRIKES += [0x20E6, 0x20EA, 0x20EB]
+
+
+@pytest.mark.parametrize("mark", _STRIKES, ids=lambda m: f"U+{m:04X}")
+@pytest.mark.parametrize(
+    "positions",
+    [_ALL, _ALL_BUT_LAST, _ALL_BUT_FIRST, _EVERY_OTHER],
+    ids=["every", "all-but-last", "all-but-first", "every-other"],
+)
+def test_a_strike_on_half_a_word_or_more_reports(positions: range, mark: int) -> None:
+    """One bare letter switched the rule off, which is no bar at all (#1194)."""
+    text = _on(positions, chr(mark))
+    assert disarm.has_anomalies(text), ascii(text)
+    assert disarm.inspect_anomalies(text).kinds == ["zalgo"], ascii(text)
+
+
+@pytest.mark.parametrize("mark", [0x336, 0x332, 0x20D2], ids=lambda m: f"U+{m:04X}")
+def test_a_mark_written_before_each_letter_reports(mark: int) -> None:
+    """The first mark has no letter and the last letter no mark, so one bare letter is free."""
+    assert disarm.has_anomalies(_before_each(chr(mark)))
+
+
+def test_a_strike_on_under_half_a_word_stays_clean() -> None:
+    """A stated limit, which `llm_guardrail` still removes: see `docs/limitations.md`."""
+    assert not disarm.has_anomalies(_on(_EVERY_THIRD, "\u0336"))
+
+
+@pytest.mark.parametrize("mark", [0x332, 0x333], ids=lambda m: f"U+{m:04X}")
+@pytest.mark.parametrize(
+    "positions",
+    [_ALL, _ALL_BUT_LAST, _ALL_BUT_FIRST],
+    ids=["every", "all-but-last", "all-but-first"],
+)
+def test_an_underline_on_all_but_one_letter_reports(positions: range, mark: int) -> None:
+    text = _on(positions, chr(mark))
+    assert disarm.has_anomalies(text), ascii(text)
+    assert disarm.inspect_anomalies(text).kinds == ["zalgo"], ascii(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "S\u0332h\u0332ayk\u0332h\u0332",
+        "s\u0332h\u0332\u0101h",
+        "k\u0332h\u0332\u0101n",
+        "s\u0332h\u0332\u012b",
+        "G\u0332h\u0332az\u0101l\u012b",
+        "F\u0332ile E\u0332dit V\u0332iew",
+    ],
+    ids=["shaykh", "shah", "khan", "shi", "ghazali", "menu-accelerators"],
+)
+def test_an_underlined_digraph_is_orthography_and_stays_clean(text: str) -> None:
+    """Scholarly romanization of Arabic underlines `s\u0332h\u0332` and `k\u0332h\u0332`.
+
+    So underlines answer to all but one letter, where a strike answers to half. A menu
+    underlines one letter of each word.
+    """
+    assert not disarm.has_anomalies(text), ascii(text)
+
+
+def test_an_underline_on_half_a_word_stays_clean() -> None:
+    assert not disarm.has_anomalies(_on(_EVERY_OTHER, "\u0332"))
+
+
+@pytest.mark.parametrize(
+    ("mark", "why"),
+    [
+        (
+            0x305,
+            "an overline is a vinculum and an active-low signal: V\u0305I\u0305, R\u0305S\u0305T\u0305",
+        ),
+        (0x331, "a macron below is a letter in Kwak'wala, Tlingit and Semitic romanization"),
+    ],
+    ids=["overline", "macron-below"],
+)
+def test_the_line_marks_with_a_use_on_every_letter_stay_clean(mark: int, why: str) -> None:
+    """A stated limit: `llm_guardrail` removes them, and only the detector does not read them."""
+    assert not disarm.has_anomalies(_on(_ALL, chr(mark))), why
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "V\u0305I\u0305I\u0305",
+        "R\u0305S\u0305T\u0305",
+        "C\u0305S\u0305",
+        "G\u0331a\u0331l\u0331a\u0331",
+    ],
+    ids=["roman-numeral", "active-low", "chip-select", "macron-below"],
+)
+def test_real_uses_of_the_line_marks_stay_clean(text: str) -> None:
+    assert not disarm.has_anomalies(text), ascii(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "x=\u0338y=\u0338z",
+        "a<\u0338b>\u0338c=\u0338d",
+        "x\u2260y\u2260z",
+    ],
+    ids=["chain", "three-relations", "precomposed"],
+)
+def test_a_chain_of_negations_counts_no_letter_as_struck(text: str) -> None:
+    """The mark is on the symbol, and half the letters is now reachable by counting it."""
+    assert not disarm.has_anomalies(text), ascii(text)
+
+
+def test_a_class_one_mark_with_a_script_of_its_own_stays_where_it_was() -> None:
+    """Bassa Vah tones are class 1 and are how that script writes tone."""
+    bassa_vah = "".join(chr(0x16AD0 + i) + "\U00016af0" for i in range(6))
+    assert not disarm.has_anomalies(bassa_vah)
+
+
+def test_every_class_one_mark_is_counted_or_has_a_script_of_its_own() -> None:
+    """A new overlay in the block for symbols has to be decided, not missed."""
+    own_script = {0x1CD4, *range(0x1CE2, 0x1CE9), 0x10A39, *range(0x16AF0, 0x16AF5)}
+    own_script |= {0x1BC9E, 0x1D167, 0x1D168, 0x1D169}
+    class_one = {cp for cp in range(0x110000) if unicodedata.combining(chr(cp)) == 1}
+    assert class_one == own_script | set(_STRIKES)
+
+
+@pytest.mark.parametrize(
+    "marks",
+    [(0x301, 0x323, 0x304), (0x300, 0x316, 0x342)],
+    ids=lambda m: "-".join(f"{cp:04X}" for cp in m),
+)
+@pytest.mark.parametrize(
+    "positions",
+    [_ALL, _ALL_BUT_LAST, _ALL_BUT_FIRST, _EVERY_OTHER],
+    ids=["every", "all-but-last", "all-but-first", "every-other"],
+)
+def test_three_marks_on_half_a_latin_word_or_more_report(
+    positions: range, marks: tuple[int, ...]
+) -> None:
+    """The stack rule had the same edge, with no overlay in it to catch them (#1194)."""
+    text = _on(positions, "".join(map(chr, marks)))
+    assert disarm.has_anomalies(text), ascii(text)
+    assert disarm.inspect_anomalies(text).kinds == ["zalgo"], ascii(text)
+
+
+def test_the_issue_stack_on_all_but_the_last_reports() -> None:
+    assert disarm.has_anomalies(_on(_ALL_BUT_LAST, "\u0323\u0301\u0336"))
+
+
+def test_three_marks_on_under_half_a_latin_word_stay_clean() -> None:
+    assert not disarm.has_anomalies(_on(_EVERY_THIRD, "\u0301\u0323\u0304"))
+
+
+def test_three_marks_on_one_letter_of_a_word_stay_clean() -> None:
+    assert not disarm.has_anomalies(_on([3], "\u0301\u0323\u0304"))
+
+
+def test_two_marks_on_every_letter_stay_clean_at_any_coverage() -> None:
+    assert not disarm.has_anomalies(_on(_ALL, "\u0301\u0323"))
+    assert not disarm.has_anomalies(_on(_ALL_BUT_LAST, "\u0301\u0323"))
+
+
+@pytest.mark.parametrize(
+    "marks",
+    [
+        "\u0336",
+        "\u0332",
+        "\u0305",
+        "\u0331",
+        "\u20d2",
+        "\u20d3",
+        "\u20e5",
+        "\u0323\u0301\u0336",
+    ],
+    ids=lambda m: "-".join(f"{ord(c):04X}" for c in m),
+)
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda m: _on(_ALL, m),
+        lambda m: _on(_ALL_BUT_LAST, m),
+        lambda m: _on(_ALL_BUT_FIRST, m),
+        lambda m: _on(_EVERY_OTHER, m),
+        lambda m: _on(_EVERY_THIRD, m),
+        _before_each,
+    ],
+    ids=["every", "all-but-last", "all-but-first", "every-other", "every-third", "before-each"],
+)
+def test_llm_guardrail_returns_the_word_from_every_row(build, marks: str) -> None:  # noqa: ANN001
+    assert disarm.get_pipeline("llm_guardrail")(build(marks)) == _PASSWORD
+
+
+def test_the_finding_says_how_many_letters_carry_the_overlay() -> None:
+    assert disarm.inspect_anomalies(_on(_ALL_BUT_LAST, "\u0336")).findings[0].detail == (
+        "U+0336 on 7 of 8 letters"
+    )
 
 
 @pytest.mark.parametrize(

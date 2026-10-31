@@ -318,8 +318,8 @@ fn is_mongolian_selector(ch: char) -> bool {
 /// * a Mongolian selector after a Mongolian letter, which is the reason the comparison presets
 ///   give for keeping them everywhere.
 ///
-/// An ideographic selector goes even after an ideograph. The IVD is not shipped, so nothing here
-/// can say which sequences are registered, and a caller naming this step gives up the variant.
+/// An ideographic selector goes even after an ideograph, registered or not: a caller naming this
+/// step gives up the variant, and a carrier that keeps to registered sequences is still a carrier.
 /// Reading the base from `out` is what makes this a fixed point: a removed selector is not a base,
 /// and a selector that stayed is not one either.
 pub(crate) fn strip_invisible_marks_into(text: &str, out: &mut String) {

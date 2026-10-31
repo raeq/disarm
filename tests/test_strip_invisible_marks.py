@@ -10,8 +10,8 @@ Three decisions, all from scope item 2:
   the glyph. That is the rule `strip_format` follows since #1135.
 * Mongolian free variation selectors stay directly after a Mongolian letter. That is the reason
   `docs/limitations.md` gives for keeping them, and it holds nowhere else.
-* An ideographic selector goes, even after an ideograph: the IVD is not shipped, so nothing here
-  can say which are registered, and a caller who names this step is asking to lose the variant.
+* An ideographic selector goes, even after an ideograph and registered or not: a caller who names
+  this step is asking to lose the variant.
 """
 
 from __future__ import annotations

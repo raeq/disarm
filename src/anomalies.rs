@@ -110,11 +110,11 @@ const RUN_THRESHOLD_NONCHARACTER: usize = 1;
 /// one byte, and more than ordinary text holds by accident. [`spread_carriers`] says what
 /// counts. One selector after an unregistered base stays unreported, as it was.
 const SPREAD_CARRIER_FLOOR: usize = 8;
-/// How many *different* ideographic selectors a text must use before they report (#1134).
+/// How many *different* ideographic selectors make registered sequences report (#1134).
 ///
-/// The IVD registers tens of thousands of sequences and is not shipped, so a selector after
-/// an ideograph cannot be checked against it. What separates the two is variety: a text
-/// repeats the registered variants of its words, and a message's bytes do not repeat.
+/// A sequence the IVD does not register counts toward [`SPREAD_CARRIER_FLOOR`] as any other
+/// does (#1196). Registered ones answer to variety alone: a text repeats the registered
+/// variants of its words. 72 bases register eight or more, so that stays a sign of a carrier.
 const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
 
 /// The carrier classes the run rule counts, each with its own floor.
@@ -856,7 +856,7 @@ fn paints_over(line: &str, after: &str) -> bool {
 ///
 /// Counts a selector after a base no sequence registers, and `U+034F` before a non-mark,
 /// since its legitimate use holds a mark away from its base. A selector touching another is
-/// the run rule's, and an ideographic selector after an ideograph answers to variety alone.
+/// the run rule's, and a sequence the IVD registers answers to variety alone (#1196).
 fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
     if text.is_ascii() {
         return None;
@@ -879,9 +879,11 @@ fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
             let base = previous.filter(|b| !crate::invisibles::is_variation_selector(*b));
             let ideograph = base.is_some_and(|b| crate::scripts::detect_char_script(b) == "Han");
             if ideograph && c >= '\u{E0100}' {
+                ideographic.insert(c);
+            }
+            if base.is_some_and(|b| crate::tables::is_registered_ideographic_variation(b, c)) {
                 ideographic_first.get_or_insert_with(|| (i, c.len_utf8()));
                 ideographic_count += 1;
-                ideographic.insert(c);
             } else if base.is_some_and(|b| !crate::tables::is_registered_variation(b, c)) {
                 first.get_or_insert_with(|| (i, c.len_utf8()));
                 count += 1;

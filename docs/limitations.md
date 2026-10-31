@@ -214,9 +214,19 @@ The other direction is the security-relevant one: `A` + `U+E0100` is a base carr
 ignorable selector that no registration justifies, which is the shape of a smuggling carrier.
 `canonicalize` removes it, so it does not survive into a key. One of them reports nothing, so a
 caller inspecting rather than transforming sees nothing. Eight spread through a text report
-`invisible`, and so do eight `U+034F` before a non-mark (#1134). A selector in the ideographic
-range after an ideograph reports only when a text uses eight different ones, because the IVD is
-not shipped and registered variants repeat.
+`invisible`, and so do eight `U+034F` before a non-mark (#1134). A selector after an ideograph
+answers to the IVD the same way (#1196): eight sequences that release 2026-08-03 does not register
+report, so 48 bits on `U+E0100` and `U+E0101` over 48 arbitrary kanji report, with 23 unregistered.
+Registered sequences report only when a text uses eight different selectors, because registered
+variants repeat. A sequence registered after that release counts as unregistered until the table is
+regenerated.
+
+No table closes the rest. The IVD registers both `U+E0100` and `U+E0101` on 4,956 ideographs in
+`U+4E00` to `U+9FFF`, so 48 of them carry the same 48 bits with every sequence valid, and a carrier
+that keeps to registered sequences and to seven selectors can spend just under three bits per
+ideograph and read clean. So can one with `U+E0100` present for each 1 bit, on kanji where fewer than
+eight sequences are unregistered. `canonicalize`, `llm_guardrail` and `strip_format` remove every
+selector from all of these, so the gap is the detector's alone.
 
 Every other CJK fidelity loss on this page is documented — the single-reading pinyin
 mapping, the missing tone marks, the character-level word boundaries. This one was not.

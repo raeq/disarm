@@ -71,6 +71,20 @@ The three predicates are disjoint answers to different questions: `has_bidi_cont
 raw set, `inspect_anomalies` is the judged subset, and `has_bidi_conflict` reads
 strong-direction **letters** and is structurally blind to controls altogether.
 
+### Shapes other detectors answer differently (#1165)
+
+A leading `U+FEFF` reports `invisible`. It is what a file read as `utf-8` and not `utf-8-sig`
+begins with, and two other detectors read it as a byte order mark. disarm keeps reporting it
+because `<BOM>paypal` is not `paypal` to an exact match. Open a file with `utf-8-sig` if the mark
+is expected.
+
+A ZWJ at the end of a text, after an emoji, reports nothing. One joiner cannot spell a byte, and a
+truncated message leaves one by accident, so this is a broken emoji sequence and not a carrier. The
+same goes for a lone zero-width character beside an emoji, with no letter to split or hide. Beside
+a letter, both report.
+
+`tests/test_rival_vectors.py` holds every string other detectors' test suites state a verdict on,
+and says for each one whether disarm agrees, differs by decision, or differs with an issue open.
 
 ### Levels (#946)
 

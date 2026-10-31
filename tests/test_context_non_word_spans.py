@@ -18,26 +18,11 @@ from __future__ import annotations
 
 import json
 import os
-import struct
 import subprocess
 import sys
 from pathlib import Path
 
-
-def _s16(s: str) -> bytes:
-    b = s.encode("utf-8")
-    return struct.pack("<H", len(b)) + b
-
-
-def _dict_bytes(unigrams: dict[str, str]) -> bytes:
-    """TRLD v1: a 24-byte header, the unigram records, no bigrams."""
-    body = b"".join(
-        _s16(skel) + struct.pack("<H", 1) + _s16(form) + struct.pack("<I", 1)
-        for skel, form in sorted(unigrams.items())
-    )
-    header = b"TRLD" + struct.pack("<5I", 1, len(unigrams), 0, 24, 24 + len(body))
-    return header + body
-
+from conftest import trld_bytes
 
 CASES = [
     # (text, lang, errors)
@@ -68,7 +53,7 @@ def test_context_output_matches_the_context_free_path_off_the_words(tmp_path: Pa
         "persian_dict.bin": {"\u0633\u0644\u0627\u0645": "\u0633\u064e\u0644\u0627\u0645"},
         "hebrew_dict.bin": {"\u05e9\u05dc\u05d5\u05dd": "\u05e9\u05dc\u05d5\u05dd"},
     }.items():
-        (tmp_path / name).write_bytes(_dict_bytes(entries))
+        (tmp_path / name).write_bytes(trld_bytes(entries))
 
     env = {**os.environ, "DISARM_DICT_DIR": str(tmp_path)}
     run = subprocess.run(

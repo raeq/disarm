@@ -345,13 +345,16 @@ pub enum AnomalyKind {
     /// the detector was silent, because the same `is_fold_whitespace` call that spares
     /// TAB and LF spared this too (#739).
     ///
-    /// A `CR` is reported only when it can actually overwrite something: it must be
-    /// followed by a character other than `LF` (so `CRLF` line endings and a trailing
-    /// `CR` never fire) and there must be text between it and the start of its line — for
-    /// every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`, `PS`,
-    /// `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file, which
-    /// used a lone `CR` as its line ending until 2001. The report is a technical fact, as
-    /// with `is_case_fold_stable` and `groß` — the judgement is the caller's.
+    /// A `CR` is reported only when it can actually overwrite something: something other
+    /// than more `CR`s must follow it on the line (so `CRLF`, `CR CR LF` and a trailing `CR`
+    /// never fire), and spaces alone count only if there are enough to blank the whole line,
+    /// so the stray `CR` before a Markdown hard line break, which is two spaces and a line
+    /// feed, does not fire (#1155). There must also be text between it and the start of its
+    /// line — for every UAX #14 mandatory break, not just `LF`, so a `CR` after `NEL`, `LS`,
+    /// `PS`, `VT` or `FF` never fires either. **Known false positive:** a classic Mac OS file,
+    /// which used a lone `CR` as its line ending until 2001, and a stray `CR` pasted in front
+    /// of ordinary text. The report is a technical fact, as with `is_case_fold_stable` and
+    /// `groß` — the judgement is the caller's.
     Deletion,
     /// A run of smuggling carriers that **decodes to readable text** (#701).
     ///
@@ -694,19 +697,13 @@ fn decoded_payloads(text: &str) -> impl Iterator<Item = crate::smuggled::Carried
 /// `has_anomalies_matches_inspect` asserts they never do, and a rule stated twice is the
 /// way that assertion starts failing.
 ///
-/// The three guards are all necessary, and each spares an ordinary use:
-/// * followed by `LF` — a `CRLF` line ending, which overwrites nothing;
-/// * at end of text — nothing follows to paint over the line;
-/// * nothing between it and the line start — a leading `CR` has no prefix to hide, for
-///   every line break in [`is_line_break`] and not just `LF`.
+/// A leading `CR` has no prefix to hide, for every line break in [`is_line_break`] and not
+/// just `LF`. [`paints_over`] decides the rest.
 fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
     let mut line_start = 0;
     for (i, c) in text.char_indices() {
-        if c == '\r' {
-            let overwrites = text[i + 1..].chars().next().is_some_and(|n| n != '\n');
-            if overwrites && i > line_start {
-                return Some((line_start, &text[line_start..i]));
-            }
+        if c == '\r' && i > line_start && paints_over(&text[line_start..i], &text[i + 1..]) {
+            return Some((line_start, &text[line_start..i]));
         }
         if is_line_break(c) {
             // A `CR` starts a line too, so a run of them collapses to one line start.
@@ -714,6 +711,30 @@ fn overwriting_cr(text: &str) -> Option<(usize, &str)> {
         }
     }
     None
+}
+
+/// Whether what follows a `CR` overwrites `line`, the text before it.
+///
+/// Further `CR`s only move the cursor to a column it is about to leave, so they are read
+/// through (#1155). What remains, up to the next line break or the end of text, is what a
+/// terminal paints:
+/// * nothing — `CRLF`, `CR CR LF`, or a trailing `CR`, which overwrite nothing;
+/// * spaces alone — these blank one cell each, so they hide the line only if there are as
+///   many as it has cells. Two spaces after `line one` is a Markdown hard line break with a
+///   stray `CR` in front of it, which was 247 of the 250 bare `CR`s in 13,735 regular
+///   prompts, and it hides two cells;
+/// * anything else — paints over the start of the line, however long it is.
+fn paints_over(line: &str, after: &str) -> bool {
+    let after = after.trim_start_matches('\r');
+    let painted = after.find(is_line_break).map_or(after, |end| &after[..end]);
+    if painted.is_empty() {
+        return false;
+    }
+    if painted.chars().all(|c| c == ' ') {
+        let cells = line.trim_end_matches(' ').chars().count();
+        return cells > 0 && painted.chars().count() >= cells;
+    }
+    true
 }
 
 fn codepoint(c: char) -> String {

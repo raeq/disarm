@@ -16,6 +16,8 @@ asserted here.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import disarm
@@ -385,6 +387,65 @@ def test_ordinary_uses_of_cr_are_spared() -> None:
     assert not has_anomalies("col1\tcol2\nrow1\trow2\n"), "ordinary multi-line text"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "line one\r\r\nline two",
+        "line one\r\r",
+        "line one\r\r\r\nline two",
+    ],
+)
+def test_a_cr_followed_only_by_more_crs_overwrites_nothing(text: str) -> None:
+    """Each CR moves the cursor to a column it is about to leave (#1155)."""
+    assert not has_anomalies(text)
+    assert "deletion" not in inspect_anomalies(text).kinds
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "line one\r  \nline two",
+        "line one\r \n",
+        "line one\r  ",
+        "    \r  \n",
+    ],
+)
+def test_a_few_spaces_after_a_cr_hide_a_few_cells_and_no_line(text: str) -> None:
+    """Exactly this shape was 247 of 250 bare CRs in 13,735 regular prompts (#1155).
+
+    Two spaces is a Markdown hard line break with a stray CR in front of it. It blanks two
+    cells, and hiding a whole line this way takes as many spaces as the line has cells.
+    """
+    assert not has_anomalies(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "paypal\r      \n",
+        "paypal\r         \nnext",
+        "ab\r  \n",
+        "paypal\r      ",
+    ],
+)
+def test_enough_spaces_to_blank_the_whole_line_still_report(text: str) -> None:
+    assert "deletion" in inspect_anomalies(text).kinds
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ZZZZZZ\rpaypal",
+        "line one\rline two",
+        "line one\r  x",
+        "line one\r\rline two",
+    ],
+)
+def test_a_cr_followed_by_text_still_reports(text: str) -> None:
+    assert has_anomalies(text)
+    assert "deletion" in inspect_anomalies(text).kinds
+
+
 def test_the_known_false_positive_is_the_documented_one() -> None:
     """Classic Mac OS used a lone CR as its line ending until 2001.
 
@@ -394,6 +455,15 @@ def test_the_known_false_positive_is_the_documented_one() -> None:
     guide, so a reader meeting the false positive finds it named.
     """
     assert has_anomalies("line one\rline two"), "indistinguishable from an overwrite"
+
+
+def test_the_guide_names_the_shape_real_prompts_hold() -> None:
+    """The corpus shape was never the classic Mac file the page named (#1155)."""
+    root = Path(__file__).resolve().parent.parent
+    for page in ("docs/user-guide/anomaly-detection.md", "THREAT_MODEL.md"):
+        flat = " ".join((root / page).read_text(encoding="utf-8").split())
+        assert "Markdown hard line break" in flat, page
+        assert "classic Mac" in flat, page
 
 
 # --------------------------------------------------------------------------------------

@@ -281,6 +281,13 @@ exactly that, and `is_zalgo`'s `threshold` is its counterpart. Note that a base 
 more than `max_marks` in total, because the cap applies at each position: a mark above and
 a mark below are two positions, not one.
 
+The detector adds two shapes the cap cannot see, both under `zalgo` (#1156). A word with an
+overlay on every letter, a strikethrough, slash or underline, carries one mark per letter and no
+stack at all. A Latin word with three marks on every letter passes the cap by spreading them
+across classes, and the gate on Latin is what keeps the Burmese evidence above out of it. Neither
+changes what the surfaces do: `canonicalize` keeps an overlay and at most three marks at each
+position, and `llm_guardrail` and `strip_obfuscation` remove them.
+
 The preset that strips *every* mark is `ml_normalize`, whose cap is `0` by design and is
 unaffected by the default.
 

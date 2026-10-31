@@ -280,6 +280,8 @@ pub(crate) fn validate_transliterate_args(
     Ok(())
 }
 
+type ContextDictRef = &'static crate::context::ContextDict;
+
 /// Context-aware transliteration using dictionary-based vowel restoration.
 ///
 /// Returns an error if no context dictionary is loaded for the language.
@@ -322,17 +324,20 @@ pub(crate) fn transliterate_context(
 
     // #107: Try to get the appropriate context dictionary, distinguishing
     // "corrupt" (file present but malformed) from "absent" (not found).
-    // Persian: try Persian dict first, fall back to Arabic (shared loanwords).
-    let dict_result: Result<Option<&'static crate::context::ContextDict>, &'static str> = match lang
-    {
-        Some("he") => crate::context::get_hebrew_dict(),
-        Some("fa") => match crate::context::get_persian_dict() {
-            Ok(Some(d)) => Ok(Some(d)),
-            Ok(None) => crate::context::get_arabic_dict(), // absent → try Arabic
-            Err(e) => Err(e),                              // corrupt → propagate
-        },
-        _ => crate::context::get_arabic_dict(),
-    };
+    // Persian: the curated vocabulary first, then Arabic for what it lacks, since about
+    // 40% of Persian vocabulary is Arabic-origin (#1148).
+    let dict_result: Result<(Option<ContextDictRef>, Option<ContextDictRef>), &'static str> =
+        match lang {
+            Some("he") => crate::context::get_hebrew_dict().map(|d| (d, None)),
+            Some("fa") => crate::context::get_persian_dict().and_then(|persian| {
+                let arabic = crate::context::get_arabic_dict()?;
+                Ok(match persian {
+                    Some(persian) => (Some(persian), arabic),
+                    None => (arabic, None),
+                })
+            }),
+            _ => crate::context::get_arabic_dict().map(|d| (d, None)),
+        };
 
     let lang_name = match lang {
         Some("he") => "Hebrew",
@@ -341,23 +346,24 @@ pub(crate) fn transliterate_context(
     };
 
     match dict_result {
-        Ok(Some(d)) => {
+        Ok((Some(d), fallback)) => {
             // Use context-aware transliteration
-            let result = crate::context::transliterate_context(text, lang, d, |word, lang| {
-                transliterate_impl(
-                    word,
-                    lang,
-                    error_mode,
-                    replace_with,
-                    strict_iso9,
-                    gost7034,
-                    false,
-                )
-                .into_owned()
-            });
+            let result =
+                crate::context::transliterate_context(text, lang, d, fallback, |word, lang| {
+                    transliterate_impl(
+                        word,
+                        lang,
+                        error_mode,
+                        replace_with,
+                        strict_iso9,
+                        gost7034,
+                        false,
+                    )
+                    .into_owned()
+                });
             Ok(result)
         }
-        Ok(None) => {
+        Ok((None, _)) => {
             // Dictionary not loaded — point the user at a remedy that actually works
             // (#60). Context dictionaries are not shipped in the wheel; build them
             // and expose them via DISARM_DICT_DIR.

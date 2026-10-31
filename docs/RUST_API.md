@@ -109,7 +109,7 @@ That is the contract, and it is what a consumer can plan against:
 | `0.15.x` → `0.16.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 3 → 9 in six steps, and the table there names what moved at each one. |
 | `0.16.x` → `0.17.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 9 → 10 in one step, and the table there names the twelve changes it records and what each moves. |
 | `0.17.x` → `0.18.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 10 → 11, for two changes. A key built only from characters assigned before Unicode 18 does not move. |
-| `0.18.x` → `0.19.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 11 → 12, for one change. A key moves only where its text holds one of the 3,738 reserved `Default_Ignorable_Code_Point` code points. |
+| `0.18.x` → `0.19.0` | Read the changelog's **Upgrade notes** first: `KEY_SCHEMA_VERSION` goes 11 → 13, for two changes. A key moves only where its text holds one of the 3,738 reserved `Default_Ignorable_Code_Point` code points, or a keycap. |
 
 The same rule holds in every binding, because they all wrap one core.
 

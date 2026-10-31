@@ -814,7 +814,8 @@ def strip_variation_selectors(text: str) -> str:
     """Strip every variation selector (VS1–VS16 and VS17–VS256).
 
     These are the arbitrary-byte smuggling channel. Use ``strip_format`` if you
-    need to keep the VS15/VS16 presentation selectors for rendering.
+    need to keep the VS15/VS16 presentation selectors for rendering, which it
+    does only after a base Unicode registers for them.
 
     Examples:
         >>> strip_variation_selectors("g\\ufe01data")  # VS2
@@ -1220,7 +1221,7 @@ PRESETS: dict[str, list[tuple[str, str | None]]] = {
     ],
     "strip_format": [
         ("strip_bidi", None),
-        # #413: rendering policy — keep VS15/VS16 after a base and PRESERVE the PUA
+        # #413, #1135: rendering policy — keep VS15/VS16 after a registered base and PRESERVE the PUA
         # (icon fonts); still strip Tags (keeping flags), CGJ, and noncharacters.
         ("strip_invisibles", "rendering"),
         ("strip_control", None),

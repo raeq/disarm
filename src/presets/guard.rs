@@ -347,6 +347,73 @@ pub(super) enum Guard {
     Actionable,
 }
 
+/// Where [`scan_ascii_run`] stopped, and the whitespace state to carry on with.
+struct AsciiRun {
+    end: usize,
+    prev_space: bool,
+    saw_ws: bool,
+}
+
+/// Scan ASCII bytes from `start` to the first non-ASCII byte. `None` means a step acts.
+///
+/// A function of its own so that no non-ASCII code shares its register allocation. With
+/// `acts_on_nonascii` inlined into the same function, the predicates #1132 added there
+/// pushed this loop's state onto the stack, though no ASCII byte reaches them:
+/// `canonicalize` on an ASCII document went from 1,698,864 to 1,792,592 estimated cycles,
+/// all of it stack reads and writes in this loop. It is 1,572,283 like this. The price is
+/// a call per ASCII run, which short inputs notice (+1.7% on two rows of the perf gate).
+#[inline(never)]
+fn scan_ascii_run(
+    bytes: &[u8],
+    start: usize,
+    mask: Actionable,
+    mut prev_space: bool,
+    mut saw_ws: bool,
+) -> Option<AsciiRun> {
+    let n = bytes.len();
+    let mut i = start;
+    while i < n {
+        let b = bytes[i];
+        if b >= 0x80 {
+            break;
+        }
+        // ── Non-whitespace ASCII actions ⇒ the full pipeline is required. ──
+        if mask.controls && is_removed_control(b) {
+            return None;
+        }
+        if mask.fold_case && b.is_ascii_uppercase() {
+            return None;
+        }
+        if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
+            return None;
+        }
+        // `I` is covered by `fold_case` wherever both are set; `0` and `1` are
+        // covered by nothing else. See the `prototype` field.
+        if mask.prototype && matches!(b, b'I' | b'0' | b'1') {
+            return None;
+        }
+        // ── ASCII whitespace `collapse_whitespace` would fold ⇒ note, keep
+        //    scanning; if nothing else fires this is the #464 WhitespaceOnly case.
+        if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
+            saw_ws = true; // TAB/CR/FS–US fold to a space
+            prev_space = false;
+        } else if mask.collapse_ws && b == b' ' {
+            if i == 0 || i + 1 == n || prev_space {
+                saw_ws = true; // leading / trailing / run-of-spaces collapses
+            }
+            prev_space = true;
+        } else {
+            prev_space = false;
+        }
+        i += 1;
+    }
+    Some(AsciiRun {
+        end: i,
+        prev_space,
+        saw_ws,
+    })
+}
+
 /// Classify `text` against the preset's step mask — the #458/#464 fast-path guard.
 /// ASCII bytes are tested by byte arithmetic (controls, fold-whitespace, case, the
 /// ASCII confusable set); whitespace is structural (collapse trims the ends and
@@ -380,38 +447,13 @@ pub(super) fn classify(
     let mut saw_ws = false;
     let mut i = 0;
     while i < n {
-        let b = bytes[i];
-        if b < 0x80 {
-            // ── Non-whitespace ASCII actions ⇒ the full pipeline is required. ──
-            if mask.controls && is_removed_control(b) {
-                return Guard::Actionable;
-            }
-            if mask.fold_case && b.is_ascii_uppercase() {
-                return Guard::Actionable;
-            }
-            if mask.confusables && crate::tables::is_ascii_confusable_latin(b) {
-                return Guard::Actionable;
-            }
-            // `I` is covered by `fold_case` wherever both are set; `0` and `1` are
-            // covered by nothing else. See the `prototype` field.
-            if mask.prototype && matches!(b, b'I' | b'0' | b'1') {
-                return Guard::Actionable;
-            }
-            // ── ASCII whitespace `collapse_whitespace` would fold ⇒ note, keep
-            //    scanning; if nothing else fires this is the #464 WhitespaceOnly case.
-            if mask.collapse_ws && is_ascii_fold_ws(b) && b != b' ' {
-                saw_ws = true; // TAB/CR/FS–US fold to a space
-                prev_space = false;
-            } else if mask.collapse_ws && b == b' ' {
-                if i == 0 || i + 1 == n || prev_space {
-                    saw_ws = true; // leading / trailing / run-of-spaces collapses
-                }
-                prev_space = true;
-            } else {
-                prev_space = false;
-            }
-            i += 1;
-        } else {
+        let Some(run) = scan_ascii_run(bytes, i, mask, prev_space, saw_ws) else {
+            return Guard::Actionable;
+        };
+        i = run.end;
+        prev_space = run.prev_space;
+        saw_ws = run.saw_ws;
+        if i < n {
             // SAFETY-free: `i` is always on a char boundary (we advance by 1 for
             // ASCII and by `len_utf8` for non-ASCII), so the slice decodes cleanly.
             let ch = text[i..].chars().next().unwrap_or('\u{FFFD}');

@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import struct
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,20 @@ def has_context_dict(word: str, lang: str = "ar") -> bool:
             return False
         raise
     return True
+
+
+def _s16(text: str) -> bytes:
+    data = text.encode("utf-8")
+    return struct.pack("<H", len(data)) + data
+
+
+def trld_bytes(unigrams: dict[str, str]) -> bytes:
+    """A minimal valid `TRLD` v1 dictionary: a 24-byte header, unigrams, no bigrams."""
+    body = b"".join(
+        _s16(skeleton) + struct.pack("<H", 1) + _s16(form) + struct.pack("<I", 1)
+        for skeleton, form in sorted(unigrams.items())
+    )
+    return b"TRLD" + struct.pack("<5I", 1, len(unigrams), 0, 24, 24 + len(body)) + body
 
 
 # ---------------------------------------------------------------------------

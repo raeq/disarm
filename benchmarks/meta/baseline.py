@@ -9,6 +9,9 @@ A baseline is keyed by suite and measurement. It records the disarm version and
 the population it was measured over, because a ratio measured over 4,000 code
 points and one measured over 150,000 are not comparable and must not be
 subtracted.
+
+A row is filed under the build that recorded it, and a later build still finds it:
+see :func:`_row_for`.
 """
 
 from __future__ import annotations
@@ -40,6 +43,8 @@ class Drift:
     #: The Unicode/confusables/UCD version moved since the baseline, so a change
     #: here is not attributable to the subject.
     tables_moved: bool = False
+    #: The build whose row supplied `before`, which is rarely the one running.
+    before_subject: str = ""
 
     @property
     def delta(self) -> float:
@@ -129,6 +134,50 @@ def save(outcomes: list[Outcome], disarm_version: str, name: str = "default") ->
     return path
 
 
+def _composition(version: str) -> str:
+    """A composed subject's step-list digest, and empty for any other subject."""
+    return version.partition("+composed.")[2]
+
+
+def _row_for(base: dict[str, Any], out: Outcome) -> tuple[str, dict[str, Any]] | None:
+    """This run's row and its key: its own build's, or the one another build recorded.
+
+    A key holds the version and, from a checkout, the sha, so the exact key alone matches
+    only the commit that recorded it. Writing the baseline dirties the tree and a squash
+    merge changes the sha, so that commit is never one anybody runs again. A composition
+    with other steps is another subject and finds nothing, and two other builds find
+    nothing either, since a number subtracted from the wrong one reads as real.
+    """
+    suites: dict[str, dict[str, Any]] = base.get("suites", {})
+    key = f"{out.method.subject_key}::{out.suite}"
+    if key in suites:
+        return key, suites[key]
+    others = [
+        (other, row)
+        for other, row in suites.items()
+        if other.rpartition("::")[2] == out.suite
+        and row.get("subject") == out.method.subject
+        and _composition(row.get("subject_version", "")) == _composition(out.method.subject_version)
+    ]
+    return others[0] if len(others) == 1 else None
+
+
+def without_a_row(outcomes: list[Outcome], name: str = "default") -> list[str]:
+    """`subject::suite` for each run with nothing to compare against.
+
+    :func:`compare` returns only what moved, so a run with no row and a run where
+    nothing moved would otherwise read alike.
+    """
+    base = load(name)
+    if not base:
+        return []
+    return [
+        f"{out.method.subject_key}::{out.suite}"
+        for out in outcomes
+        if out.status is Status.OK and _row_for(base, out) is None
+    ]
+
+
 def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
     """Diff this run against the baseline. Reports movement; judges nothing."""
     base = load(name)
@@ -138,9 +187,10 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
     for out in outcomes:
         if out.status is not Status.OK:
             continue
-        prior = base.get("suites", {}).get(f"{out.method.subject_key}::{out.suite}")
-        if not prior:
+        found = _row_for(base, out)
+        if found is None:
             continue
+        prior_key, prior = found
         prior_pop = prior.get("population")
         comparable = prior_pop == out.population
         # A table bump moves normative numbers on its own. Recording it here
@@ -167,6 +217,7 @@ def compare(outcomes: list[Outcome], name: str = "default") -> list[Drift]:
                     higher_is_better=m.higher_is_better,
                     subject=out.method.subject_key,
                     tables_moved=tables_moved,
+                    before_subject=prior_key.rpartition("::")[0],
                 )
             )
     return drifts

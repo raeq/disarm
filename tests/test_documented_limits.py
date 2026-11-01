@@ -240,10 +240,15 @@ def test_a_partly_folded_word_is_what_the_seam_check_sees() -> None:
     assert not disarm.has_anomalies(disarm.get_pipeline("rag_ingest")(RUSSIAN))
 
 
+def _release_notes() -> str:
+    """The changelog and every fragment, flat: a release moves a fragment's text into the file."""
+    paths = [ROOT / "CHANGELOG.md", *sorted((ROOT / "changelog.d").glob("*.md"))]
+    return " ".join(" ".join(path.read_text(encoding="utf-8") for path in paths).split())
+
+
 def test_the_next_release_note_names_the_profiles_that_moved() -> None:
     """The guard on `CHANGELOG.md` lets only a release assembly edit it, so the 0.18.0 note takes
     this sentence in the release PR. Until then the fragment carries it to the same reader."""
-    flat = " ".join((ROOT / "changelog.d/1183.docs.md").read_text(encoding="utf-8").split())
     assert (
         "The profiles move too, and the fixture does not track them: `llm_guardrail` and "
         "`ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`, "
@@ -251,7 +256,19 @@ def test_the_next_release_note_names_the_profiles_that_moved() -> None:
         "`normalize_user_input` and `security_clean`, on the 68. If you stored a key built with "
         "`search_index` or `library_catalog_key_eu` from text that can hold a character new in "
         "Unicode 18, recompute it."
-    ) in flat
+    ) in _release_notes()
+
+
+def test_the_reserved_code_point_note_says_which_profiles_moved() -> None:
+    """The fixture's README asks this of any note that moves a key (#1139). Measured from the
+    0.18.0 wheel on the 3,738 code points, alone, after `a`, before U+0301, after `a` + U+0301
+    and between two letters, and every context agrees."""
+    assert (
+        "`code_context`, `llm_guardrail`, `ml_corpus_normalize` and `normalize_web_input` move on "
+        "all 3,738, and so do `normalize_user_input` and `security_clean`. `search_index`, "
+        "`library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` move on none, "
+        "because each one removed them already, so a key built with one of those does not move."
+    ) in _release_notes()
 
 
 def test_the_fixture_readme_says_what_the_counter_speaks_for() -> None:

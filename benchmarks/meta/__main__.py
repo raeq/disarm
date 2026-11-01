@@ -213,8 +213,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  merged   {prior}: {len(merged)} outcomes", file=sys.stderr)
 
     drifts = [] if args.no_baseline else baseline_mod.compare(report.outcomes, args.baseline)
+    unmatched = (
+        [] if args.no_baseline else baseline_mod.without_a_row(report.outcomes, args.baseline)
+    )
     board = build_leaderboard(report.outcomes) if args.leaderboard else None
-    markdown = render_markdown(report, drifts, args.baseline, leaderboard=board)
+    markdown = render_markdown(
+        report, drifts, args.baseline, leaderboard=board, unmatched=unmatched
+    )
     print(markdown)
 
     if args.report:
@@ -223,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {args.report}", file=sys.stderr)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:
-            f.write(render_json(report, drifts) + "\n")
+            f.write(render_json(report, drifts, unmatched) + "\n")
         print(f"wrote {args.json}", file=sys.stderr)
     if args.update_baseline:
         path = baseline_mod.save(report.outcomes, report.disarm_version, args.baseline)

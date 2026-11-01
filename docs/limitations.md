@@ -507,6 +507,18 @@ drops rows reads as coverage it does not have. See
 [Knowing what is NOT covered](user-guide/confusables.md#knowing-what-is-not-covered) and
 [Provenance](provenance.md).
 
+### Hiding data in ordinary characters (#1207)
+
+Two ways of hiding data in ordinary characters report nothing. A mix of NFC and NFD gets one
+verdict, because canonically equivalent text always does; use `is_normalized`. Trailing spaces and
+tabs are plain ASCII, and no rule reads them. `canonicalize` removes both. A third way, two or more
+kinds of exotic space in one text, reports `compat_fold` (#1207). One kind beside ordinary spaces
+stays clean, because `Mr.` `U+2009` `Smith` is a space doing its job, so a carrier built from one
+kind reads clean too, and `canonicalize` folds it.
+
+ST3GG's `example_normalization.txt` and `example_whitespace.txt` are the two that report nothing, and
+its `example_confusable_whitespace.txt` is the third.
+
 ### Three ways of restyling letters have no answer in Unicode (#1138)
 
 These are not fold defects. In each case disarm follows Unicode, or the construction has no

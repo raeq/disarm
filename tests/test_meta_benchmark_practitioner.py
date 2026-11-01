@@ -1380,6 +1380,16 @@ def test_the_detector_is_its_own_axis_and_a_census(st3gg_tree):
     assert detected.higher_is_better is None
 
 
+def test_the_suite_names_which_technique_each_detector_saw(st3gg_tree):
+    """#1207: a total per detector could not say which three it was."""
+    outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name(DISARM))
+    by_technique = outcome.extra["detected_by_technique"]["has_anomalies"]
+    assert set(by_technique) == set(St3ggTextExamples.TECHNIQUES)
+    detected = outcome.measurement("techniques_detected:has_anomalies")
+    assert detected is not None
+    assert sum(by_technique.values()) == detected.value
+
+
 def test_a_subject_with_no_detector_omits_the_st3gg_detector_axis(st3gg_tree):
     outcome = _st3gg(st3gg_tree).run(subject=subjects.by_name("identity"))
     assert not [m.key for m in outcome.measurements if m.key.startswith("techniques_detected")]

@@ -182,8 +182,11 @@ _ALL_BUT_FIRST = range(1, 8)
 _EVERY_OTHER = range(0, 8, 2)
 _EVERY_THIRD = range(0, 8, 3)
 
-_STRIKES = [0x334, 0x335, 0x336, 0x337, 0x338, 0x20D2, 0x20D3, 0x20D8, 0x20D9, 0x20DA, 0x20E5]
-_STRIKES += [0x20E6, 0x20EA, 0x20EB]
+_STRIKES = [0x336, 0x337, 0x338, 0x20D2, 0x20D3, 0x20D8, 0x20D9, 0x20DA, 0x20E5, 0x20E6, 0x20EA]
+_STRIKES += [0x20EB]
+#: Each has a real use on a letter, so two of three stay clean, and styling tools use them too,
+#: so a whole word still reports. They take the underline's bar, not an exemption (#1213).
+_TILDE_AND_SHORT_STROKE = [0x334, 0x335]
 
 
 @pytest.mark.parametrize("mark", _STRIKES, ids=lambda m: f"U+{m:04X}")
@@ -210,7 +213,9 @@ def test_a_strike_on_under_half_a_word_stays_clean() -> None:
     assert not disarm.has_anomalies(_on(_EVERY_THIRD, "\u0336"))
 
 
-@pytest.mark.parametrize("mark", [0x332, 0x333], ids=lambda m: f"U+{m:04X}")
+@pytest.mark.parametrize(
+    "mark", [0x332, 0x333, *_TILDE_AND_SHORT_STROKE], ids=lambda m: f"U+{m:04X}"
+)
 @pytest.mark.parametrize(
     "positions",
     [_ALL, _ALL_BUT_LAST, _ALL_BUT_FIRST],
@@ -245,6 +250,90 @@ def test_an_underlined_digraph_is_orthography_and_stays_clean(text: str) -> None
 
 def test_an_underline_on_half_a_word_stays_clean() -> None:
     assert not disarm.has_anomalies(_on(_EVERY_OTHER, "\u0332"))
+
+
+def _marked(spec: str, *marks: int) -> str:
+    """`spec` with the next of `marks` after each letter that follows a `*` (#1213)."""
+    out, seen, i = [], 0, 0
+    while i < len(spec):
+        if spec[i] == "*":
+            out.append(spec[i + 1] + chr(marks[seen % len(marks)]))
+            seen += 1
+            i += 2
+        else:
+            out.append(spec[i])
+            i += 1
+    return "".join(out)
+
+
+_U_MACRON, _A_MACRON = chr(0x16B), chr(0x101)
+
+
+@pytest.mark.parametrize(
+    ("spec", "mark"),
+    [
+        ("*s*h", 0x332),
+        ("*s*h", 0x333),
+        ("*o*n", 0x332),
+        ("*k*hu*s*h", 0x332),
+        (f"*k*h{_U_MACRON}*s*h", 0x332),
+        ("*g*hu*s*h", 0x332),
+        ("*s*ha*k*h", 0x332),
+        ("*d*hi*k*h", 0x332),
+        ("*p*a*ss", 0x332),
+        ("*p*a*s*sw", 0x332),
+        ("*S*hay*k*h", 0x332),
+        (f"*s*h{_A_MACRON}h", 0x332),
+        ("*ti*l", 0x334),
+        ("*ge*b", 0x335),
+        ("fi*l", 0x334),
+        ("*pa*ss*wo*rd", 0x334),
+        ("*pa*ss*wo*rd", 0x335),
+        ("*pas*swo*rd", 0x336),
+    ],
+)
+def test_the_underline_bar_leaves_these_clean(spec: str, mark: int) -> None:
+    """Two digraphs cannot reach five marks, and one cannot reach three (#1210, #1213)."""
+    assert not disarm.has_anomalies(_marked(spec, mark)), ascii(_marked(spec, mark))
+
+
+@pytest.mark.parametrize(
+    ("spec", "marks"),
+    [
+        ("*t*h*e", (0x332,)),
+        ("*p*a*s*s", (0x332,)),
+        ("*s*e*c*r*et", (0x332,)),
+        ("*p*a*s*s*w*o*rd", (0x332,)),
+        ("*t*i*l", (0x334,)),
+        ("*p*a*s*s*w*o*rd", (0x334,)),
+        ("*p*a*s*s*w*o*r*d", (0x335,)),
+        ("*o*n", (0x336,)),
+        ("*ti*l", (0x336,)),
+        ("*ti*l", (0x337,)),
+        ("*ti*l", (0x338,)),
+        ("*pa*ss*wo*rd", (0x336,)),
+        ("*ti*l", (0x334, 0x336)),
+        ("*pa*ss*wo*rd", (0x332, 0x336)),
+    ],
+)
+def test_the_bars_still_report_these(spec: str, marks: tuple[int, ...]) -> None:
+    """A word holding a strike takes the strike's bar, so a bare tilde beside it counts."""
+    text = _marked(spec, *marks)
+    assert disarm.has_anomalies(text), ascii(text)
+    assert disarm.inspect_anomalies(text).kinds == ["zalgo"], ascii(text)
+
+
+@pytest.mark.parametrize(
+    ("spec", "mark"),
+    [("*s*h", 0x332), ("*k*hu*s*h", 0x332), ("*p*a*s*sw", 0x332), ("*ti*l", 0x334)],
+)
+def test_what_the_bars_spare_still_leaves_no_seam(spec: str, mark: int) -> None:
+    """`canonicalize` keeps the mark and its output reads as the input does. `llm_guardrail`
+    removes it, so the cost of each clean row is the detector's alone."""
+    text = _marked(spec, mark)
+    assert chr(mark) in disarm.canonicalize(text)
+    assert not disarm.has_anomalies(disarm.canonicalize(text))
+    assert chr(mark) not in disarm.get_pipeline("llm_guardrail")(text)
 
 
 @pytest.mark.parametrize(
@@ -302,7 +391,7 @@ def test_every_class_one_mark_is_counted_or_has_a_script_of_its_own() -> None:
     own_script = {0x1CD4, *range(0x1CE2, 0x1CE9), 0x10A39, *range(0x16AF0, 0x16AF5)}
     own_script |= {0x1BC9E, 0x1D167, 0x1D168, 0x1D169}
     class_one = {cp for cp in range(0x110000) if unicodedata.combining(chr(cp)) == 1}
-    assert class_one == own_script | set(_STRIKES)
+    assert class_one == own_script | set(_STRIKES) | set(_TILDE_AND_SHORT_STROKE)
 
 
 @pytest.mark.parametrize(

@@ -302,6 +302,12 @@ the Burmese evidence above out of it. Neither changes what the surfaces do: `can
 an overlay and at most three marks at each position, and `llm_guardrail` and `strip_obfuscation`
 remove them.
 
+The overlay rule also reads the canonical form of a text that holds an overlay mark (#1209). A soft
+hyphen or a private-use character between a letter and its strike draws nothing, so it does not
+close the letter. A `|` or `U+2103` there does, since a mark on a symbol is a negation, but
+`canonicalize` folds each to a letter, and the rule then reports what the output would. A digit, a
+star or `=` stays in the output, so the mark stays on a symbol and the text reads clean.
+
 Both start short of every letter, because one bare letter must not switch them off (#1194). A
 strikethrough or slash, and three marks on a Latin letter, report at two letters and half the
 word, so `U+0336` on every other letter of `password` reports. An underline reports on every

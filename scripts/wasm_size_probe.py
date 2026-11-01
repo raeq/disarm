@@ -28,6 +28,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 #: `(entry point, call expression)`. The call differs because some presets are fallible.
 SURFACES = {
     "strip_format": "disarm::api::strip_format(t).len()",
+    # #1209: the overlay rule reads the canonical form, so the detector links the preset engine.
+    "has_anomalies": "usize::from(disarm::api::has_anomalies(t, &std::collections::HashSet::new()))",
     "canonicalize": "disarm::api::canonicalize(t).map(|c| c.len()).unwrap_or(0)",
     "canonicalize_strict": "disarm::api::canonicalize_strict(t).map(|c| c.len()).unwrap_or(0)",
     "strip_obfuscation": "disarm::api::strip_obfuscation(t).map(|c| c.len()).unwrap_or(0)",

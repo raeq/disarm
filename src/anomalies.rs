@@ -435,6 +435,9 @@ pub enum AnomalyKind {
     /// `Привет` and `Ελλάδα` do not fire. Every letter in them folds to Latin, and
     /// flagging that is the whole-legitimate-non-Latin-web over-flagging #545 removed
     /// from `is_suspicious_hostname`.
+    ///
+    /// Also a run of regional indicators that is not a sequence of registered flags, which spells
+    /// letters and folds to nothing (#1206).
     Confusable,
     /// A token whose base characters carry **enclosing marks** (`Me`) — `I⃝g⃝n⃝o⃝r⃝e⃝`.
     ///
@@ -865,6 +868,76 @@ fn paints_over(line: &str, after: &str) -> bool {
         return cells > 0 && (spaces > CR_SPARED_SPACES || spaces >= cells);
     }
     true
+}
+
+/// `RGI_Emoji_Flag_Sequence` of Emoji 18.0, 259 rows: one row per first letter, one bit per second.
+///
+/// Written out rather than read from the name tables, which a detector must not link (#910).
+/// `tests/test_regional_indicator_runs.py` holds the rows and checks all 676 pairs.
+const REGISTERED_FLAGS: [u32; 26] = [
+    0x2DF_597C, 0x36F_7BFB, 0x3F3_FDED, 0x200_5650, 0x01E_00D5, 0x002_5700, 0x15F_B9FB, 0x01A_3400,
+    0x00F_781C, 0x000_D010, 0x342_B1D0, 0x13E_0507, 0x3FF_FCFD, 0x212_C975, 0x000_1000, 0x14E_3CF1,
+    0x000_0001, 0x054_4010, 0x3AE_7FDF, 0x26A_7EED, 0x304_3041, 0x010_2155, 0x004_0020, 0x000_0400,
+    0x008_0010, 0x040_1001,
+];
+
+/// The letter a regional indicator at byte `at` names, from 0, or `None`.
+fn indicator_at(bytes: &[u8], at: usize) -> Option<u8> {
+    match *bytes.get(at..at + 4)? {
+        [0xF0, 0x9F, 0x87, low @ 0xA6..=0xBF] => Some(low - 0xA6),
+        _ => None,
+    }
+}
+
+/// The first run of regional indicators that is not a sequence of registered flags, as its byte
+/// offset and length (#1206).
+///
+/// Unicode names each one `REGIONAL INDICATOR SYMBOL LETTER A`, a reader sees a letter, and a word
+/// filter sees no word. So `the` spelled in them is a word in disguise, and it reports `confusable`,
+/// since a patch adds no kind. A run of flags stays clean, and that is what the table is for: odd
+/// length alone would need no table and miss 16 of the 128 such runs in L1B3RT4S. A word that
+/// happens to spell registered pairs, such as `bear`, stays clean too.
+///
+/// One indicator reports only beside a letter. A cut message leaves half a flag by accident,
+/// and the detector never fires on a code point `canonicalize` keeps (`docs/api/predicates.md`).
+fn unregistered_indicator_run(text: &str) -> Option<(usize, usize)> {
+    if text.is_ascii() {
+        return None;
+    }
+    let bytes = text.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] != 0xF0 || indicator_at(bytes, at).is_none() {
+            at += 1;
+            continue;
+        }
+        let start = at;
+        let mut first = None;
+        let mut registered = true;
+        while let Some(letter) = indicator_at(bytes, at) {
+            if let Some(opening) = first.take() {
+                let row: u32 = REGISTERED_FLAGS[usize::from(opening)];
+                registered &= row & (1 << letter) != 0;
+            } else {
+                first = Some(letter);
+            }
+            at += 4;
+        }
+        let len = at - start;
+        let reports = if len == 4 {
+            text[..start]
+                .chars()
+                .next_back()
+                .is_some_and(char::is_alphabetic)
+                || text[at..].chars().next().is_some_and(char::is_alphabetic)
+        } else {
+            !registered || first.is_some()
+        };
+        if reports {
+            return Some((start, len));
+        }
+    }
+    None
 }
 
 /// Carriers spread through a text, as `(first carrier's byte offset and length, count)`, once
@@ -2160,6 +2233,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     overwriting_cr(text).is_some()
         || spread_carriers(text).is_some()
         || decoded_payloads(text).next().is_some()
+        || unregistered_indicator_run(text).is_some()
         || split_tokens(text)
             .into_iter()
             .any(|(start, tok)| classify(tok, start, lexicon).is_some())
@@ -2214,6 +2288,20 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
                     "{count} spread through the text, first {}",
                     carrier.chars().next().map_or_else(String::new, codepoint)
                 ),
+            },
+        );
+    }
+
+    if let Some((start, len)) = unregistered_indicator_run(text) {
+        let at = findings.partition_point(|f: &Finding| f.start < start);
+        findings.insert(
+            at,
+            Finding {
+                kind: AnomalyKind::Confusable,
+                token: text[start..start + len].to_owned(),
+                start,
+                end: start + len,
+                detail: "regional indicators that are no sequence of registered flags".to_owned(),
             },
         );
     }

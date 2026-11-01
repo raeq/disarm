@@ -517,9 +517,14 @@ in `U+24AF U+24A3 U+24A0` becomes `(t)(h)(e)`, so a word filter after the fold d
 `has_anomalies` reports `compat_fold`.
 
 Regional indicators have no compatibility mapping and no confusable row. `canonicalize`,
-`search_key` and `llm_guardrail` keep them, `rag_ingest` deletes them, and `has_anomalies` is
-False. A run of them that forms no flag is not reported either: nothing in it disguises anything
-a reader or a comparison would otherwise take at face value, and flags share the block.
+`search_key` and `llm_guardrail` keep them, and `rag_ingest` deletes them. A run of them that is
+not a sequence of registered flags reports `confusable`, because Unicode names each one for a
+letter and a reader sees a letter (#1206). One on its own reports only beside a letter, since a cut
+message leaves half a flag by accident. The table is `RGI_Emoji_Flag_Sequence` of Emoji 18.0, so a
+flag registered later reports until the table moves, and a word that happens to spell registered
+pairs, such as `bear` as `BE` and `AR`, stays clean. Nothing folds them: the names give the letter,
+but `the` starts with the flag `TH`, so a fold would have to judge a whole run, and a new fold is a
+new capability, which a patch release does not add.
 
 Turned letters such as `U+0250` and `U+0287` are distinct letters with no decomposition. They are
 kept, and a transliterating surface may give a different letter. A text reversed as well as

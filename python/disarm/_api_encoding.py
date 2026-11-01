@@ -132,6 +132,9 @@ def detect_encoding(data: bytes) -> tuple[str, float]:
     Returns (encoding_name, confidence) where confidence is 0.0–1.0.
     Uses the chardetng algorithm (Firefox's encoding detector).
 
+    This answers a question about bytes and carriers, not textual encodings. It does not
+    read base64, hex or binary; see the threat model.
+
     Note (#194): chardetng (since the 1.0 migration, #164) does not expose a
     graded score — it reports a fixed confidence of ``0.95`` for every
     successful detection. The float is kept for API stability and to align with
@@ -189,6 +192,9 @@ def decode_to_utf8(
 
     Returns (decoded_text, had_errors) where had_errors is True if a U+FFFD
     replacement character was inserted during decoding.
+
+    This answers a question about bytes and carriers, not textual encodings. It does not
+    read base64, hex or binary; see the threat model.
 
     ``had_errors=False`` is **not** a fidelity guarantee: single-byte encodings
     such as windows-1252 map every byte to some codepoint without ever inserting

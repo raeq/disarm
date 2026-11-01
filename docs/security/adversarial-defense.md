@@ -114,6 +114,11 @@ and by what normalization can do at all:
   found 8,000+ homoglyphs with deep learning; measured against disarm's bundled data,
   ~89% of their *letter* homoglyphs are **not in TR39 at all**. A TR39-derived tool cannot
   canonicalize what TR39 does not list.
+- **A payload encoded in ordinary text is out of scope.** Base64, hex, binary, ROT-n, Morse
+  and reversal are plain ASCII to every preset, which neither decodes nor reports them.
+  `llm_guardrail` folds case, which happens to corrupt base64; that is a side effect and not
+  a control. Decode under your own policy first, then pass the result in, as the
+  [Threat Model](https://github.com/raeq/disarm/blob/main/THREAT_MODEL.md) says.
 - **Where disarm actually lands on real phishing text.** On the BitAbuse corpus of real
   perturbed phishing lines ([Lee et al., 2025](https://arxiv.org/abs/2502.05225)), generic
   table-driven lookup restores only ~35% of perturbed words and a context-aware character

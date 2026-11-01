@@ -91,6 +91,13 @@ truncated message leaves one by accident, so this is a broken emoji sequence and
 same goes for a lone zero-width character beside an emoji, with no letter to split or hide. Beside
 a letter, both report.
 
+`U+200B` between two digits reports nothing (#1204). The rule for one invisible character reads
+letters, so `12` `U+200B` `34` stays clean while `ab` `U+200B` `cd` and `a1` `U+200B` `2b` report.
+A digit group has no word to split, and UAX #14 makes `U+200B` a line-break opportunity, which a
+long number has no other way to carry. The cost falls on a filter that matches digits in raw text,
+since `4111` `U+200B` `1111` gets past it. Run such a filter on `canonicalize` output, which
+removes the character, or ask `is_canonical`, which returns False.
+
 `tests/test_rival_vectors.py` holds every string other detectors' test suites state a verdict on,
 and says for each one whether disarm agrees, differs by decision, or differs with an issue open.
 

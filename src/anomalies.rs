@@ -1689,6 +1689,9 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // BOM, …) is never legitimate inside or at the edge of a word, so a
             // single letter neighbour on EITHER side — including accented Latin —
             // is enough (catches word-edge `paypal<ZWSP>` and leading `<BOM>paypal`).
+            //
+            // A digit is not a letter, so `12` U+200B `34` stays clean. That is a decision: a
+            // digit group has no word to split, and `canonicalize` removes it (#1204).
             let joiner = c == '\u{200C}' || c == '\u{200D}';
             let letter = |slice: &[char]| {
                 if joiner {

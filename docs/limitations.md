@@ -663,6 +663,11 @@ than folding it — see
 [Code is not prose](user-guide/llm-pipelines.md#code-is-not-prose-code_context-and-strip-and-report)
 — and the reason a normalizer belongs *before* a parser rather than inside one.
 
+`U+200B` between two digits is the same split, by decision: `canonicalize` removes it and
+`is_canonical` returns False, while `has_anomalies` stays silent, because the rule for one
+invisible character reads letters and a digit group has no word to split. A filter that matches
+digits in raw text has to run on the rewritten text (#1204).
+
 ## Bidirectional Text Security
 
 ### Bidi overrides are a real attack vector

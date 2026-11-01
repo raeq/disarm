@@ -1293,6 +1293,75 @@ fn is_underline_bar_mark(c: char) -> bool {
     matches!(c, '\u{0332}'..='\u{0335}')
 }
 
+/// Whether a character draws nothing, so a mark after it still sits on the letter before it:
+/// every format character, and private use (#1209).
+///
+/// Written out, like [`is_strike_mark`], since the crate has no general-category check.
+fn is_undrawn(c: char) -> bool {
+    matches!(
+        c,
+        '\u{AD}'
+            | '\u{600}'..='\u{605}'
+            | '\u{61C}'
+            | '\u{6DD}'
+            | '\u{70F}'
+            | '\u{890}'
+            | '\u{891}'
+            | '\u{8E2}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FEFF}'
+            | '\u{FFF9}'..='\u{FFFB}'
+            | '\u{110BD}'
+            | '\u{110CD}'
+            | '\u{13430}'..='\u{1343F}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0001}'
+            | '\u{E0020}'..='\u{E007F}'
+            | '\u{E000}'..='\u{F8FF}'
+            | '\u{F0000}'..='\u{FFFFD}'
+            | '\u{100000}'..='\u{10FFFD}'
+    )
+}
+
+/// The first overlay mark in `text`, with its byte offset.
+///
+/// By lead byte, since every non-ASCII text pays for this and few hold one: every overlay mark
+/// is in `U+0300`-`U+033F` or `U+2000`-`U+2FFF` (a test holds that). A char walk here costs more
+/// than the rest of the check.
+fn first_overlay_mark(text: &str) -> Option<(usize, char)> {
+    if text.is_ascii() {
+        return None;
+    }
+    text.bytes()
+        .enumerate()
+        .filter(|&(_, byte)| byte == 0xCC || byte == 0xE2)
+        .find_map(|(at, _)| {
+            let mark = text[at..].chars().next()?;
+            (is_strike_mark(mark) || is_underline_bar_mark(mark)).then_some((at, mark))
+        })
+}
+
+/// The overlay rule on what `canonicalize` makes of a text holding an overlay mark, as the first
+/// mark's byte offset and length in `text`, then the mark, overlaid letters and letters found in
+/// the canonical form (#1209).
+///
+/// So the seam holds by construction and no list of fillers has to stay right. What the rule
+/// calls clean here `canonicalize` cannot turn into a report: `|` folds to `l`, `U+2103` to `C`,
+/// and each is a letter in the output that `overlaid_word` never saw in the input.
+fn overlay_after_canonicalize(text: &str) -> Option<(usize, usize, char, usize, usize)> {
+    let (at, first) = first_overlay_mark(text)?;
+    let canonical = crate::presets::canonicalize(text).ok()?;
+    split_tokens(&canonical)
+        .into_iter()
+        .find_map(|(_, token)| word_parts(token).find_map(overlaid_word))
+        .map(|(mark, overlaid, letters)| (at, first.len_utf8(), mark, overlaid, letters))
+}
+
 /// The first overlay on a word covering enough of it, with how many letters of how many
 /// carry one, or `None` (#1156, #1194).
 ///
@@ -1310,6 +1379,9 @@ fn is_underline_bar_mark(c: char) -> bool {
 ///   and 4 of 5 on a word styled by hand, which `llm_guardrail` still removes (#1213).
 ///
 /// A mark on a symbol counts for no letter, so `a=\u{338}b` stays the negation it is (#749).
+/// A character that draws nothing leaves the letter open, so a soft hyphen does not hide the
+/// strike after it (#1209). [`overlay_after_canonicalize`] reads the same rule on the canonical
+/// form, for the fillers `canonicalize` removes or folds into letters.
 fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
     let (mut letters, mut overlaid) = (0usize, 0usize);
     let mut open_letter = false;
@@ -1324,7 +1396,7 @@ fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
                 struck |= strike;
                 found.get_or_insert(c);
             }
-        } else {
+        } else if !is_undrawn(c) {
             open_letter = c.is_alphabetic();
             letters += usize::from(open_letter);
         }
@@ -2217,6 +2289,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
         || split_tokens(text)
             .into_iter()
             .any(|(start, tok)| classify(tok, start, lexicon).is_some())
+        || overlay_after_canonicalize(text).is_some()
 }
 
 /// Full analysis: every finding with its span and a plain-language reason. Parallel to
@@ -2250,6 +2323,29 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
         .collect();
     for f in smuggled.into_iter().rev() {
         findings.insert(0, f);
+    }
+
+    // The input's own tokens did not reach the bar, and its canonical form may (#1209).
+    if !findings
+        .iter()
+        .any(|f: &Finding| f.kind == AnomalyKind::Zalgo)
+    {
+        if let Some((start, len, mark, overlaid, letters)) = overlay_after_canonicalize(text) {
+            let at = findings.partition_point(|f: &Finding| f.start < start);
+            findings.insert(
+                at,
+                Finding {
+                    kind: AnomalyKind::Zalgo,
+                    token: text[start..start + len].to_owned(),
+                    start,
+                    end: start + len,
+                    detail: format!(
+                        "{} on {overlaid} of {letters} letters of the canonical form",
+                        codepoint(mark)
+                    ),
+                },
+            );
+        }
     }
 
     // Text-level for the reason the CR rule below is: the carriers sit in different tokens,
@@ -2320,6 +2416,21 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
 #[cfg(test)]
 mod tests {
     use super::{AnomalyKind, AnomalySeverity};
+
+    #[test]
+    fn first_overlay_mark_reads_the_lead_byte_of_every_overlay_mark() {
+        // #1209: it looks for two lead bytes, so a mark outside them would never be found.
+        let marks = (0..=0x0010_FFFF_u32)
+            .filter_map(char::from_u32)
+            .filter(|&c| super::is_strike_mark(c) || super::is_underline_bar_mark(c));
+        let mut seen = 0;
+        for mark in marks {
+            let text = format!("pass{mark}word");
+            assert_eq!(super::first_overlay_mark(&text), Some((4, mark)));
+            seen += 1;
+        }
+        assert!(seen >= 7, "the walk found {seen} marks");
+    }
 
     #[test]
     fn a_decoded_payload_is_the_one_error() {

@@ -42,6 +42,9 @@ ROOT = Path(__file__).resolve().parent.parent
 #: CI has no wasm target, and the default selection leaves out `slow`.
 EXPECTED = {
     "strip_format": (False, False, 100_000),
+    # #1209 made this 439,293 to 557,349 bytes, on purpose: the overlay rule reads the canonical
+    # form, so the detector links the preset engine. No binding ships Wasm today.
+    "has_anomalies": (False, False, 700_000),
     "canonicalize": (False, False, 440_000),
     "canonicalize_strict": (False, False, 450_000),
     # No longer demojizes (#910), so the emoji table must NOT be linked. This gate caught

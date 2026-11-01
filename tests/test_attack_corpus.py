@@ -528,6 +528,47 @@ def test_the_guide_names_the_shape_real_prompts_hold() -> None:
         assert "classic Mac" in flat, page
 
 
+@pytest.mark.parametrize(
+    ("cover", "on_screen"),
+    [("unsafe", "  safe"), ("no access", "   access"), ("inactive", "  active")],
+)
+def test_two_cells_can_change_a_meaning_and_are_not_reported(cover: str, on_screen: str) -> None:
+    """A stated limit (#1211): these bytes are also a stray CR before a hard line break."""
+    text = _blanked(cover, 2)
+    assert not has_anomalies(text)
+    assert canonicalize(text) == f"{cover} next"
+    terminal = disarm.TextPipeline(resolve_deletions=True, resolve_cr=True)
+    assert terminal(text) == f"{on_screen}\nnext"
+
+
+def test_the_terminal_view_needs_both_flags() -> None:
+    """`resolve_cr` alone is inert, so the pages have to name both (#1211)."""
+    text = _blanked("unsafe", 2)
+    assert disarm.TextPipeline(resolve_cr=True)(text) == text
+
+
+def test_three_spaces_report_where_two_give_the_same_screen() -> None:
+    """The line is the evidence and not what the screen shows (#1193, #1211)."""
+    resolve = disarm.TextPipeline(resolve_deletions=True, resolve_cr=True)
+    assert resolve(_blanked("no access", 2)) == resolve(_blanked("no access", 3))
+    assert not has_anomalies(_blanked("no access", 2))
+    assert has_anomalies(_blanked("no access", 3))
+
+
+def test_the_pages_say_two_cells_can_change_a_meaning() -> None:
+    root = Path(__file__).resolve().parent.parent
+    sentence = (
+        "Two cells can change a meaning: `unsafe` with a `CR` and two spaces shows `  safe`, "
+        "and `no access` shows `   access`. This is not reported, because the same bytes are a "
+        "stray `CR` before a Markdown hard line break, and the detector cannot tell them apart. "
+        "`canonicalize` and `llm_guardrail` return the whole text. "
+        "`TextPipeline(resolve_deletions=True, resolve_cr=True)` returns what a terminal shows."
+    )
+    wanted = " ".join(sentence.split())
+    for page in ("docs/user-guide/anomaly-detection.md", "THREAT_MODEL.md"):
+        assert wanted in " ".join((root / page).read_text(encoding="utf-8").split()), page
+
+
 # --------------------------------------------------------------------------------------
 # The reordering class, in the direction the corpus was not testing (#740)
 #

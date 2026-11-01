@@ -240,23 +240,30 @@ def test_a_partly_folded_word_is_what_the_seam_check_sees() -> None:
     assert not disarm.has_anomalies(disarm.get_pipeline("rag_ingest")(RUSSIAN))
 
 
-def _release_notes() -> str:
-    """The changelog and every fragment, flat: a release moves a fragment's text into the file."""
-    paths = [ROOT / "CHANGELOG.md", *sorted((ROOT / "changelog.d").glob("*.md"))]
-    return " ".join(" ".join(path.read_text(encoding="utf-8") for path in paths).split())
+def _changelog_section(version: str) -> str:
+    """One release's section, flat. The 0.18.0 sentence below is in two of them, so a check of
+    the whole file passes with no edit to the note (#1139)."""
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = text.index(f"\n## [{version}]")
+    return " ".join(text[start : text.index("\n## [", start + 1)].split())
 
 
-def test_the_next_release_note_names_the_profiles_that_moved() -> None:
-    """The guard on `CHANGELOG.md` lets only a release assembly edit it, so the 0.18.0 note takes
-    this sentence in the release PR. Until then the fragment carries it to the same reader."""
-    assert (
-        "The profiles move too, and the fixture does not track them: `llm_guardrail` and "
-        "`ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`, "
-        "`library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do "
-        "`normalize_user_input` and `security_clean`, on the 68. If you stored a key built with "
-        "`search_index` or `library_catalog_key_eu` from text that can hold a character new in "
-        "Unicode 18, recompute it."
-    ) in _release_notes()
+PROFILES_MOVED_IN_0_18_0 = (
+    "The profiles move too, and the fixture does not track them: `llm_guardrail` and "
+    "`ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`, "
+    "`library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do "
+    "`normalize_user_input` and `security_clean`, on the 68. If you stored a key built with "
+    "`search_index` or `library_catalog_key_eu` from text that can hold a character new in "
+    "Unicode 18, recompute it."
+)
+
+
+def test_the_0_18_0_note_names_the_profiles_that_moved() -> None:
+    assert PROFILES_MOVED_IN_0_18_0 in _changelog_section("0.18.0")
+
+
+def test_the_0_19_0_notes_say_the_0_18_0_note_was_short() -> None:
+    assert PROFILES_MOVED_IN_0_18_0 in _changelog_section("0.19.0")
 
 
 def test_the_reserved_code_point_note_says_which_profiles_moved() -> None:
@@ -268,7 +275,7 @@ def test_the_reserved_code_point_note_says_which_profiles_moved() -> None:
         "all 3,738, and so do `normalize_user_input` and `security_clean`. `search_index`, "
         "`library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` move on none, "
         "because each one removed them already, so a key built with one of those does not move."
-    ) in _release_notes()
+    ) in _changelog_section("0.19.0")
 
 
 def test_the_fixture_readme_says_what_the_counter_speaks_for() -> None:

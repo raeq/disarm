@@ -1,6 +1,6 @@
 {
   "name": "disarm",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Unicode confusable/text-security building blocks, powered by Rust",
   "main": "index.js",
   "types": "index.d.ts",

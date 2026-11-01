@@ -211,8 +211,9 @@ grep -rn "<old-version>" --exclude=CHANGELOG.md . | grep -v deprecated
 ### Refresh the meta-benchmark baseline
 
 The harness reports and does not gate, so nothing else asks for this. Commit the bump first,
-because a dirty tree marks every row `.dirty`. Then, with `requirements/bench.txt` installed and
-the interpreter whose UCD the file records as `host_ucd`, unless you mean to move it:
+because a dirty tree marks every row `.dirty`. Then, with `requirements/bench.txt`,
+`confusable-homoglyphs` and `pyunormalize` installed, under the interpreter whose UCD the file
+records as `host_ucd`, unless you mean to move it:
 
 ```sh
 python -m benchmarks.meta --run --subject all --update-baseline

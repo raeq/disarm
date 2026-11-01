@@ -31,7 +31,7 @@ exception — it is anchored on Latin, and fires on Latin combined with Cyrillic
 
 | Kind | Fires on | Spared (false-positive guards) |
 |---|---|---|
-| `invisible` | a zero-width / formatting codepoint inside a Latin word; a run of **tag**, **variation-selector**, zero-width or **Private Use Area** characters standing on their own (#700, #812); the twelve `Default_Ignorable` `Cf` code points that are invisible by property rather than by name — Duployan `U+1BCA0`–`U+1BCA3` and musical `U+1D173`–`U+1D17A` (#813); the 3,738 that Unicode reserves as `Default_Ignorable` and has not assigned — `U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF` and `U+E01F0`–`U+E0FFF` (#1103); the deprecated format controls `U+206A`-`U+206F` and the interlinear annotation characters `U+FFF9`-`U+FFFB`, which `strip_bidi`, `strip_format` and `canonicalize` delete from a word; and any **noncharacter** (`U+FDD0`-`U+FDEF` and the last two code points of every plane), even one standing alone: nothing legitimate emits one, and `canonicalize` deletes it. Those two were found by the Lean model in `formal/lean/Detection` (Finding 1) | emoji ZWJ sequences; ZWJ/ZWNJ joiners in Indic & Arabic; soft hyphen; a **single** Private Use Area code point, which is an icon-font glyph — it takes four in a row, the same reason `strip_format` keeps the block at all (#413); the 29 `Cf` code points that render and carry meaning, such as the Arabic number signs and the Egyptian hieroglyph layout controls |
+| `invisible` | a zero-width / formatting codepoint inside a Latin word; a run of **tag**, **variation-selector**, zero-width or **Private Use Area** characters standing on their own (#700, #812); one **Private Use Area** character, or a touching run of them, between two Latin letters of the same case, and eight between any other letters outside the CJK scripts (#1212); the twelve `Default_Ignorable` `Cf` code points that are invisible by property rather than by name — Duployan `U+1BCA0`–`U+1BCA3` and musical `U+1D173`–`U+1D17A` (#813); the 3,738 that Unicode reserves as `Default_Ignorable` and has not assigned — `U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF` and `U+E01F0`–`U+E0FFF` (#1103); the deprecated format controls `U+206A`-`U+206F` and the interlinear annotation characters `U+FFF9`-`U+FFFB`, which `strip_bidi`, `strip_format` and `canonicalize` delete from a word; and any **noncharacter** (`U+FDD0`-`U+FDEF` and the last two code points of every plane), even one standing alone: nothing legitimate emits one, and `canonicalize` deletes it. Those two were found by the Lean model in `formal/lean/Detection` (Finding 1) | emoji ZWJ sequences; ZWJ/ZWNJ joiners in Indic & Arabic; soft hyphen; a **single** Private Use Area code point, which is an icon-font glyph — it takes four in a row, the same reason `strip_format` keeps the block at all (#413); the 29 `Cf` code points that render and carry meaning, such as the Arabic number signs and the Egyptian hieroglyph layout controls |
 | `bidi` | an LRO/RLO override anywhere; an isolate or an LRE..PDF embedding in a token that is majority-Latin **or has no letters at all** (`12<isolate>34` — a bare account number is exactly the carrier, so numeric tokens are in scope, Trojan Source, #643); an `RLM`/`ALM` immediately before a run of European numbers in the same context — `Transfer <RLM>100 200 300 to Bob` renders `Transfer 300 200 100 to Bob` (#741) | `LRM`, which produced no reordering over any carrier measured; `RLM`/`ALM` anywhere other than in front of a number run, so RTL prose and hashtags do not fire |
 | `zalgo` | excessive stacked combining marks; a strikethrough or slash on two letters and half a word or more; an underline, `U+0334` or `U+0335` on every letter of three or more, or on all letters but one with five at the least; three marks on two letters and half a Latin word or more (#1156, #1194, #1213). The overlay rule also reads the canonical form of a text holding an overlay mark, so a filler between a letter and its strike does not hide the strike (#1209) | ordinary accents; one overlaid letter; under half a word struck; two letters of three under `U+0334` or `U+0335`, the IPA mark for a velarized or pharyngealized sound and a short bar; an underlined digraph in romanized Arabic (`s\u0332h\u0332`); a negation on a symbol (`a=\u0338b`); the overline `U+0305` and the macron below `U+0331`, which have real uses on every letter; Vietnamese, Indic and Burmese clusters |
 | `enclosing_mark` | two or more **enclosing marks** (`Me`) in one token — `I⃝g⃝n⃝o⃝r⃝e⃝`. Its own kind rather than a `zalgo` finding, because it is a different fact: not "too many marks" but a mark whose category is never an accent. One per base is below every threshold — `is_zalgo` fires above three, `strip_zalgo` keeps two — so the class was clean at every surface while `strip_obfuscation` removed it (#724) | keycap sequences on a digit, `#` or `*`, the bases a keycap can have (`1️⃣` is `1` + `U+FE0F` + `U+20E3`, and the variation selector is what makes it an RGI keycap). The sequence on a letter reports, as `canonicalize` keeps its mark (#1195); the five marks of historic Cyrillic notation on a Cyrillic base (`U+0488`, `U+0489`, `U+A670`–`U+A672`), while `U+20DD` or `U+20E3` on Cyrillic letters reports; a single enclosing mark, which is a character someone may have typed |
@@ -77,6 +77,14 @@ A leading `U+FEFF` reports `invisible`. It is what a file read as `utf-8` and no
 begins with, and two other detectors read it as a byte order mark. disarm keeps reporting it
 because `<BOM>paypal` is not `paypal` to an exact match. Open a file with `utf-8-sig` if the mark
 is expected.
+
+One private-use character beside a letter or on its own reports nothing (#812), because that is an
+icon-font glyph. One between two Latin letters of the same case reports, because `pay` + `U+E000` +
+`pal` is a split word, and `canonicalize` returns `paypal` (#1212). A glued label changes case at the
+join, so `Save` + `U+E001` + `File` stays clean, and so does `Pay` + `U+E000` + `Pal`, where
+`is_canonical` still returns False. Between any other letters it takes eight, and a CJK letter on
+either side does not count, since legacy encodings for Han used this block. `of` + `U+F001` + `ce`
+reports too, and that is correct, because `canonicalize` damages it to `ofce`.
 
 A ZWJ at the end of a text, after an emoji, reports nothing. One joiner cannot spell a byte, and a
 truncated message leaves one by accident, so this is a broken emoji sequence and not a carrier. The
@@ -270,9 +278,10 @@ assert inspect_anomalies(normalize_confusables(hostile)).kinds == ["invisible"]
 
     At that recall this is a useful alarm and a useless all-clear. Wire it into CI
     as an acceptance test and it will read "clean" on well over half the inputs that
-    are not. The PUA column is the sharpest case: a single private-use character is
-    not an anomaly (it takes a run of four, #812), so a transform that forwards one is
-    reported clean.
+    are not. The PUA column is the sharpest case: a private-use character beside a letter
+    or on its own is not an anomaly (it takes a run of four, #812), and only one between two
+    Latin letters of the same case reports (#1212), so a transform that forwards one is
+    usually reported clean.
 
     See [#643](https://github.com/raeq/disarm/issues/643) for classes the panel
     does not cover.

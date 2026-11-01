@@ -1088,6 +1088,9 @@ pub struct EncodingDetection {
 /// encoding and yields mojibake, with no flag — supply the encoding explicitly when you
 /// know the source emits BOM-less UTF-16.
 #[must_use]
+///
+/// This answers a question about bytes and carriers, not textual encodings. It does not
+/// read base64, hex or binary; see the threat model.
 pub fn detect_encoding(bytes: &[u8]) -> EncodingDetection {
     let (label, confidence) = crate::encoding::detect_encoding_impl(bytes);
     EncodingDetection { label, confidence }
@@ -1122,6 +1125,9 @@ pub struct DecodedText {
 /// Fails ([`ErrorKind`](crate::ErrorKind)) on an unknown, unsupported, or
 /// low-confidence encoding, an out-of-range `min_confidence`, or (strict) a
 /// lossy decode.
+///
+/// This answers a question about bytes and carriers, not textual encodings. It does not
+/// read base64, hex or binary; see the threat model.
 pub fn decode_to_utf8(
     bytes: &[u8],
     encoding: Option<&str>,

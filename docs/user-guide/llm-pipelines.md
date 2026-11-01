@@ -543,6 +543,10 @@ Do **not** reach for disarm when:
   per-call cost disarm does not have. Reach for it when the input is adversarial *and*
   stylized; reach for disarm when you need a deterministic, versionable transform you can
   assert on both sides of a pipeline.
+- **The payload is encoded in ordinary text.** Base64, hex, binary, ROT-n, Morse and
+  reversal are plain ASCII to every preset, which neither decodes nor reports them.
+  `llm_guardrail` folds case, which happens to corrupt base64; that is a side effect and
+  not a control. Decode under your own policy first, then pass the result in.
 - **You need lossless round-tripping.** Compatibility-tier romanisation (CJK,
   Indic) is lossy; see [Limitations](../limitations.md).
 

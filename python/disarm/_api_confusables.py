@@ -325,6 +325,9 @@ def decode_smuggled(text: str) -> list[SmuggledPayload]:
     | ``sneaky_bits`` | ``U+2062`` = 0, ``U+2064`` = 1 | eight bits per byte, or unpadded with ``U+200B`` for a space |
     | ``percent_escape`` | ``%XX``, two hex digits | one byte per triple, decoded once (#727) |
 
+    Carriers, then, plus one textual encoding, ``percent_escape``. It does not read base64,
+    hex or binary; see the threat model.
+
     ``text`` is populated **only** when the bytes are valid UTF-8 and wholly
     printable — meaning *a reader would see it*, not merely "no control character".
     A payload of ``U+202E`` + ``U+200B`` is valid UTF-8 with no control in it and

@@ -204,10 +204,14 @@ behavior, not a vulnerability:
 - **Semantic / meaning-level attacks.** Prompt injection, social engineering, or any
   attack that does not depend on character-level visual/format manipulation.
 - **Textual encoding obfuscation — base64, hex, ROT-n, reversal, binary, Morse,
-  percent-encoding, `\uXXXX` escapes (#729, #917).** disarm does not decode these and does
-  not detect them. It operates on the string it is given; a payload spelled `PHNjcmlwdD4=`
-  or written backwards is, to every transform here, an ordinary run of ASCII letters. Two
-  API names invite the opposite conclusion and are the first a reader auditing for this
+  percent-encoding, `\uXXXX` escapes (#729, #917).** disarm does not rewrite these and
+  `inspect_anomalies` does not report them. `decode_smuggled` reads one of them,
+  percent-encoding, once and rewrites nothing (#727). disarm operates on the string it is
+  given; a payload spelled `PHNjcmlwdD4=` or written backwards is, to every transform here,
+  an ordinary run of ASCII letters.
+  `llm_guardrail` folds case, which happens to corrupt base64; that is a side effect and not
+  a control. Two API names invite the opposite conclusion and are the first a reader
+  auditing for this
   class will find:
   `detect_encoding` and `decode_to_utf8` answer a **byte-charset** question — is this
   buffer UTF-8, UTF-16, Latin-1 — and have nothing to do with textual encodings. If your

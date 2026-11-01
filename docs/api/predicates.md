@@ -355,6 +355,14 @@ reporting it as `smuggled` would fire on every escaped query string.
 
 ---
 
+### Base64, hex and binary are not schemes (#1208)
+
+It does not read base64, hex or binary, and they stay out of `inspect_anomalies` too. #729 left
+this open, and the answer is no. A run of that shape reads as text on 2 of 20,456 benign prompts
+and 2 of 2,253 attack texts, so a scheme would rarely answer. It also could not answer the rest of
+the family: ROT-n and reversal decode to letters under any key, so no bar tells one from any other
+word. Decode under your own policy first, then pass the result in, as the threat model says.
+
 ## is_canonical
 
 ::: disarm.is_canonical

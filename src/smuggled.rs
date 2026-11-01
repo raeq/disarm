@@ -109,6 +109,9 @@ const MIN_PERCENT_RUN: usize = 2;
 /// `U+E007F` spelling one of the three RGI values is the Scotland flag, not a channel.
 /// The allowlist is the stripper's own, borrowed rather than
 /// restated — #700 is about exactly that kind of drift.
+///
+/// Carriers, then, plus one textual encoding, percent escapes. It does not read base64, hex or
+/// binary; see the threat model.
 pub fn decode_smuggled(text: &str) -> Vec<Payload> {
     decode(text, true).into_iter().map(|c| c.payload).collect()
 }

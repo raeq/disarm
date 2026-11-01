@@ -526,6 +526,28 @@ kept, and a transliterating surface may give a different letter. A text reversed
 turned has no recoverable form. Beside ASCII letters a turned letter the fold reaches, such as
 `U+01DD`, reports `confusable`.
 
+### Substitution into a real script has no answer, and `rag_ingest` loses some Latin letters (#1205)
+
+Substitution into a real script is out of scope. A text that writes Latin letters as Katakana, Hiragana, Runic, Ogham or Greek by a chosen map has no
+Unicode answer: the fold works on look-alikes, and `rag_ingest` romanizes by sound, so neither returns
+the source text. No map is added for one of these alphabets: the bar in #40 stands, and a row for one
+of them would rewrite real text.
+
+A text wholly in Runic or Ogham reads clean. Both are `Exclusion` in UTS #39, and no benign prompt of
+20,456 holds three of their letters, but a rule for those two would cover 879 of the 4,155 letters
+`llm_guardrail` keeps in L1B3RT4S, since Katakana and Hiragana are the rest and have to stay clean, and
+no anomaly kind says it: nothing in such a text disguises itself as Latin. `llm_guardrail` folds the
+eight Runic letters that UTS #39 lists as look-alikes, so its output can report `mixed_script` where the
+input reported nothing. That report is about the fold's output, as it is for a Russian word (#1157), and
+this class has no function to send the reader to.
+
+`rag_ingest` deletes a Latin letter that has no transliteration row, which is 17 of 25 small capitals:
+`transliterate` answers `[?]` and the profile drops it, so `attack` in small capitals becomes an empty
+string and `the` followed by ` report` becomes `H report`. `llm_guardrail` returns both, and
+`has_anomalies` reports `confusable` on the input. Adding the 17 rows moves `search_key` on these
+letters, in every language, and a patch release never moves a stored key, so the fix waits for a minor
+release.
+
 ### 65 table rows are shadowed by the preceding NFKC (#834)
 
 The paragraph above insists nothing is filtered out of the coverage report, because *"a

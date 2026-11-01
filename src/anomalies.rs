@@ -119,7 +119,9 @@ const SPREAD_IDEOGRAPHIC_SELECTOR_FLOOR: usize = 8;
 /// How many spaces after a `CR` are spared when they do not blank the whole line (#1193).
 ///
 /// Two is a Markdown hard line break, and the whole of the evidence: no set read holds any
-/// other count. One hides less than that. Three is enough to hide `not`.
+/// other count. Two cells can still change a meaning, so `unsafe` shows as `  safe`, and that
+/// is accepted because the bytes are the same as the stray `CR` (#1211). The line sits at
+/// three because no set read holds three, and three is enough to hide `not`.
 const CR_SPARED_SPACES: usize = 2;
 
 /// The carrier classes the run rule counts, each with its own floor.

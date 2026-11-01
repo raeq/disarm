@@ -396,7 +396,11 @@ behavior, not a vulnerability:
   they are byte-identical. A `CR` before a Markdown hard line break, two spaces and a line
   feed, hides two cells and is not reported, and neither is one space. Three or more spaces
   report, because that many can hide `not` and nothing in real text was seen to hold them
-  (#1193). Resolving
+  (#1193). Two cells can change a meaning: `unsafe` with a `CR` and two spaces shows `  safe`,
+  and `no access` shows `   access`. This is not reported, because the same bytes are a stray
+  `CR` before a Markdown hard line break, and the detector cannot tell them apart. `canonicalize`
+  and `llm_guardrail` return the whole text. `TextPipeline(resolve_deletions=True, resolve_cr=True)`
+  returns what a terminal shows. Resolving
   `line1<CR>line2` to `line2` is right for one reading and destroys the other, so no
   preset or profile makes that call: `TextPipeline(resolve_deletions=True,
   resolve_cr=True)` does. The detector reports it either way, as kind `deletion`.

@@ -28,7 +28,7 @@ import pytest
 import yaml
 
 import disarm
-from benchmarks.meta import fetch, registry, subjects
+from benchmarks.meta import base, fetch, registry, subjects
 from benchmarks.meta.base import REPO_ROOT
 from benchmarks.meta.protocol import (
     Availability,
@@ -808,6 +808,77 @@ def test_the_invariants_read_only_the_corpora_that_are_provisioned(tmp_path, mon
     path.parent.mkdir(parents=True)
     path.write_text("first\n\nsecond\n", encoding="utf-8")
     assert suite.read_corpora() == {corpus.name: ["first", "second"]}
+
+
+#: Suites that open every file they declare, so one absent file leaves nothing to measure.
+READS_EVERY_FILE = (SpikeeSeedCensus, AugustusKnownAnswers, PromptfooLiteralMaps)
+CORPORA_SUITES = (BenignControls, LabelFreeInvariants)
+
+
+@pytest.fixture
+def cache(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "FETCH_CACHE", tmp_path)
+    monkeypatch.setattr(practitioner, "FETCH_CACHE", tmp_path)
+    return tmp_path
+
+
+def _place(cache: Path, sources) -> None:
+    for source in sources:
+        path = cache / source.filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("suite_class", "absent"),
+    [(cls, source) for cls in READS_EVERY_FILE for source in cls.SOURCES],
+    ids=lambda value: (
+        value.name if isinstance(value, type) else "/".join(Path(value.filename).parts[-2:])
+    ),
+)
+def test_one_absent_file_skips_a_suite_that_reads_them_all(cache, suite_class, absent):
+    """The runner's docstring promises SKIPPED for a failed fetch, not an error (#1192)."""
+    _place(cache, suite_class.SOURCES)
+    (cache / absent.filename).unlink()
+    outcome = suite_class().run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.SKIPPED
+    assert absent.filename in outcome.skip_reason
+
+
+@pytest.mark.parametrize("suite_class", READS_EVERY_FILE)
+def test_a_suite_that_reads_them_all_is_available_with_all_of_them(cache, suite_class):
+    _place(cache, suite_class.SOURCES)
+    assert suite_class().available() == (True, "")
+
+
+@pytest.mark.parametrize("suite_class", CORPORA_SUITES)
+def test_a_corpora_suite_reads_the_rest_when_one_corpus_is_absent(cache, suite_class):
+    suite = suite_class()
+    _place(cache, suite.SOURCES)
+    # The last one, because `taxonomy.json` is the one reader an empty file would fail.
+    absent = suite.CORPORA[-1]
+    (cache / absent.source.filename).unlink()
+    assert suite.available() == (True, "")
+    assert set(suite.read_corpora()) == {c.name for c in suite.CORPORA} - {absent.name}
+
+
+@pytest.mark.parametrize("suite_class", READS_EVERY_FILE + CORPORA_SUITES)
+def test_an_empty_cache_skips_with_a_reason(cache, suite_class):
+    outcome = suite_class().run(subject=subjects.by_name(DISARM))
+    assert outcome.status is Status.SKIPPED
+    assert outcome.skip_reason
+
+
+def test_each_suite_of_several_files_says_whether_it_needs_them_all():
+    """A new suite of several files fails here until it has chosen."""
+    several = [s for s in registry.all_suites() if len(getattr(s, "SOURCES", ())) > 1]
+    assert {s.name for s in several if s.NEEDS_EVERY_SOURCE} == {
+        cls.name for cls in READS_EVERY_FILE
+    }
+    assert {s.name for s in several if not s.NEEDS_EVERY_SOURCE} == {
+        *(cls.name for cls in CORPORA_SUITES),
+        "ucd-private-use",  # its second file only adds the direction row
+    }
 
 
 def test_each_corpus_is_pinned_to_a_commit_and_a_digest():

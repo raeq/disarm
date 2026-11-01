@@ -222,6 +222,12 @@ An absent corpus is not a passing corpus. A suite that cannot find its artifact
 returns `SKIPPED` with the environment variable to set, and the report lists every
 one under **Not run**. Nothing is inferred from a benchmark that did not execute.
 
+A suite that opens every file it declares sets `NEEDS_EVERY_SOURCE`, and one absent file
+then skips it with that file's name. `spikee-seed-census`, `augustus-known-answers` and
+`promptfoo-literal-maps` work this way. `benign-controls` and `label-free-invariants` read
+the corpora that are present and report how many, and `ucd-private-use` drops only its
+direction row without `IdentifierStatus.txt`.
+
 Most academic corpora need a manual download — copying an attack corpus into this
 repository would make it disarm's corpus, and a corpus disarm owns is a corpus
 disarm can be tuned against. Point each suite at its data:

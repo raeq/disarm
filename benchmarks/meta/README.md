@@ -459,7 +459,7 @@ Read so far, so the next search starts from here:
 
 | source | licence | status | why |
 |---|---|---|---|
-| P4RS3LT0NGV3 | AGPL-3.0 per `LICENSE` | `p4rs3lt0ngv3-transforms` | a generator: of 222 transforms, 35 are scored, 143 are counted and 44 are text utilities left out |
+| P4RS3LT0NGV3 | AGPL-3.0 per `LICENSE` | `p4rs3lt0ngv3-transforms` | a generator: of 222 transforms, 35 are scored, 143 are counted and 44 are text utilities left out. `encoding/base64` and `encoding/base64url` answer `[Invalid input]` on the suite's pangrams, so those two boundary rows measure nothing (#1208) |
 | garak `resources/ansi.py` | Apache-2.0 | `garak-ansi-escapes` | a payload list that ships the tokens to detect it by |
 | L1B3RT4S | AGPL-3.0 | `l1b3rt4s-fixtures` | unlabelled: 169 of 182 sections carry no Unicode obfuscation |
 | jailbreak_llms, FuzzyAI, palisade, Arc PI Taxonomy | MIT, Apache-2.0, MIT, CC-BY-4.0 | `label-free-invariants` | 22,897 texts that need no label for three contract questions, pinned by commit and digest |

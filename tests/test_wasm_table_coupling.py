@@ -31,13 +31,19 @@ ROOT = Path(__file__).resolve().parent.parent
 
 #: `surface -> (pinyin expected, emoji expected, byte ceiling)`.
 #:
-#: The ceilings are roughly 1.5x the measured size — loose enough that ordinary codegen
-#: drift does not fail them, tight enough that a re-coupled table cannot hide, since the
-#: tables are hundreds of KB.
+#: The ceilings are loose enough that ordinary codegen drift does not fail them, and tight
+#: enough that a re-coupled table cannot hide, since the tables are hundreds of KB.
+#:
+#: Three were raised for 0.19.0, to about 1.25x the measured size, and each growth was a
+#: deliberate change that links no table this file names. `strip_format` went from 28,360 to
+#: 61,037 for the fixed points of #1029, and to 77,843 for the variation sequences of #1135.
+#: `canonicalize` went from 224,377 to 288,897 with the performance work of #1064 to #1067, and
+#: to 349,207 when #1071 finished a fold span by span. This test had stopped running by then:
+#: CI has no wasm target, and the default selection leaves out `slow`.
 EXPECTED = {
-    "strip_format": (False, False, 60_000),
-    "canonicalize": (False, False, 320_000),
-    "canonicalize_strict": (False, False, 330_000),
+    "strip_format": (False, False, 100_000),
+    "canonicalize": (False, False, 440_000),
+    "canonicalize_strict": (False, False, 450_000),
     # No longer demojizes (#910), so the emoji table must NOT be linked. This gate caught
     # the change the moment the step came out, which is what it is for — and the ceiling
     # drops with it: a preset that stopped naming emoji has no business carrying the CLDR

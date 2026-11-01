@@ -2,5 +2,5 @@
 
 module Disarm
   # Kept in lockstep with the Rust crate / Python package version.
-  VERSION = "0.18.0"
+  VERSION = "0.19.0"
 end

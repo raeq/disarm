@@ -18,6 +18,311 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
 
 <!-- towncrier release notes start -->
 
+## [0.19.0] — 2026-11-01
+
+### Upgrade notes
+
+**`KEY_SCHEMA_VERSION` goes 11 → 13 in this release.** Two changes each moved a stored output.
+If your stored text can hold what either one names, recompute it once against 0.19.0;
+`disarm.KEY_SCHEMA_VERSION` reads `13`.
+
+- **`KEY_SCHEMA_VERSION` goes 11 → 12, for the change below (#1103, #1132).** A key moves only where its
+  text holds one of the 3,738 code points Unicode reserves as `Default_Ignorable_Code_Point` and
+  has not assigned, and none of them is a character. If your stored text can hold one, recompute
+  what you store from it once. Measured by running 0.18.0
+  and this tree over every scalar value (alone, after `a`, before U+0301 and after `a` + U+0301),
+  through the eight functions the fixture tracks, `skeleton_key` and `ml_normalize`. The profiles
+  were measured the same way, and between two letters. `code_context`, `llm_guardrail`,
+  `ml_corpus_normalize` and `normalize_web_input` move on all 3,738, and so do
+  `normalize_user_input` and `security_clean`. `search_index`, `library_catalog_key_eu`,
+  `rag_ingest` and `scholarly_cyrillic_iso9` move on none, because each one removed them already,
+  so a key built with one of those does not move.
+
+- **`KEY_SCHEMA_VERSION` goes 12 → 13, for the change below (#1158, #1180).** A key moves only where its text
+  holds a keycap, a digit, `#` or `*` followed by `U+FE0F` and `U+20E3`. If your stored text can hold one,
+  recompute what you store from it once. Measured over the 12 keycap
+  bases in 60 strings, through the eight functions the fixture tracks, `skeleton_key`, `ml_normalize`,
+  `strip_format` and every profile: `canonicalize`, `canonicalize_strict`, `sort_key` and `skeleton_key` move on
+  all 60, and no profile moves.
+
+- **Rebuild the context dictionaries if you use `context=True` (#1146, #1147, #1177).** Run
+  `bash scripts/bootstrap_dicts.sh` again after upgrading. A dictionary built before 0.19.0 holds
+  keys `context=True` no longer asks for.
+
+### Added
+
+- **`decode_smuggled` reads sneaky bits (#1136, #1181).** `U+2062` for 0 and `U+2064` for 1, in both framings
+  the tools publish: PyRIT's eight bits per byte, and garak's and Augustus's unpadded bits with `U+200B` for
+  a space. A run that decodes reports `smuggled` as the other carriers do. An unpadded mix of letters and
+  digits can split more than one way, so `text` is `None` and the detector still fires, and a lone `U+2062`
+  in a formula is unchanged. `canonicalize` already removed the carrier, so nothing about a key moves.
+
+- **`TextPipeline(strip_invisible_marks=True)` removes variation selectors and `U+034F` and leaves
+  every other mark (#1137).** `strip_zalgo=0` and `strip_accents=True` took these along with every
+  diacritic, so a pipeline that had to keep accents kept the carriers too. `U+FE0E` and `U+FE0F` stay
+  after a base Unicode registers them for, and a Mongolian free variation selector stays after a
+  Mongolian letter. An ideographic selector goes even after an ideograph, since the IVD is not
+  shipped. It defaults off and no preset uses it, so no key moves. On `l1b3rt4s-fixtures` the composed
+  `review-display` subject now leaves 34 of 472,791 carriers, where it left 472,754.
+
+- **A level for each anomaly kind, in the library (#946).** `AnomalyKind::severity()` returns
+  `AnomalySeverity::Error` for `smuggled` and `Warning` for the rest, and `anomaly_severity(kind)` does
+  the same from the name a report holds, on Python, Node, Ruby, Java, Kotlin and the C ABI. The names
+  are SARIF's. `smuggled` is the one error because it fires only on a run that decodes. `deletion` stays
+  a warning, since a classic Mac OS file with `CR` line endings is a known false positive. `disarm.scan`'s
+  SARIF writer now reads these, and its own `SARIF_LEVELS` map is gone, with every level unchanged.
+
+- **The detector reads the IVD (#1196).** 48 ideographs spelling `hidden` in bits, with `U+E0100` for 0 and `U+E0101` for 1, read clean, since a selector after an ideograph answered only to how many different selectors a text used. disarm now ships the base and selector of each sequence in IVD release 2026-08-03, 29,642 rows, and a sequence that release does not register counts toward the same floor of eight as any other unregistered selector. Registered text stays clean, and that now includes the 3 sequences on `U+2EDA5` and `U+31350`, which counted as carriers because the block table does not resolve those bases to Han. A carrier that keeps to registered sequences has no table that can tell it apart: `docs/limitations.md` says what it can do, and `canonicalize`, `llm_guardrail` and `strip_format` remove every selector from it.
+
+### Changed (breaking)
+
+- **The 3,738 reserved `Default_Ignorable_Code_Point` code points are stripped and reported
+  (#1103, #1132).** `U+2065`, `U+FFF0`–`U+FFF8`, `U+E0080`–`U+E00FF` and `U+E01F0`–`U+E0FFF` passed every
+  preset and reported clean, so `pay` + `U+E0080` + `pal` was the shape of #813. `U+E01F0` follows
+  directly on VS256, so the byte channel #413 closed in the variation selectors went through
+  `canonicalize` moved up by 240 code points. They now go wherever `U+1D173` goes:
+  `strip_zero_width_chars`, `strip_format`, `canonicalize`, `canonicalize_strict`,
+  `strip_obfuscation`, the key builders and every profile, `code_context` and
+  `normalize_web_input` included, and `inspect_anomalies` reports them as `invisible`. The set
+  follows the property with no filter on assignment, so a Unicode version that assigns a character
+  in one of these ranges changes nothing. `canonicalize("pay\U000e0080pal")` was the input and is
+  `"paypal"`. `decode_smuggled` has no scheme for them and finds nothing.
+
+- **A keycap's selector and mark now go together (#1158, #1180).** `canonicalize`, `canonicalize_strict`,
+  `sort_key` and `skeleton_key` removed the `U+FE0F` from a keycap and kept the `U+20E3`. Removing it is what
+  exempts a keycap from `enclosing_mark`, so two adjacent keycaps read clean and their canonical form
+  reported. On 13,735 regular prompts this was the 3 that gained `enclosing_mark`. A keycap now folds to its
+  digit: `canonicalize("1\ufe0f\u20e3")` was `"1\u20e3"` and is `"1"`. A bare `U+20E3` keeps its mark and still
+  reports, and `strip_format` keeps the keycap whole.
+
+- **`PayloadScheme` and `AnomalyKind` are `#[non_exhaustive]` (#1136, #1181).** `docs/RUST_API.md` says every
+  public enum is, and these two were not, so `PayloadScheme::SneakyBits` would have been a breaking change on
+  its own and the next one would be too. A Rust caller that matches either one exhaustively needs a `_` arm.
+
+### Fixed
+
+- **`UniqueSlugifier` no longer stops at 10,001 slugs for one base (#1102, #1130).** `MAX_UNIQUE_ATTEMPTS`
+  was compared with the suffix, so call 10,002 raised `ResourceLimitError` before it tried
+  anything, with or without `check`, and the message spoke of attempts. A sheet with 10,002
+  columns under one header reached it through xl2pd. The limit now counts what `check` is asked
+  in one call: 10,001 refusals raise, as they did, and a slug the instance has already given
+  costs no attempt. A call without `check` makes one attempt however many slugs the base has.
+
+- **`bash scripts/bootstrap_dicts.sh persian` no longer stops on its own pin (#1151, #1171).** The
+  pin dated from v0.5.0, and a later change to the vocabulary moved the builder's output, so
+  `persian` and `verify` reported a checksum mismatch on an untouched tree. The pin is now what the
+  builder produces, and a test holds the two together.
+
+- **`lang="auto"` with `context=True` reads the dictionary of the language it detects (#1149, #1173).**
+  The dictionary was chosen from the raw `lang` string, so `"auto"` always took the Arabic one.
+  Hebrew text came back context-free, and raised `context dictionary for Arabic not found` when
+  only the Hebrew dictionary was installed. `"auto"` now behaves as the detected code would: Hebrew
+  text with only the Arabic dictionary installed raises, naming Hebrew, where it used to return the
+  context-free reading.
+
+- **`deletion` no longer fires on a `CR` that overwrites nothing (#1155, #1175).** `line one` `CR CR LF`
+  and two trailing `CR`s only move the cursor to a column it is about to leave. Spaces after a `CR` now
+  count only if there are enough to blank the whole line: the stray `CR` before a Markdown hard line
+  break hides two cells, and it was 247 of the 250 bare `CR`s in 13,735 regular prompts. `deletion`
+  fires on 1 of those prompts, where it fired on 40. `ZZZZZZ` `CR` `paypal` still reports, and so does
+  `paypal` `CR` and six spaces.
+
+- **`has_anomalies` no longer fires on ordinary typography (#1153, #1176).** Curly quotes, the dashes and
+  hyphens `U+2010` to `U+2015`, the minus sign and the ellipsis all fold to ASCII, so `don’t` reported
+  `confusable` and `well…` reported `compat_fold`. On the 13,735 prompts `verazuo/jailbreak_llms` labels
+  regular, the rate falls from 1,881 to 254. Fullwidth sentence punctuation in a word that holds CJK no
+  longer reports either, for the reason #776 gives for `mixed_script`. `canonicalize` still folds all of
+  it, so a sink that cares about a new ASCII `'` should ask `is_canonical`: `admin’--` used to report
+  and no longer does, and `’ OR 1=1` never did. `ord∶end`, `ａdmin` and `København` still report, and so
+  does a word shaped like a host name, because `ex‐ample.com` is CVE-2017-5383's own vector.
+
+- **The dictionary builders and `context=True` agree on what a word is (#1146, #1147, #1177).** The
+  builders split a corpus on whitespace and kept the punctuation on the key, and the runtime looks up a
+  bare run of script characters, so a word the corpus saw only beside `.` or `(` was never restored and
+  a word's readings were ranked per punctuated variant. 42% of the Arabic skeletons and 49% of the Hebrew
+  ones were such variants. The runtime also kept the Arabic comma, semicolon, question mark and full stop
+  on the word, so `؟` and `۔` never reached `is_context_boundary`, and a bigram applied across a sentence
+  end. Both sides now read a word the same way, and a test compares them on every code point in the script
+  blocks. **Run `bash scripts/bootstrap_dicts.sh` again after upgrading:** a dictionary built before this
+  holds keys `context=True` no longer asks for. The Tashkeela archive is now pinned, so the bootstrap no
+  longer needs `ALLOW_UNVERIFIED_CORPUS`.
+
+- **`strip_format` keeps a presentation selector only after a base registered for it (#1135, #1178).** It kept
+  `U+FE0E` and `U+FE0F` after any character a later strip would not remove, so 48 selectors spelling a
+  word, one after each letter, left the preset whole. A valid base is now one Unicode's
+  `emoji-variation-sequences.txt` lists, which among ASCII means the digits, `#` and `*`. `a` + `U+FE0F`
+  becomes `a`, and `❤️`, `©️` and `1️⃣` are unchanged. `strip_format` is not a key builder, so
+  `KEY_SCHEMA_VERSION` does not move. The table is generated by `scripts/gen_variation_sequences.py`.
+
+- **Overlay marks on every letter, and stacks spread across classes, report `zalgo` (#1156, #1182).** One `U+0336` on each letter is below every count, and so are four marks per letter in four combining classes, so Arcanum's strikethrough examples read 0 of 4 and its zalgo set 1 of 4. A word of two or more letters with a strikethrough, slash or underline on every letter now reports, and so does a Latin word with three marks on every letter. The second is gated on Latin, because counting across classes in any script is what flagged 142 Burmese place names (#842). Both Arcanum titles now read 4 of 4. Over 22,583 prompts the two rules fire on 5, each of them styled text. `a=` + `U+0338` + `b` stays clean, and `canonicalize` still keeps an overlay, which `llm_guardrail` and `strip_obfuscation` remove.
+
+- **Persian `context=True` falls back to the Arabic dictionary, as the guide says (#1148, #1184).** The dictionary was chosen once per call, and the Arabic one only when no Persian file existed. So with both installed, which is what `bootstrap_dicts.sh` produces, an Arabic-origin loanword came back context-free. A word the curated vocabulary lacks now comes from the Arabic dictionary, and a word in both takes its Persian reading. A corrupt Arabic dictionary now raises for `lang="fa"`, where it went unread. The Persian builder's docstring no longer describes sources it does not read.
+
+- **Selectors or `U+034F` spread one per letter report `invisible` (#1134).** The run rule needs marks that touch, so a word spelled with one selector after each letter read clean while `canonicalize` removed them all. Eight in a text now report: selectors after a base no sequence registers, and `U+034F` before a non-mark. Registered sequences, keycaps and one lone selector stay clean. The IVD is not shipped, so a selector in the ideographic range after an ideograph reports only when a text uses eight different ones. Over 22,897 practitioner texts and ghostchars' labelled excerpts the rule fires on two rows, both Arcanum's symbol-font examples.
+
+- **A `CR` followed only by spaces reports from three spaces up (#1193).** #1155 spared every run of spaces shorter than the line, so `delete the audit log now` with `CR` and 23 spaces showed a lone `w` on a terminal and `has_anomalies` returned False. The evidence behind #1155 is one shape, a stray `CR` before a Markdown hard line break: all 330 such `CR`s in 13,735 regular prompts hold exactly two spaces. One or two spaces stay clean unless they blank the whole line, and three or more report. `deletion` on that set stays at 1 of 13,735.
+
+- **`U+FE0F U+20E3` is a keycap only on a digit, `#` or `*` (#1195).** The detector exempted the sequence on any base and the `canonicalize` fold reads only those twelve, so `Ignore` with it on each letter read clean and its canonical form reported `enclosing_mark`: a sanitizer's output reported what its input did not. The two halves now share one definition. The exemption for a Cyrillic base narrows too, to the five marks its documentation names, `U+0488`, `U+0489` and `U+A670` to `U+A672`, so `U+20DD` or `U+20E3` on each letter of a Cyrillic word reports. Real keycaps read clean going in and coming out, and no benign set read holds the sequence on any other base.
+
+- **An overlay reports short of every letter, and on more marks (#1194).** `password` with `U+0336` on all eight letters reported `zalgo` and the same word with it on seven read clean, so one bare letter switched the rule off, and writing the mark before each letter did that without leaving one out on purpose. A strikethrough or slash now reports on two letters and half a word or more, and so do three marks on a letter of a Latin word. An underline reports on all letters but one and three at the least, because scholarly romanization of Arabic underlines digraphs and `S̲h̲ayk̲h̲` is four of six. The class-1 overlays in the block for symbols count too, such as `U+20D2`, `U+20D3` and `U+20E5`. The overline `U+0305` and the macron below `U+0331` do not, since they have real uses on every letter. A strike on under half a word stays clean, as a stated limit. Over `benign-controls` and `ghostchars-labels` no measurement moved, and `llm_guardrail` still returns the word from every row. The finding now says how many letters carry the mark: `U+0336 on 7 of 8 letters`.
+
+### Performance
+
+- **`canonicalize` on ASCII text no longer pays for code that ASCII never reaches (#1152).** The
+  guard's byte loop shared a function with its non-ASCII check, and the check's growth in #1103
+  pushed the loop's state onto the stack: `canonicalize` on the ASCII document of the perf gate
+  went from 1,698,864 to 1,792,592 estimated cycles, all of it stack reads and writes. The loop now
+  has a function of its own, and that row is 1,572,283, 7.45% below its cost before #1103. The
+  document rows of every other surface do not move. A call per ASCII run costs short inputs a
+  little: `search_key` and `strip_obfuscation` on the short string are +1.7%.
+
+### Documentation
+
+- **Three pages said the wrong thing about two profiles (#1122, #1123, #1124, #1129).** `code_context`
+  "removes the invisible classes" and keeps the Private Use Area, the TAG block, every variation
+  selector and `U+034F`; `normalize_web_input` does "no zero-width or control stripping" and does
+  both; and `TextPipeline` "does not support" `strip_zalgo` and `strip_bidi`, which it has taken
+  since #139. The pages now say what each class does, and
+  `tests/test_profile_carrier_claims.py` measures the claims and reads them off the pages. Two
+  decisions come with it, and neither moves a profile: `code_context` keeps variation selectors
+  and `U+034F`, because `U+FE0F` on an emoji in a string literal is source text, and
+  `normalize_web_input` keeps the TAG block and selectors, because it is not a screen and its
+  page sends adversarial input to `canonicalize_strict`.
+
+- **Three boundaries a reader looks for are now named (#1159, #1167, #1168, #1179).** `THREAT_MODEL.md`
+  says that text a renderer hides, such as an HTML comment or alt text, is out of scope for a
+  character-level library, and the LLM guide points there where it recommends `rag_ingest`. Its entry
+  on textual encodings names FlipAttack, CipherChat, BitBypass and ArtPrompt. It also names charset
+  confusion between two decoders, and `docs/api/encoding.md` says UTF-7 is not detected and reads as
+  ASCII. Tests pin each construction, so a later change cannot alter the answer unnoticed.
+
+- **Two pages meet, and the 0.18.0 upgrade note's omission is on record (#1157, #1139, #1183).** The seam
+  section of the anomaly guide now says non-Latin input is a wrong-function case for the folding surfaces, and
+  the LLM guide shows a word that folds partly, which is the usual outcome and the one a seam check sees. The
+  fixture's README says `KEY_SCHEMA_VERSION` speaks for its eight functions and not for a profile. The 0.18.0
+  upgrade note named eight surfaces, and nine more moved. The profiles move too, and the fixture does not track
+  them: `llm_guardrail` and `ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and
+  `search_index`, `library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do
+  `normalize_user_input` and `security_clean`, on the 68. If you stored a key built with `search_index` or
+  `library_catalog_key_eu` from text that can hold a character new in Unicode 18, recompute it.
+
+- **The abjad guide's Persian figures are measured (#1150, #1184).** It said `lang="fa"` overrides 51 mappings. `translit_lang_fa.tsv` has 63 rows, 9 of them change the output, and the guide's table now lists all 9. Its vocabulary count moves from 266 to 258, what the builder holds. Tests hold each figure.
+
+- **Three ways of restyling letters are named (#1138, #1185).** Parenthesized letters, regional indicators and turned letters leave the prompt surfaces with text that no longer spells the words, and no page said so. `docs/limitations.md` now says what each surface does, and `docs/security/adversarial-corpora.md` measures each. A run of regional indicators that forms no flag stays unreported, and `U+042F` for `R` goes to #40 rather than to a table row.
+
+- **The security pages cite what was read for them, with disarm's answer on each vector (#1169).** A
+  new section of the adversarial-defense page takes Microsoft's report on `U+E0020` in phishing mail,
+  Endor Labs on GlassWorm's selectors, and SilverSpeak on homoglyphs against AI-text detectors. Five
+  ghostchars studies land on the pages they bear on. `benchmarks/meta/README.md` now records the
+  2026-10-31 audit of 67 repositories and four rules for the next one.
+
+### Internal
+
+- **The extension builds under pyo3 0.30 (#1117).** pyo3 0.30.0 made `skip_from_py_object` the
+  default and deprecated the option, which fails the build under `-D warnings`. The six
+  `#[pyclass]` sites that named it drop it; nothing else in the binding layer changes.
+
+- **The macOS wheels build on a runner image that is not being retired (#1127).**
+  `publish.yml` was the last workflow on `macos-14`, which GitHub retires on 2026-11-02. A
+  scheduled brownout cancelled both macOS wheel jobs of the 0.18.0 publish before they got a
+  runner, so the PyPI job was skipped after the crate and the bindings had shipped. The jobs
+  now run on `macos-latest`, as the Node and JVM builds do, and a test fails when a workflow
+  names a retired image.
+
+- **The nightly's failure issue says whether the tests ran (#1120, #1128).** `if: failure()` is true
+  when any step failed, so a rustup download that timed out on 2026-10-29 opened an issue
+  calling itself "a real counterexample, not flake", with no test run and an empty log. The
+  step now reads the outcome of the test step, and a failure elsewhere files *Nightly
+  Hypothesis run did not reach a verdict*, with its own rolling issue. A test runs the step's
+  script under node.
+
+- **`benchmarks/meta` gains a `practitioner` family, for sources the literature does not
+  reach (#1131).** The registry cited 15 arXiv URLs and no offensive tool, because sourcing
+  had focused on published papers. Three suites now read practitioner sources.
+  `p4rs3lt0ngv3-transforms` applies a generator's 222 transforms to known text, so each case
+  has a known answer: on 0.18.0, disarm recovers 48 of 64 restyled pairs and removes 12 of 12
+  hidden payloads. `garak-ansi-escapes` scores garak's terminal escape payloads, 7 of 7.
+  `l1b3rt4s-fixtures` is unlabelled, so it stays a fixture and reports only counts. The base
+  classes enforce the rules: a fixture cannot report a score, and a suite whose
+  delete-everything control scores anything reports an error. AGPL sources are cached from a
+  pinned commit and never vendored. The generator runs upstream's code only after a digest
+  check of the tree, under Node's permission model. `Source.sha256` also now holds for
+  archives, and a mismatch no longer leaves the bad bytes in the cache, where the next run
+  read them as a cached artifact.
+
+- **The reserved code points cost ordinary text almost nothing (#1103, #1133).** The predicate
+  behind the strips runs per character, and its six range checks moved `strip_obfuscation` by
+  +5.93% on the `mixed_web` document, over the perf gate's 5% limit, which only the run on
+  `main` measured. Text below `U+FFF0` now leaves after one comparison and one equality test.
+  The `mixed_web`, `homoglyph`, `latin` and `cyrillic` rows are now 0.64% to 0.95% below their cost
+  before #1103. `canonicalize` on the short Unicode string is +0.45%.
+
+- **The tests that hold the `p4rs3lt0ngv3-transforms` sandbox run on CI (#1144, #1170).** They need
+  Node 25 or later, the first release whose permission model denies the network, and the test job
+  has Node 22, so they skipped on every run and a lost `--permission` would have shipped green. A
+  job of their own now runs the module on Node 26 with `DISARM_REQUIRE_NODE` set, which turns a
+  missing or old Node into a failure. A contributor's machine still skips. A new `sandbox` change
+  filter starts the job, because `code` has no `*.js` and a change to the driver alone started
+  nothing that runs it.
+
+- **The tests that need a context dictionary run on CI (#1151, #1171).** The dictionaries are
+  gitignored and no workflow built them, so all 29 tests skipped on every run, and Hebrew's six
+  ran nowhere. A new `context-dictionaries` job builds Persian and Hebrew with the real builders
+  and holds them to their pins, and builds Arabic from a small committed fixture, because Kaggle
+  credentials never reach a pull request from a fork. `DISARM_REQUIRE_CONTEXT_DICTS` turns a
+  missing dictionary into a failure there, and a contributor's machine still skips. Hebrew's
+  3.1 GB corpus and six-minute build are cached by output.
+
+- **`benchmarks/meta` asks three questions that need no label (#1163, #1172).** A new
+  `label-free-invariants` suite counts, over seven pinned files holding 22,897 practitioner texts,
+  whether each surface raises, whether its output is a fixed point, and which kinds a sanitizer's
+  output gains. Every number is a census, and deleting everything also scores zero on the first two,
+  so none of them can rank a tool. The sweep proves on every run that it can see a failure, and a
+  call count other than texts times surfaces is an error.
+
+- **Five practitioner suites hold the fixes that follow them in this release (#1154, #1161, #1143,
+  #1141, #1160, #1174).** `benign-controls` reports what fires on text people type into a model, per
+  set, and `gutenberg-benign` is no longer the only false-positive axis over ordinary text.
+  `ghostchars-labels` reads another detector's hand labels, with the selection bias named.
+  `token-smuggling-constructions` rebuilds seven constructions PyRIT and garak ship, importing
+  neither, and `st3gg-text-examples` scores eleven static files with a known cover, running nothing
+  from upstream. `arcanum-taxonomy` reports 104 examples under named techniques, in classes fixed in
+  the source. Each number reproduces its issue's measurement on this build.
+
+- **`benchmarks/meta` reads five more practitioner sources, and has detectors built for smuggling
+  to compare with (#1142, #1140, #1162, #1166, #1164).** New suites are
+  `promptfoo-literal-maps`, `augustus-known-answers`, `palisade-labels` and `spikee-seed-census`.
+  `p4rs3lt0ngv3-transforms` now also reads each style letter by letter, so one unmapped letter no
+  longer hides what a style recovers. `unicode-smuggling-guard` and `glyphguard` join the subjects,
+  read before pinning and pinned by hash, and the README's considered list says why `llm-guard` and
+  the others stayed out. spikee's recorded guardrail results are not comparable, and the suite's
+  notes say why.
+
+- **Every string another detector's test suite states a verdict on is now held, with whether disarm
+  agrees (#1165).** `tests/test_rival_vectors.py` rebuilds them from code points and gives each one
+  a status: `agrees`, `decided` with a citation, or `open` with an issue, checked against
+  `has_anomalies`, so a reader can tell a decision from a gap. Two shapes were undecided, and the
+  anomaly guide now records them: a leading `U+FEFF` stays reported, and a ZWJ at the end of a text
+  after an emoji stays clean.
+
+- **A `benchmarks/meta` run brings every file its selection declares, and a suite short of one
+  skips (#1192).** `runner.provision` kept one source per URL, and `benign-controls` and
+  `spikee-seed-census` cache one URL under two names, so the pair exited 1 on an empty cache and
+  again on every retry. It now keeps one source per cache name. `spikee-seed-census`,
+  `augustus-known-answers` and `promptfoo-literal-maps` open every file they declare, so one absent
+  file reports SKIPPED and names the file where it used to report `FileNotFoundError`.
+  `benign-controls` and `label-free-invariants` still read what is present and count it.
+
+- **`benchmarks/meta` compares disarm with its baseline again, and says which runs it could not
+  (#1145, #1139).** A row's key holds the version and the sha, so disarm found its row only on the
+  commit that recorded it: a full run against the committed file gave 95 drift rows and none for
+  disarm. A run now finds its own build's row or the one row another build of the tool recorded,
+  and the table names that build. The section also lists each run with no row, because a section
+  that is merely absent reads as nothing having moved. The README's refresh command kept 17 of 59
+  suites on a new cache and only the disarm subject, and the file is replaced whole, so it now reads
+  `--run --subject all --update-baseline`, and `RELEASING.md` carries the step. The test on the 0.18.0
+  note's sentence now survives a release assembly, which deletes the fragment it read.
+
 ## [0.18.0] — 2026-10-30
 
 ### Upgrade notes
@@ -42,6 +347,12 @@ Releases before 0.15.0 are archived verbatim, one page per minor series, in `doc
   `catalog_key`, `strip_obfuscation` and `ml_normalize`, which remove marks:
   `search_key("\u0b53")` was `"\u0b53"` and is `""`. `normalize_confusables` and `fold_case` do
   not move.
+  The profiles move too, and the fixture does not track them: `llm_guardrail` and
+  `ml_corpus_normalize` on all 105, `normalize_web_input` on the 68, and `search_index`,
+  `library_catalog_key_eu`, `rag_ingest` and `scholarly_cyrillic_iso9` on 44. So do
+  `normalize_user_input` and `security_clean`, on the 68. If you stored a key built with
+  `search_index` or `library_catalog_key_eu` from text that can hold a character new in
+  Unicode 18, recompute it.
 - **A Brahmic slot with no inherent `a` opens no consonant context (#1094).** `search_key` and
   `catalog_key` move on 2,380 of the 1,638,400 pairs, and nothing else does. Each pair ends in
   one of 28 unassigned code points at a vowel sign's offset, so no pair of assigned characters

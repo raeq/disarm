@@ -304,13 +304,15 @@ remove them.
 
 Both start short of every letter, because one bare letter must not switch them off (#1194). A
 strikethrough or slash, and three marks on a Latin letter, report at two letters and half the
-word, so `U+0336` on every other letter of `password` reports. An underline reports on all
-letters but one and three at the least, because scholarly romanization of Arabic underlines
-digraphs: `S\u0332h\u0332ayk\u0332h\u0332` is four of six and stays clean. The bars leave this
+word, so `U+0336` on every other letter of `password` reports. An underline reports on every
+letter of three or more, and on all letters but one with five at the least, because scholarly
+romanization of Arabic underlines digraphs, and two digraphs cannot reach five: `S\u0332h\u0332ayk\u0332h\u0332` is four of six and stays clean. The bars leave this
 clean, and only the detector is blind to it, since `llm_guardrail` removes every mark:
 
 - A strike on under half a word, such as every third letter of `password`.
-- An underline on all but two letters.
+- An underline on all but two letters, on a two-letter word, or on 3 of 4 or 4 of 5 letters.
+- `U+0334` or `U+0335` short of the underline's bar, such as two letters of three or half a
+  word. `U+0334` is the IPA mark for a velarized or pharyngealized sound (#1213).
 - The overline `U+0305` on any word, a vinculum in `V\u0305I\u0305` and an active-low signal in
   `R\u0305S\u0305T\u0305`.
 - The macron below `U+0331` on any word, a letter in Kwak'wala and Tlingit.

@@ -18,6 +18,7 @@ Every assertion here fails on ``0.14.1``.
 from __future__ import annotations
 
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -139,3 +140,114 @@ def test_a_hand_built_pipeline_does_not_strip_pua() -> None:
     hand_built = disarm.TextPipeline(strip_zero_width=True, strip_control=True)
     assert PUA in hand_built("Menu " + PUA)
     assert "strip_pua" not in [name for name, _ in hand_built.steps]
+
+
+_E = chr(0xE000)
+_LATIN_ACCENT = chr(0xE9)
+_COMBINING_ACUTE = chr(0x301)
+_COMBINING_CIRCUMFLEX = chr(0x302)
+_CYRILLIC = "".join(chr(c) for c in range(0x430, 0x439))
+_ARABIC = "".join(chr(c) for c in range(0x628, 0x631))
+_HAN = "".join(chr(0x4E00 + i) for i in range(9))
+_HIRAGANA = "".join(chr(c) for c in range(0x3042, 0x304B))
+_KATAKANA = "".join(chr(c) for c in range(0x30A2, 0x30AB))
+_HANGUL = "".join(chr(0xAC00 + i) for i in range(9))
+
+
+def _spread(word: str, filler: str = _E) -> str:
+    return "".join(letter + filler for letter in word)
+
+
+class TestPrivateUseBetweenLetters:
+    """One between two Latin letters of the same case splits a word (#1212).
+
+    #812's reason is about a glyph beside a letter, and it stands: every other row here that
+    stays clean is one. `canonicalize` removes all of them, so the detector had nothing to say
+    about text the comparison presets had already rewritten.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "pay" + _E + "pal",
+            "PAY" + _E + "PAL",
+            "pass" + chr(0xF0000) + "word",
+            "pass" + chr(0x100000) + "word",
+            "caf" + _E + _LATIN_ACCENT,
+            "pay" + _E * 2 + "pal",
+            "pay" + _E * 3 + "pal",
+            "of" + chr(0xF001) + "ce",
+            _spread("password"),
+            _spread("PaSsWoRdX"),
+            _spread(_CYRILLIC),
+            _spread(_ARABIC),
+            "Hello " + _E * 4,
+        ],
+        ids=ascii,
+    )
+    def test_reports(self, text: str) -> None:
+        assert disarm.has_anomalies(text)
+        assert "invisible" in disarm.inspect_anomalies(text).kinds
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Pay" + _E + "Pal",
+            "Save" + chr(0xE001) + "File",
+            "Mac" + chr(0xF8FF) + "Book",
+            "Home" + chr(0xF0B7) + "About",
+            "pass1" + _E + "2word",
+            _CYRILLIC[0] + _E + _CYRILLIC[1],
+            chr(0x4E00) + chr(0xE78D) + chr(0x4E8C),
+            _spread(_CYRILLIC[:8]),
+            _spread(_HAN),
+            _spread(_HIRAGANA),
+            _spread(_KATAKANA),
+            _spread(_HANGUL),
+            "Menu " + _E,
+            _E + " Menu",
+            "Menu" + _E,
+            _E + "Menu",
+            (chr(0xF0B7) + " item\n") * 8,
+            "Hello " + _E * 3,
+        ],
+        ids=ascii,
+    )
+    def test_stays_clean(self, text: str) -> None:
+        assert not disarm.has_anomalies(text)
+        assert disarm.inspect_anomalies(text).kinds == []
+
+    def test_a_cjk_letter_on_one_side_does_not_count(self) -> None:
+        pairs = "".join(chr(0x4E00 + i) + _E + chr(0x430 + i) + " " for i in range(9))
+        assert not disarm.has_anomalies(pairs)
+
+    def test_a_letter_with_a_mark_is_still_a_letter(self) -> None:
+        """One verdict for every canonically equivalent spelling, and a base keeps its mark."""
+        composed = "caf" + _LATIN_ACCENT + _E + "s"
+        decomposed = "cafe" + _COMBINING_ACUTE + _E + "s"
+        assert disarm.has_anomalies(composed)
+        assert disarm.has_anomalies(decomposed)
+        assert disarm.has_anomalies("x" + _COMBINING_CIRCUMFLEX + _E + "y")
+
+    def test_the_finding_points_at_the_whole_run(self) -> None:
+        text = "pay" + _E * 3 + "pal"
+        [finding] = disarm.inspect_anomalies(text).findings
+        assert (finding.start, finding.end) == (3, 3 + len((_E * 3).encode()))
+        assert finding.token == _E * 3
+        assert "U+E000" in finding.detail
+        assert "inside a word" in finding.detail
+
+    def test_a_run_the_run_rule_reports_is_not_reported_twice(self) -> None:
+        assert len(disarm.inspect_anomalies("pay" + _E * 4 + "pal").findings) == 1
+
+    def test_the_rewrites_and_the_exemption_do_not_move(self) -> None:
+        assert disarm.canonicalize("pay" + _E + "pal") == "paypal"
+        assert not disarm.is_canonical("pay" + _E + "pal")
+        assert _E in disarm.get_pipeline("code_context")("Menu " + _E)
+
+    def test_the_guide_states_the_rule(self) -> None:
+        guide = (
+            Path(__file__).resolve().parents[1] / "docs/user-guide/anomaly-detection.md"
+        ).read_text(encoding="utf-8")
+        assert "between two Latin letters of the same case" in " ".join(guide.split())
+        assert "a single private-use character is not an anomaly" not in " ".join(guide.split())

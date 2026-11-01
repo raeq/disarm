@@ -82,12 +82,12 @@ const CGJ: char = '\u{034F}';
 /// presentation, so two is the floor. Zero-width runs need the loosest floor: eight, well
 /// above any orthography and well below the sixteen it takes to smuggle two ASCII letters.
 ///
-/// The Private Use Area (#812) takes four. It is a run rule and not a neighbour rule for
-/// the reason `strip_format` keeps the block at all: a single PUA code point beside a
-/// letter is an icon-font glyph, which is ordinary in UI strings — so the floor has to sit
-/// above one, unlike the tag block where nothing legitimate emits even one. Four is the
-/// shortest run that no icon font produces and that still catches the shape
-/// `canonicalize` was already deleting silently.
+/// The Private Use Area (#812) takes four standing on their own. A PUA code point beside a
+/// letter is an icon-font glyph, which is ordinary in UI strings and the reason `strip_format`
+/// keeps the block at all, so the floor has to sit above one, unlike the tag block where
+/// nothing legitimate emits even one. Four is the shortest run that no icon font produces and
+/// that still catches the shape `canonicalize` was already deleting silently. One between two
+/// letters is not beside a letter, and [`spread_carriers`] reads that shape (#1212).
 ///
 /// Noncharacters take one, for the tag block's reason. `U+FDD0`-`U+FDEF` and the last two
 /// code points of every plane are permanently reserved for a process's internal use
@@ -873,6 +873,10 @@ fn paints_over(line: &str, after: &str) -> bool {
 /// Counts a selector after a base no sequence registers, and `U+034F` before a non-mark,
 /// since its legitimate use holds a mark away from its base. A selector touching another is
 /// the run rule's, and a sequence the IVD registers answers to variety alone (#1196).
+///
+/// Also counts a run of private-use characters between two letters, once a run, and one
+/// between two Latin letters of the same case reports on its own (#1212). See
+/// [`private_use_between_letters`].
 fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
     if text.is_ascii() {
         return None;
@@ -882,11 +886,28 @@ fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
     let mut ideographic_first = None;
     let mut ideographic_count = 0usize;
     let mut ideographic = HashSet::new();
+    let mut splits_word = false;
+    let mut private_use_start = 0;
     let mut previous = None;
     let mut chars = text.char_indices().peekable();
     while let Some((i, c)) = chars.next() {
         let next = chars.peek().map(|&(_, n)| n);
-        if c == CGJ {
+        if crate::invisibles::is_pua(c) {
+            if !previous.is_some_and(crate::invisibles::is_pua) {
+                private_use_start = i;
+            }
+            // Read at the end of a run, so a run bounded by letters counts once.
+            if let Some(after) = next.filter(|&n| !crate::invisibles::is_pua(n)) {
+                let run = private_use_start..i + c.len_utf8();
+                let verdict =
+                    private_use_between_letters(&text[..run.start], &text[run.clone()], after);
+                if let Some(split) = verdict {
+                    first.get_or_insert_with(|| (run.start, run.len()));
+                    count += 1;
+                    splits_word |= split;
+                }
+            }
+        } else if c == CGJ {
             if next.is_none_or(|n| !unicode_normalization::char::is_combining_mark(n)) {
                 first.get_or_insert_with(|| (i, c.len_utf8()));
                 count += 1;
@@ -911,9 +932,42 @@ fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
         count += ideographic_count;
         first = first.or(ideographic_first);
     }
-    (count >= SPREAD_CARRIER_FLOOR)
+    (count >= SPREAD_CARRIER_FLOOR || splits_word)
         .then(|| first.map(|at| (at, count)))
         .flatten()
+}
+
+/// How a run of private-use characters sits between the text `before` it and the character
+/// `after` it: `Some(true)` splits a word, `Some(false)` counts toward
+/// [`SPREAD_CARRIER_FLOOR`], and `None` is neither (#1212).
+///
+/// Between two Latin letters of the same case it splits a word: `pay` + `U+E000` + `pal`. A
+/// glued label changes case at the join, so `Save` + `U+E001` + `File` keeps its answer, and
+/// a glyph beside one letter is #812's icon font. A CJK letter on either side does not count,
+/// because legacy encodings for Han used this block, so a long text can hold eight. A run the
+/// run rule reports is left to it.
+fn private_use_between_letters(before: &str, run: &str, after: char) -> Option<bool> {
+    if run.chars().count() >= RUN_THRESHOLD_PRIVATE_USE || !after.is_alphabetic() {
+        return None;
+    }
+    // Through any marks, so `e` + `U+0301` is the letter that `U+00E9` is.
+    let left = before
+        .chars()
+        .rev()
+        .find(|&c| !unicode_normalization::char::is_combining_mark(c))?;
+    if !left.is_alphabetic() {
+        return None;
+    }
+    let (left_script, after_script) = (
+        crate::scripts::detect_char_script(left),
+        crate::scripts::detect_char_script(after),
+    );
+    let same_case = (left.is_lowercase() && after.is_lowercase())
+        || (left.is_uppercase() && after.is_uppercase());
+    if same_case && left_script == "Latin" && after_script == "Latin" {
+        return Some(true);
+    }
+    (!CJK_SCRIPTS.contains(&left_script) && !CJK_SCRIPTS.contains(&after_script)).then_some(false)
 }
 
 fn codepoint(c: char) -> String {
@@ -2208,7 +2262,12 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
                 start,
                 end: start + len,
                 detail: format!(
-                    "{count} spread through the text, first {}",
+                    "{count} {} the text, first {}",
+                    if count < SPREAD_CARRIER_FLOOR {
+                        "inside a word of"
+                    } else {
+                        "spread through"
+                    },
                     carrier.chars().next().map_or_else(String::new, codepoint)
                 ),
             },

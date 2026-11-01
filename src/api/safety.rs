@@ -1087,10 +1087,10 @@ pub struct EncodingDetection {
 /// ambiguous-bytes case `THREAT_MODEL.md` scopes out. Such input decodes as a single-byte
 /// encoding and yields mojibake, with no flag — supply the encoding explicitly when you
 /// know the source emits BOM-less UTF-16.
-#[must_use]
 ///
 /// This answers a question about bytes and carriers, not textual encodings. It does not
 /// read base64, hex or binary; see the threat model.
+#[must_use]
 pub fn detect_encoding(bytes: &[u8]) -> EncodingDetection {
     let (label, confidence) = crate::encoding::detect_encoding_impl(bytes);
     EncodingDetection { label, confidence }

@@ -118,6 +118,7 @@ def test_the_rust_docs_carry_the_note(relative: str, anchor: str) -> None:
     source = _page(relative)
     before = source.split(anchor, 1)[0].rsplit("\n\n", 1)[-1]
     assert "does not read base64, hex or binary" in _unwrapped(before.replace("///", " "))
+    assert not re.search(r"#\[[^\n]*\]\n///", before), "an attribute splits the doc comment"
 
 
 def test_the_decode_smuggled_rust_doc_carries_the_note() -> None:

@@ -208,6 +208,20 @@ bumped:
 grep -rn "<old-version>" --exclude=CHANGELOG.md . | grep -v deprecated
 ```
 
+### Refresh the meta-benchmark baseline
+
+The harness reports and does not gate, so nothing else asks for this. Commit the bump first,
+because a dirty tree marks every row `.dirty`. Then, with `requirements/bench.txt` installed and
+the interpreter whose UCD the file records as `host_ucd`, unless you mean to move it:
+
+```sh
+python -m benchmarks.meta --run --subject all --update-baseline
+git diff --stat benchmarks/meta/baselines/default.json
+```
+
+Read what moved before committing it. A run takes about five minutes on a populated cache and
+longer on a new one.
+
 ## Bad releases
 
 A *bad release* is one that should not be used: a security vulnerability, data

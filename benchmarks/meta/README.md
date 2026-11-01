@@ -340,12 +340,23 @@ is not a measurement.
 ## Drift
 
 ```bash
-python -m benchmarks.meta --run --only-available --update-baseline
-python -m benchmarks.meta --run --only-available          # later: reports what moved
+python -m benchmarks.meta --run --subject all --update-baseline
+python -m benchmarks.meta --run --subject all             # later: reports what moved
 ```
 
 The harness reports and does not gate. A moved number never fails a run; only a
 suite that threw does, because that is a harness defect rather than a result.
+
+Refresh the baseline when a release is cut, on the released build, and read what moved
+before committing it. A baseline that is several releases old still reports drift, against
+a build nobody is comparing with. The refresh names every subject and selects every suite,
+because the file is replaced whole and whatever a run leaves out loses its row.
+
+A run looks up the row its own build recorded, and otherwise the one row another build of
+that tool recorded, so a commit or a release does not hide a moved number, and the table
+says which build the number came from. A composed pipeline with other steps is another
+subject and finds no row. The section also says which runs had no row, because a section
+that is merely absent reads as nothing having moved.
 
 Baselines are keyed by subject, suite *and* population, and record the Unicode
 and confusables versions in force — a table bump moves normative numbers on its

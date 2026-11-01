@@ -52,6 +52,7 @@ def render_markdown(
     drifts: Sequence[Drift] = (),
     baseline_name: str = "default",
     leaderboard: Leaderboard | None = None,
+    unmatched: Sequence[str] = (),
 ) -> str:
     lines: list[str] = [
         "# disarm meta-benchmark",
@@ -99,8 +100,8 @@ def render_markdown(
             by_suite.setdefault(out.suite, []).append(out)
         for group in by_suite.values():
             lines += _render_suite(group)
-    if drifts:
-        lines += _render_drift(drifts, baseline_name)
+    if drifts or unmatched:
+        lines += _render_drift(drifts, baseline_name, unmatched)
     lines += _render_skips(report)
     return "\n".join(lines).rstrip() + "\n"
 
@@ -536,7 +537,9 @@ def _render_outcome(out: Outcome) -> list[str]:
     return lines
 
 
-def _render_drift(drifts: Sequence[Drift], baseline_name: str) -> list[str]:
+def _render_drift(
+    drifts: Sequence[Drift], baseline_name: str, unmatched: Sequence[str] = ()
+) -> list[str]:
     significant = [d for d in drifts if d.significant]
     lines = [
         "## Drift against the committed baseline",
@@ -546,8 +549,19 @@ def _render_drift(drifts: Sequence[Drift], baseline_name: str) -> list[str]:
         f"{len(significant)} beyond the noise floor. "
         "Nothing here fails a run — the point is that a silent change becomes visible.",
         "",
-        "| subject | suite | measurement | before | after | direction | comparable |",
-        "|---|---|---|---|---|---|---|",
+    ]
+    if unmatched:
+        suites = ", ".join(f"`{s}`" for s in sorted({k.rpartition("::")[2] for k in unmatched}))
+        runs = "1 run has" if len(unmatched) == 1 else f"{len(unmatched)} runs have"
+        lines += [
+            f"> {runs} no row in this baseline, so this section is silent on: {suites}.",
+            "",
+        ]
+    if not drifts:
+        return lines
+    lines += [
+        "| subject | recorded on | suite | measurement | before | after | direction | comparable |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for d in sorted(significant, key=lambda x: (x.suite, x.key)):
         note = (
@@ -560,8 +574,8 @@ def _render_drift(drifts: Sequence[Drift], baseline_name: str) -> list[str]:
             )
         )
         lines.append(
-            f"| `{d.subject}` | `{d.suite}` | `{d.key}` | {_num(d.before)} | "
-            f"{_num(d.after)} | {d.direction} | {note} |"
+            f"| `{d.subject}` | `{d.before_subject}` | `{d.suite}` | `{d.key}` | "
+            f"{_num(d.before)} | {_num(d.after)} | {d.direction} | {note} |"
         )
     lines.append("")
     incomparable = [d for d in significant if not d.comparable]
@@ -655,7 +669,9 @@ def load_outcomes(path: str) -> list[Outcome]:
     return out
 
 
-def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
+def render_json(
+    report: RunReport, drifts: Sequence[Drift] = (), unmatched: Sequence[str] = ()
+) -> str:
     payload = {
         "subjects": report.subjects,
         "disarm_version": report.disarm_version,
@@ -736,11 +752,13 @@ def render_json(report: RunReport, drifts: Sequence[Drift] = ()) -> str:
                 "ratio_delta": d.ratio_delta,
                 "comparable": d.comparable,
                 "subject": d.subject,
+                "before_subject": d.before_subject,
                 "tables_moved": d.tables_moved,
                 "direction": d.direction,
                 "significant": d.significant,
             }
             for d in drifts
         ],
+        "no_baseline_row": list(unmatched),
     }
     return json.dumps(payload, indent=2, sort_keys=True, default=str)

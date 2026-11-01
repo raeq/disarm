@@ -18,9 +18,10 @@ import os
 import pytest
 
 from benchmarks.meta import base, damage, fetch, leaderboard, registry, runner, subjects
+from benchmarks.meta import baseline as baseline_module
 from benchmarks.meta import report as report_module
 from benchmarks.meta.base import REPO_ROOT, SuiteBase, surfaces, thin
-from benchmarks.meta.baseline import Drift, compare, snapshot
+from benchmarks.meta.baseline import Drift, compare, save, snapshot
 from benchmarks.meta.protocol import Availability, Family, Outcome, Provenance, Status
 from benchmarks.meta.report import load_outcomes, render_json, render_markdown
 from benchmarks.meta.runner import RunReport, run
@@ -331,6 +332,166 @@ def test_drift_direction_follows_higher_is_better():
 
 def test_compare_against_an_absent_baseline_is_empty():
     assert compare([_outcome("s", "k", 1, 2, 2)], name="a-baseline-that-does-not-exist") == []
+
+
+def _on_build(version: str, value: float = 5, subject: str = "disarm", suite: str = "s") -> Outcome:
+    out = _outcome(suite, "k", value, 10, 10, subject=subject)
+    out.method.subject_version = version
+    return out
+
+
+@pytest.fixture
+def baseline_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(baseline_module, "BASELINE_DIR", tmp_path)
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("recorded", "running"),
+    [
+        ("0.19.0+gaaaaaaa", "0.19.0+gbbbbbbb"),
+        ("0.19.0+gaaaaaaa.dirty", "0.19.0+gbbbbbbb"),
+        ("0.19.0", "0.20.0"),
+        ("0.19.0+gaaaaaaa+composed.11111111", "0.20.0+gbbbbbbb+composed.11111111"),
+    ],
+)
+def test_a_later_build_finds_the_row_an_earlier_build_recorded(baseline_dir, recorded, running):
+    """The key holds the sha, so every commit used to hide a moved number from disarm (#1145)."""
+    save([_on_build(recorded)], "0.0.0")
+    run = [_on_build(running, value=9)]
+    drifts = compare(run)
+    assert [(d.before, d.after) for d in drifts] == [(5, 9)]
+    assert drifts[0].before_subject == f"disarm@{recorded}"
+    assert drifts[0].subject == f"disarm@{running}"
+    assert baseline_module.without_a_row(run) == []
+
+
+def test_a_row_recorded_on_this_build_wins_over_another_builds(baseline_dir):
+    save([_on_build("0.14.1", value=1), _on_build("0.15.0", value=5)], "0.0.0")
+    assert [d.before for d in compare([_on_build("0.15.0", value=9)])] == [5]
+
+
+def test_two_other_builds_of_a_tool_name_no_single_row(baseline_dir):
+    """Either could be the one meant, and a number subtracted from the wrong build reads as real."""
+    save([_on_build("0.14.1", value=1), _on_build("0.15.0", value=5)], "0.0.0")
+    run = [_on_build("0.16.0", value=9)]
+    assert compare(run) == []
+    assert baseline_module.without_a_row(run) == ["disarm@0.16.0::s"]
+
+
+@pytest.mark.parametrize(
+    ("recorded", "run"),
+    [
+        (_on_build("0.19.0"), _on_build("0.19.0", value=9, subject="ftfy")),
+        (_on_build("0.19.0"), _on_build("0.19.0", value=9, suite="t")),
+        (_on_build("0.19.0+composed.11111111"), _on_build("0.19.0+composed.22222222", value=9)),
+    ],
+    ids=["another tool", "another suite", "another composition"],
+)
+def test_another_tool_suite_or_composition_never_supplies_the_row(baseline_dir, recorded, run):
+    save([recorded], "0.0.0")
+    assert compare([run]) == []
+    assert baseline_module.without_a_row([run]) == [f"{run.method.subject_key}::{run.suite}"]
+
+
+def test_a_skipped_suite_needs_no_row(baseline_dir):
+    save([_on_build("0.19.0")], "0.0.0")
+    run = _on_build("0.19.0", suite="t")
+    run.status = Status.SKIPPED
+    assert baseline_module.without_a_row([run]) == []
+
+
+def test_an_absent_baseline_lists_nothing_as_missing_a_row(baseline_dir):
+    assert baseline_module.without_a_row([_on_build("0.19.0")]) == []
+
+
+def test_the_report_says_what_had_no_row_to_compare_with():
+    """A section that is merely absent reads as nothing having moved."""
+    report = RunReport(selected=2, registered=2)
+    no_row = ["disarm@0.19.0::s", "ftfy@6.3.1::s", "disarm@0.19.0::t"]
+    md = render_markdown(report, unmatched=no_row)
+    assert "## Drift against the committed baseline" in md
+    assert "3 runs have no row in this baseline" in md
+    assert "`s`, `t`" in md
+    assert json.loads(render_json(report, unmatched=no_row))["no_baseline_row"] == no_row
+
+
+def test_the_report_names_the_build_a_moved_number_came_from():
+    report = RunReport(selected=1, registered=1)
+    moved = Drift(
+        "s", "k", 5, 9, 10, 10, comparable=True, higher_is_better=True, subject="disarm@0.20.0"
+    )
+    moved.before_subject = "disarm@0.19.0"
+    assert "`disarm@0.19.0`" in render_markdown(report, [moved])
+    assert json.loads(render_json(report, [moved]))["drift"][0]["before_subject"] == "disarm@0.19.0"
+
+
+def test_a_run_reports_a_number_that_moved_since_another_build(baseline_dir, monkeypatch, tmp_path):
+    """Through the command line, with only the sha between the two builds."""
+    from benchmarks.meta.__main__ import main
+
+    args = ["--run", "--quiet", "--select", "token-smuggling-constructions", "--baseline", "b"]
+    monkeypatch.setattr(subjects, "_git_describe", lambda _repo: "+gaaaaaaa")
+    assert main([*args, "--update-baseline"]) == 0
+    path = baseline_dir / "b.json"
+    recorded = json.loads(path.read_text(encoding="utf-8"))
+    row = next(iter(recorded["suites"].values()))
+    assert row["subject_version"].endswith("+gaaaaaaa")
+    moved = sorted(row["measurements"])[0]
+    row["measurements"][moved]["value"] += 1
+    path.write_text(json.dumps(recorded), encoding="utf-8")
+
+    monkeypatch.setattr(subjects, "_git_describe", lambda _repo: "+gbbbbbbb")
+    out = tmp_path / "run.json"
+    assert main([*args, "--json", str(out)]) == 0
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert [d["measurement"] for d in payload["drift"]] == [moved]
+    assert payload["no_baseline_row"] == []
+
+
+def test_a_run_lists_what_the_baseline_has_no_row_for(baseline_dir, tmp_path, capsys):
+    from benchmarks.meta.__main__ import main
+
+    suite = "token-smuggling-constructions"
+    (baseline_dir / "b.json").write_text(
+        '{"disarm_version": "0.0.0", "suites": {}}', encoding="utf-8"
+    )
+    out = tmp_path / "run.json"
+    args = ["--run", "--quiet", "--select", suite, "--baseline", "b", "--json", str(out)]
+    assert main(args) == 0
+    assert f"1 run has no row in this baseline, so this section is silent on: `{suite}`" in (
+        capsys.readouterr().out
+    )
+    [row] = json.loads(out.read_text(encoding="utf-8"))["no_baseline_row"]
+    assert row.endswith(f"::{suite}")
+
+
+def _drift_section() -> str:
+    text = (REPO_ROOT / "benchmarks/meta/README.md").read_text(encoding="utf-8")
+    return " ".join(text.split("\n## Drift\n", 1)[1].split("\n## ", 1)[0].split())
+
+
+def test_the_readme_says_when_a_baseline_is_due():
+    assert (
+        "Refresh the baseline when a release is cut, on the released build, and read what moved "
+        "before committing it. A baseline that is several releases old still reports drift, "
+        "against a build nobody is comparing with."
+    ) in _drift_section()
+
+
+def test_the_documented_refresh_keeps_every_suite_and_every_subject():
+    """`--only-available` filters before anything is fetched, and the file is replaced whole.
+
+    On a new cache that keeps 17 of 59 suites, and the default subject is disarm alone.
+    """
+    section = _drift_section()
+    assert "--run --subject all --update-baseline" in section
+    assert "--only-available" not in section
+
+
+def test_the_release_checklist_refreshes_the_baseline():
+    text = (REPO_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+    assert "python -m benchmarks.meta --run --subject all --update-baseline" in text
 
 
 def test_noise_floor_suppresses_a_tiny_ratio_move():

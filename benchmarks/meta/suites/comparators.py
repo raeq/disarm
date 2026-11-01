@@ -9,13 +9,16 @@ place where a *false positive* is defined by someone other than disarm.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import NamedTuple
 
-from ..base import CACHE, DATA, SuiteBase, add, artifact, record
+from ..base import CACHE, DATA, SuiteBase, add, artifact, detectors, record, thin
 from ..fetch import Source
 from ..protocol import Availability, Family, Outcome, Provenance
 from ..subjects import Capability, Job, Role
+from .practitioner import tree_digest
 
 
 class ConfusableBenchV1(SuiteBase):
@@ -322,6 +325,41 @@ class ConfusableVision(SuiteBase):
         )
 
 
+_UNTRACE_COMMIT = "5cc75c3af73e53dda14eee6918e91f956c73ac61"
+
+#: A run with one of these prints what untrace prints by default. `--fail` moves the
+#: exit code and leaves the report alone.
+_UNTRACE_PLAIN_ARGS = frozenset({"", ".", "--fail ."})
+#: The last line of a text report, which holds how many files the run scanned.
+_UNTRACE_TAIL = re.compile(r"(?:found: .*? of|clean:) (\d+) file")
+#: What each line of a report gives its file, the strongest first. A file takes the first
+#: it earned. A line about metadata gives nothing, so a file named for metadata alone is
+#: clean: `legitimate-authors` is one.
+_UNTRACE_MARKS = (
+    ("payload", re.compile(r"\s*!! hidden payload ")),
+    ("hidden", re.compile(r"\s*\d+:\d+\s+detected\s.*\(hidden\)\s*$")),
+    ("mixed_script", re.compile(r"\s*\d+:\d+\s+mixed-script\s")),
+    ("typographic", re.compile(r"\s*\d+:\d+\s+detected\s.*\(typographic\)\s*$")),
+)
+#: Each class, and whether `has_anomalies` firing on it is better. Typography is not a
+#: hidden character and not clean either, so it counts and has no direction.
+_UNTRACE_DIRECTIONS: dict[str, bool | None] = {
+    "payload": True,
+    "hidden": True,
+    "mixed_script": True,
+    "typographic": None,
+    "clean": False,
+}
+
+
+class _UntraceFile(NamedTuple):
+    #: `case/path`. A file name is the only part of the corpus a report may print.
+    name: str
+    #: A key of `_UNTRACE_DIRECTIONS`, or None where the run gave no verdict.
+    label: str | None
+    text: str
+
+
 class UntraceTechniques(SuiteBase):
     name = "untrace-techniques"
     family = Family.COMPARATOR
@@ -329,22 +367,27 @@ class UntraceTechniques(SuiteBase):
     env_var = "DISARM_META_UNTRACE"
     SOURCES = (
         Source(
-            url="https://codeload.github.com/juriku/untrace/tar.gz/refs/heads/main",
+            url=f"https://codeload.github.com/juriku/untrace/tar.gz/{_UNTRACE_COMMIT}",
             filename="untrace",
             licence="MIT",
             kind="tar.gz",
-            member="untrace-main/testdata",
-            note="the rival's own test corpus — its technique taxonomy, not ours",
+            member=f"untrace-{_UNTRACE_COMMIT}/testdata",
+            note="the rival's own test inputs and the reports it expects for them",
         ),
     )
-    summary = "A rival detector's technique list: which does disarm report, and which decode?"
+    #: Of the extracted `testdata`, as `practitioner.tree_digest` computes it.
+    TREE_SHA256 = "d417d4610381cd41d82f721909282bdbe91bf93f05dea6a99293ac9f1e4eef9f"
+    summary = (
+        "A rival detector's expected reports label its test inputs: what does disarm report, "
+        "and what does it fire on that the rival calls clean?"
+    )
     provenance = Provenance(
         origin="juriku",
         citation="untrace (successor to hidden-characters-detector)",
         url="https://github.com/juriku/untrace",
-        version="operator-selected checkout",
-        licence="see upstream repository",
-        issues=(700, 701, 702, 703, 704, 705, 706),
+        version=f"commit {_UNTRACE_COMMIT[:12]}, testdata/cases",
+        licence="MIT",
+        issues=(700, 701, 702, 703, 704, 705, 706, 1204),
         finding=(
             "#701: disarm strips the three ASCII-smuggling carriers and never says "
             "what a run spells. Presence and decode are different strengths of "
@@ -352,84 +395,227 @@ class UntraceTechniques(SuiteBase):
             "that decodes to readable text cannot."
         ),
         notes=(
-            "The comparison is against a technique taxonomy somebody else wrote, "
-            "which is the point: disarm's own detector cannot nominate the "
-            "techniques it is blind to. Expects one probe per line as "
-            "`technique<TAB>text`."
+            "The cases are regression fixtures for untrace's command line, not a list of "
+            "techniques, and some are clean by name. So each text file under a case's `in/` "
+            "takes its label from the expected report of a run with no flag that changes it. "
+            "A file the run may have ignored has no verdict, and it does not count as clean. "
+            "`has_anomalies` reports apart from the primitives, since `is_confusable` firing "
+            "on a Russian file says nothing about a hidden character. The name stays so "
+            "that the row in a baseline still joins."
         ),
     )
 
     def locate(self) -> Path | None:
-        return self.provisioned() or artifact(CACHE / "untrace_techniques.tsv", env=self.env_var)
+        return self.provisioned()
+
+    def available(self) -> tuple[bool, str]:
+        ready, reason = super().available()
+        if not ready:
+            return ready, reason
+        root = self.locate()
+        assert root is not None
+        digest = tree_digest(root)
+        if digest != self.TREE_SHA256:
+            return False, f"tree digest {digest[:16]} is not the pinned {self.TREE_SHA256[:16]}"
+        return True, ""
 
     def measure(self, outcome: Outcome, limit: int | None) -> None:
         import disarm
 
-        from ..base import detectors
-
         path = self.locate()
         assert path is not None
-        probes: list[tuple[str, str]] = []
-        if path.is_dir():
-            # untrace's own case tree: testdata/cases/<technique>/in/<file>.
-            # The directory name IS the technique label, which is the point —
-            # the taxonomy is theirs, not ours, and disarm's detector cannot
-            # nominate the techniques it is blind to.
-            cases = path / "cases" if (path / "cases").is_dir() else path
-            for case in sorted(d for d in cases.iterdir() if d.is_dir()):
-                for f in sorted(case.rglob("*")):
-                    if not f.is_file() or f.suffix.lower() in _BINARY_SUFFIXES:
-                        continue
-                    try:
-                        text = f.read_text(encoding="utf-8")
-                    except (UnicodeDecodeError, OSError):
-                        continue
-                    if text.strip():
-                        probes.append((case.name, text))
-                        break
-        else:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip() or line.startswith("#"):
-                    continue
-                technique, _, text = line.partition("\t")
-                if text:
-                    probes.append((technique.strip(), text))
-        if limit is not None:
-            probes = probes[:limit]
-        outcome.population = len(probes)
-        if not probes:
-            add(outcome, "techniques", 0)
-            return
+        cases, left_out, files = _untrace_files(path / "cases")
+        by_class = {label: [f for f in files if f.label == label] for label in _UNTRACE_DIRECTIONS}
+        by_class = {
+            label: [chosen[i] for i in thin(list(range(len(chosen))), limit)]
+            for label, chosen in by_class.items()
+        }
+        scored = [f for chosen in by_class.values() for f in chosen]
+        positives = [f for label in ("payload", "hidden", "mixed_script") for f in by_class[label]]
+        clean = by_class["clean"]
 
-        det = detectors()
-        reported = removed = 0
+        def score(fires: Callable[[str], bool]) -> float:
+            """True positives less false positives, each as a rate, so firing always earns 0."""
+            caught = sum(_safe(fires, f.text) for f in positives) / max(len(positives), 1)
+            raised = sum(_safe(fires, f.text) for f in clean) / max(len(clean), 1)
+            return round(caught - raised, 4)
+
+        always, never = score(lambda _text: True), score(lambda _text: False)
+        if always > never:
+            raise ValueError(
+                f"{self.name}: a detector that always fires scored {always:g} and one that "
+                f"never does {never:g}, so no number from this corpus is reported"
+            )
+
+        surfaces = dict(detectors())
+        has_anomalies = surfaces.pop("has_anomalies")
+        outcome.population = len(scored)
+        record(
+            outcome,
+            domain=f"{len(scored)} text files with a verdict, from {cases - left_out} cases",
+            predicates=["has_anomalies", *surfaces],
+            commit=_UNTRACE_COMMIT,
+        )
+        add(outcome, "cases", cases, unit="cases")
+        add(
+            outcome,
+            "cases_left_out",
+            left_out,
+            of=cases,
+            unit="cases",
+            detail="no run with a text report and no flag that changes what it reports",
+        )
+        add(outcome, "files", len(files), unit="files")
+        add(
+            outcome,
+            "files_without_verdict",
+            sum(f.label is None for f in files),
+            of=len(files),
+            unit="files",
+            detail="the run may have ignored it by path, config or directive",
+        )
         silent: list[str] = []
-        for technique, text in probes:
-            hit = any(_safe(fn, text) for fn in det.values())
-            if hit:
-                reported += 1
-            else:
-                silent.append(technique)
-            if disarm.strip_obfuscation(text) != text:
-                removed += 1
-        n = len(probes)
-        add(outcome, "techniques", n, unit="probes")
-        add(outcome, "reported_by_any_detector", reported, of=n, higher_is_better=True)
+        raised: list[str] = []
+        for label, direction in _UNTRACE_DIRECTIONS.items():
+            chosen = by_class[label]
+            fired = [f for f in chosen if _safe(has_anomalies, f.text)]
+            add(
+                outcome,
+                f"has_anomalies_on_{label}",
+                len(fired),
+                of=len(chosen),
+                unit="files",
+                higher_is_better=direction,
+            )
+            add(
+                outcome,
+                f"primitives_on_{label}",
+                sum(any(_safe(fn, f.text) for fn in surfaces.values()) for f in chosen),
+                of=len(chosen),
+                unit="files",
+                # Firing on a clean file is wrong for any detector. On any other class a
+                # primitive may fire for a reason that has nothing to do with the class.
+                higher_is_better=False if label == "clean" else None,
+            )
+            if direction is True:
+                silent += [f.name for f in chosen if f not in fired]
+            elif direction is False:
+                raised += [f.name for f in fired]
+        add(
+            outcome,
+            "has_anomalies_tpr_minus_fpr",
+            score(has_anomalies),
+            higher_is_better=True,
+            detail="reports caught less false positives, each as a rate",
+        )
+        add(
+            outcome,
+            "control_always_fires",
+            always,
+            detail="the same score for a detector that always fires; must not beat never firing",
+        )
         add(
             outcome,
             "altered_by_strip_obfuscation",
-            removed,
-            of=n,
-            detail="removed — which is not the same as reported",
+            sum(disarm.strip_obfuscation(f.text).split() != f.text.split() for f in scored),
+            of=len(scored),
+            unit="files",
+            detail="beyond whitespace, so the folds of printable ASCII count; rewritten is not reported",
         )
-        add(outcome, "silent", n - reported, of=n, higher_is_better=False)
-        outcome.extra = {"silent_techniques": sorted(set(silent))}
+        outcome.extra = {"silent_on": sorted(silent), "false_positives": sorted(raised)}
 
 
 #: Fixtures untrace ships that are not text probes.
 _BINARY_SUFFIXES = frozenset(
-    {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".epub", ".docx", ".woff", ".ico"}
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".pdf",
+        ".zip",
+        ".epub",
+        ".docx",
+        ".woff",
+        ".ico",
+        ".webp",
+        ".tiff",
+        ".tif",
+        ".pyc",
+    }
 )
+
+
+def _untrace_report(case: Path) -> list[str] | None:
+    """The expected report of the first run with no flag that changes it, as lines."""
+    for run in (case, *sorted(p for p in (case / "runs").glob("*") if p.is_dir())):
+        want = run / "want.txt"
+        if not want.is_file():
+            continue
+        args = run / "args"
+        flags = args.read_text(encoding="utf-8", errors="replace").strip() if args.is_file() else ""
+        if flags not in _UNTRACE_PLAIN_ARGS:
+            continue
+        lines = want.read_text(encoding="utf-8", errors="replace").splitlines()
+        if lines and _UNTRACE_TAIL.match(lines[-1]):
+            return lines
+    return None
+
+
+def _untrace_named(lines: Sequence[str]) -> dict[str, str]:
+    """Each file a report names, with the strongest class its lines give it."""
+    earned: dict[str, set[str]] = {}
+    current: set[str] | None = None
+    for line in lines[:-1]:
+        if not line.strip():
+            continue
+        if not line.startswith(" "):
+            current = earned.setdefault(line.strip(), set())
+        elif current is not None:
+            current.update(label for label, mark in _UNTRACE_MARKS if mark.match(line))
+    return {
+        name: next((label for label, _ in _UNTRACE_MARKS if label in marks), "clean")
+        for name, marks in earned.items()
+    }
+
+
+def _untrace_files(cases: Path) -> tuple[int, int, list[_UntraceFile]]:
+    """How many cases, how many have no usable report, and every text file of the rest.
+
+    An unnamed file is clean only where the run read it and nothing told the run to look
+    away. The report does not say which files it skipped, so a run that scanned fewer
+    files than exist leaves every unnamed file without a verdict. A case's config and a
+    file's own directive turn reporting off in the same way.
+    """
+    dirs = sorted(d for d in cases.iterdir() if d.is_dir())
+    files: list[_UntraceFile] = []
+    left_out = 0
+    for case in dirs:
+        lines = _untrace_report(case)
+        if lines is None:
+            left_out += 1
+            continue
+        named = _untrace_named(lines)
+        inputs = case / "in"
+        present = sorted(p for p in inputs.rglob("*") if p.is_file())
+        tail = _UNTRACE_TAIL.match(lines[-1])
+        assert tail is not None
+        looked_away = int(tail.group(1)) != len(present) or (inputs / ".untrace.json").is_file()
+        for path in present:
+            if path.suffix.lower() in _BINARY_SUFFIXES:
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            if not text.strip():
+                continue
+            relative = path.relative_to(inputs).as_posix()
+            label = named.get(relative)
+            if label is None and not looked_away and "untrace:ignore" not in text:
+                label = "clean"
+            files.append(_UntraceFile(f"{case.name}/{relative}", label, text))
+    return len(dirs), left_out, files
 
 
 def _safe(fn: Callable[[str], object], text: str) -> bool:

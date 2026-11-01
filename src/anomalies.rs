@@ -332,8 +332,8 @@ pub enum AnomalyKind {
     /// A bidi override, or a bidi control inside a majority-Latin token (Trojan Source).
     Bidi,
     /// Excessive stacked combining marks, an overlay across a word, or three marks on half the
-    /// letters of a Latin word. A strike counts from half a word, an underline from all letters
-    /// but one (#1194).
+    /// letters of a Latin word. A strike counts from half a word, an underline from every letter
+    /// of three or all but one of six (#1194, #1213).
     Zalgo,
     /// One token mixing Latin with Cyrillic or Greek (a Latin homoglyph).
     MixedScript,
@@ -1211,13 +1211,14 @@ fn is_cjk_prose_punctuation(c: char, word: &str) -> bool {
 
 /// Whether a mark draws through a letter: a strikethrough or a slash (#1156, #1194).
 ///
-/// `U+0334` to `U+0338`, and the overlays in the block for symbols. That is every mark in
-/// combining class 1 but those a script writes for itself: Vedic tones, Kharoshthi, Bassa Vah,
-/// Duployan and the musical tremolos.
+/// `U+0336` to `U+0338`, and the overlays in the block for symbols. With `U+0334` and `U+0335`,
+/// which [`is_underline_bar_mark`] holds, that is every mark in combining class 1 but those a
+/// script writes for itself: Vedic tones, Kharoshthi, Bassa Vah, Duployan and the musical
+/// tremolos.
 fn is_strike_mark(c: char) -> bool {
     matches!(
         c,
-        '\u{0334}'..='\u{0338}'
+        '\u{0336}'..='\u{0338}'
             | '\u{20D2}'
             | '\u{20D3}'
             | '\u{20D8}'..='\u{20DA}'
@@ -1228,10 +1229,14 @@ fn is_strike_mark(c: char) -> bool {
     )
 }
 
-/// Whether a mark draws under a letter (#1156). Not `U+0331`, which is a letter in Kwak'wala
-/// and Tlingit, and not the overline `U+0305`, a vinculum and an active-low signal (#1194).
-fn is_underline_mark(c: char) -> bool {
-    matches!(c, '\u{0332}' | '\u{0333}')
+/// Whether a mark answers to the underline's bar (#1156, #1213).
+///
+/// The underlines, and `U+0334` and `U+0335`. `U+0334` is the IPA mark for a velarized or
+/// pharyngealized sound and `U+0335` a short bar, so two letters of three are a use and a whole
+/// word is still a style. Not `U+0331`, which is a letter in Kwak'wala and Tlingit, and not the
+/// overline `U+0305`, a vinculum and an active-low signal (#1194).
+fn is_underline_bar_mark(c: char) -> bool {
+    matches!(c, '\u{0332}'..='\u{0335}')
 }
 
 /// The first overlay on a word covering enough of it, with how many letters of how many
@@ -1244,8 +1249,11 @@ fn is_underline_mark(c: char) -> bool {
 ///
 /// * a strike reports on two letters and at least half the word. Nobody writes one on every
 ///   other letter, and one struck letter is linguistic or math notation;
-/// * an underline reports on all letters but one, three at the least. Scholarly romanization of
-///   Arabic underlines digraphs, so `S\u{332}h\u{332}ayk\u{332}h\u{332}` is four of six.
+/// * an underline reports on every letter of three or more, and on all letters but one with
+///   five marks at the least. Scholarly romanization of Arabic underlines digraphs, so
+///   `S\u{332}h\u{332}ayk\u{332}h\u{332}` is four of six and `k\u{332}h\u{332}us\u{332}h\u{332}`
+///   four of five. Five is the least that two digraphs cannot reach, and it gives up 3 of 4
+///   and 4 of 5 on a word styled by hand, which `llm_guardrail` still removes (#1213).
 ///
 /// A mark on a symbol counts for no letter, so `a=\u{338}b` stays the negation it is (#749).
 fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
@@ -1256,7 +1264,7 @@ fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
     for c in word.chars() {
         if unicode_normalization::char::is_combining_mark(c) {
             let strike = is_strike_mark(c);
-            if open_letter && (strike || is_underline_mark(c)) {
+            if open_letter && (strike || is_underline_bar_mark(c)) {
                 open_letter = false;
                 overlaid += 1;
                 struck |= strike;
@@ -1270,7 +1278,7 @@ fn overlaid_word(word: &str) -> Option<(char, usize, usize)> {
     let enough = if struck {
         overlaid >= 2 && overlaid * 2 >= letters
     } else {
-        letters >= 2 && (overlaid == letters || (overlaid >= 3 && overlaid + 1 == letters))
+        overlaid >= 3 && (overlaid == letters || (overlaid >= 5 && overlaid + 1 == letters))
     };
     enough
         .then_some(found)
@@ -1689,6 +1697,9 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
             // BOM, …) is never legitimate inside or at the edge of a word, so a
             // single letter neighbour on EITHER side — including accented Latin —
             // is enough (catches word-edge `paypal<ZWSP>` and leading `<BOM>paypal`).
+            //
+            // A digit is not a letter, so `12` U+200B `34` stays clean. That is a decision: a
+            // digit group has no word to split, and `canonicalize` removes it (#1204).
             let joiner = c == '\u{200C}' || c == '\u{200D}';
             let letter = |slice: &[char]| {
                 if joiner {

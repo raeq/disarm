@@ -12966,26 +12966,91 @@
       "measurements": {
         "altered_by_strip_obfuscation": {
           "higher_is_better": null,
-          "of": 64,
-          "value": 51
+          "of": 61,
+          "value": 48
         },
-        "reported_by_any_detector": {
-          "higher_is_better": true,
-          "of": 64,
-          "value": 10
-        },
-        "silent": {
-          "higher_is_better": false,
-          "of": 64,
-          "value": 54
-        },
-        "techniques": {
+        "cases": {
           "higher_is_better": null,
           "of": null,
           "value": 64
+        },
+        "cases_left_out": {
+          "higher_is_better": null,
+          "of": 64,
+          "value": 33
+        },
+        "control_always_fires": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 0.0
+        },
+        "files": {
+          "higher_is_better": null,
+          "of": null,
+          "value": 94
+        },
+        "files_without_verdict": {
+          "higher_is_better": null,
+          "of": 94,
+          "value": 33
+        },
+        "has_anomalies_on_clean": {
+          "higher_is_better": false,
+          "of": 23,
+          "value": 0
+        },
+        "has_anomalies_on_hidden": {
+          "higher_is_better": true,
+          "of": 20,
+          "value": 14
+        },
+        "has_anomalies_on_mixed_script": {
+          "higher_is_better": true,
+          "of": 4,
+          "value": 4
+        },
+        "has_anomalies_on_payload": {
+          "higher_is_better": true,
+          "of": 6,
+          "value": 6
+        },
+        "has_anomalies_on_typographic": {
+          "higher_is_better": null,
+          "of": 8,
+          "value": 0
+        },
+        "has_anomalies_tpr_minus_fpr": {
+          "higher_is_better": true,
+          "of": null,
+          "value": 0.8
+        },
+        "primitives_on_clean": {
+          "higher_is_better": false,
+          "of": 23,
+          "value": 7
+        },
+        "primitives_on_hidden": {
+          "higher_is_better": null,
+          "of": 20,
+          "value": 1
+        },
+        "primitives_on_mixed_script": {
+          "higher_is_better": null,
+          "of": 4,
+          "value": 4
+        },
+        "primitives_on_payload": {
+          "higher_is_better": null,
+          "of": 6,
+          "value": 0
+        },
+        "primitives_on_typographic": {
+          "higher_is_better": null,
+          "of": 8,
+          "value": 2
         }
       },
-      "population": 64,
+      "population": 61,
       "subject": "disarm",
       "subject_version": "0.19.0+g4e21e8a3"
     },

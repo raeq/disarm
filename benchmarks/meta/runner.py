@@ -111,15 +111,15 @@ def provision(
     a particular revision keeps it. A failed fetch is recorded and the run
     continues: the suite then reports SKIPPED, the same answer it gave before
     provisioning existed.
+
+    Sources are kept per cache name and not per URL, because a suite opens the name.
+    Two suites may cache one URL under two names, and each must find its own.
     """
-    sources: list[Source] = []
-    seen: set[str] = set()
+    sources: dict[tuple[str, str | None], Source] = {}
     for suite in suites:
         for source in getattr(suite, "SOURCES", ()):
-            if source.url not in seen:
-                seen.add(source.url)
-                sources.append(source)
-    return provision_sources(sources, offline=offline, refresh=refresh)
+            sources.setdefault((source.filename, source.member), source)
+    return provision_sources(list(sources.values()), offline=offline, refresh=refresh)
 
 
 def run(

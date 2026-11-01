@@ -1901,6 +1901,7 @@ class PromptfooLiteralMaps(_KnownAnswerSuite):
             ),
         )
     )
+    NEEDS_EVERY_SOURCE = True
     EXPECTED_ROWS: ClassVar[dict[str, int]] = {"homoglyph": 62, "arabic": 43}
 
     def read_maps(self) -> dict[str, list[tuple[str, str]]]:
@@ -2091,6 +2092,7 @@ class AugustusKnownAnswers(_KnownAnswerSuite):
             *ZALGO_FILES.items(),
         )
     )
+    NEEDS_EVERY_SOURCE = True
     #: Fixed here before any score, and a carrier and a style are scored differently. A cipher,
     #: Braille and emoji substitution are boundary under `THREAT_MODEL.md`.
     CLASSES: ClassVar[dict[str, str]] = {
@@ -2560,6 +2562,7 @@ class SpikeeSeedCensus(_FixtureSuite):
         )
         for relative, digest in FILES.items()
     )
+    NEEDS_EVERY_SOURCE = True
     EXPECTED_ROWS: ClassVar[dict[str, int]] = {
         "seeds-cybersec-2026-01": 94,
         "seeds-harmful-instructions-only": 45,

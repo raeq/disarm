@@ -17,7 +17,7 @@ import os
 
 import pytest
 
-from benchmarks.meta import damage, fetch, leaderboard, registry, subjects
+from benchmarks.meta import base, damage, fetch, leaderboard, registry, runner, subjects
 from benchmarks.meta import report as report_module
 from benchmarks.meta.base import REPO_ROOT, SuiteBase, surfaces, thin
 from benchmarks.meta.baseline import Drift, compare, snapshot
@@ -639,6 +639,71 @@ def test_offline_never_reaches_the_network(tmp_path):
     got = provision([source], cache=tmp_path, offline=True)
     assert got.skipped_offline == [source]
     assert not got.fetched
+
+
+@pytest.fixture
+def downloads(tmp_path, monkeypatch):
+    """The real provisioning path, with an empty file where each download lands."""
+    asked: list[fetch.Source] = []
+
+    def download(source, cache):
+        asked.append(source)
+        path = fetch._target(source, cache)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(fetch, "_download", download)
+    monkeypatch.setattr(fetch, "CACHE", tmp_path)
+    monkeypatch.setattr(base, "FETCH_CACHE", tmp_path)
+    return asked
+
+
+def _cache_names(sources) -> list[tuple[str, str | None]]:
+    return [(source.filename, source.member) for source in sources]
+
+
+def test_a_run_hands_the_fetcher_each_declared_cache_name_once(monkeypatch):
+    """A name dropped here is a file some suite opens and nothing ever fetched (#1192)."""
+    handed: list[fetch.Source] = []
+
+    def fetcher(sources, **_options):
+        handed.extend(sources)
+        return fetch.Provisioning()
+
+    monkeypatch.setattr(runner, "provision_sources", fetcher)
+    suites = registry.all_suites()
+    runner.provision(suites)
+    declared = {name for suite in suites for name in _cache_names(getattr(suite, "SOURCES", ()))}
+    assert declared - set(_cache_names(handed)) == set()
+    assert len(handed) == len(declared)
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ("benign-controls", "spikee-seed-census"),
+        ("spikee-seed-census", "benign-controls"),
+    ],
+)
+def test_two_suites_caching_one_url_each_get_their_own_name(downloads, tmp_path, names):
+    by_name = {suite.name: suite for suite in registry.all_suites()}
+    suites = [by_name[name] for name in names]
+    runner.provision(suites)
+    for suite in suites:
+        for source in suite.SOURCES:
+            assert fetch._target(source, tmp_path).exists(), source.filename
+
+
+def test_one_cache_name_is_one_pinned_artifact():
+    """`provision` keeps one source per name, so a second pin on a name would be lost."""
+    pins: dict[tuple[str, str | None], set[tuple[str, str | None]]] = {}
+    for suite in registry.all_suites():
+        for source in getattr(suite, "SOURCES", ()):
+            pins.setdefault((source.filename, source.member), set()).add(
+                (source.url, source.sha256)
+            )
+    assert {name: pin for name, pin in pins.items() if len(pin) > 1} == {}
 
 
 def test_an_archive_member_escaping_the_destination_is_refused(tmp_path):

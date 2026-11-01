@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from .fetch import CACHE as FETCH_CACHE
-from .fetch import Provisioning, Source, provision
+from .fetch import Provisioning, Source, _target, provision
 from .protocol import (
     Availability,
     Family,
@@ -191,6 +191,9 @@ class SuiteBase:
     #: fetchable artifact has been *shown* to exist — the suite stays manual and
     #: says so, rather than implying a download nobody has demonstrated.
     SOURCES: tuple[Source, ...] = ()
+    #: Does this suite open every file in `SOURCES`? Then one absent file means it cannot
+    #: run, and it skips and names the file. Left False, it reads what is present.
+    NEEDS_EVERY_SOURCE: ClassVar[bool] = False
     #: Can this suite score a tool other than disarm? False where the question is
     #: about a disarm-specific surface (a key builder, a named anomaly kind) that
     #: no other tool exposes — running such a suite against `ftfy` would produce a
@@ -225,9 +228,7 @@ class SuiteBase:
             if override and Path(override).exists():
                 return Path(override)
         for source in self.SOURCES:
-            path = FETCH_CACHE / source.filename
-            if source.member and source.kind != "file":
-                path = path / source.member
+            path = _target(source, FETCH_CACHE)
             if path.exists():
                 return path
         return None
@@ -240,10 +241,17 @@ class SuiteBase:
         if self.availability in (Availability.VENDORED, Availability.DERIVED):
             return True, ""
         path = self.locate()
-        if path is not None:
-            return True, ""
-        hint = f" Set ${self.env_var} to a downloaded copy." if self.env_var else ""
-        return False, f"{self.provenance.citation} artifact not present.{hint}"
+        if path is None:
+            hint = f" Set ${self.env_var} to a downloaded copy." if self.env_var else ""
+            return False, f"{self.provenance.citation} artifact not present.{hint}"
+        if self.NEEDS_EVERY_SOURCE:
+            absent = [s.filename for s in self.SOURCES if not _target(s, FETCH_CACHE).exists()]
+            if absent:
+                return False, (
+                    f"{self.provenance.citation}: {len(absent)} of {len(self.SOURCES)} declared "
+                    f"files not present, first {absent[0]}."
+                )
+        return True, ""
 
     #: Values the suite's published script printed at :attr:`REPRO_VERSION`,
     #: copied from that script's own output. Never edited to match a fresh run —

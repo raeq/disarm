@@ -174,6 +174,12 @@ look-alike of `paypal` romanizes to `raural` rather than folding to `paypal`. Tr
 runs before the fold in the fixed step order, so adding a confusable step here would be a
 no-op. For homoglyph-spoof folding, use `llm_guardrail`.
 
+**It deletes a Latin letter that has no transliteration row.** `transliterate` answers `[?]` and the
+profile drops it, so it deletes 17 of 25 small capitals and gives a capital for the other 8: `attack`
+in small capitals becomes an empty string, where `llm_guardrail` returns `attack`. `has_anomalies`
+reports `confusable` on the input, so a caller who screens first is told. Adding the rows moves
+`search_key`, a stored key, so the fix waits for a minor release (#1205).
+
 ```python
 pipe = get_pipeline("rag_ingest")
 assert pipe("Москва") == "Moskva"  # retrievable, and the case is kept

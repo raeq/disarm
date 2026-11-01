@@ -89,6 +89,11 @@ operates on the string it is given; a base64 payload is an ordinary run of ASCII
 to every transform here. Decode first, then pass the result in — the same ordering
 `THREAT_MODEL.md` gives for the rest of that class.
 
+Substitution into a real script is out of scope. A text that writes Latin letters as Katakana, Hiragana, Runic, Ogham or Greek by a chosen map has no
+Unicode answer: the fold works on look-alikes, and `rag_ingest` romanizes by sound, so neither returns
+the source text. 4,155 of
+L1B3RT4S's non-ASCII letters are of this kind (#1205).
+
 ## Structural attacks are mostly out of scope, and that is the honest reading
 
 Four of the seven structural rows are `no` in both columns. Reordering words, deleting

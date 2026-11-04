@@ -60,7 +60,7 @@ jobs:
       - name: Install the pinned nightly with llvm-tools
         run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --component llvm-tools-preview
 
-      - uses: Swatinem/rust-cache@f0d9c3887740aee45f6153b24b3a6b815192ec16  # master
+      - uses: Swatinem/rust-cache@c8037a86dde8214a8310e9f54a8fc61ab362aa31  # master
 
       - name: Install cargo-llvm-cov (pinned)
         run: cargo install cargo-llvm-cov --version "$CARGO_LLVM_COV_VERSION" --locked

@@ -221,6 +221,12 @@ behavior, not a vulnerability:
   FlipAttack (reordered words and letters), CipherChat (classical ciphers and character
   codes), BitBypass (binary spelled in ASCII) and ArtPrompt (ASCII art) all fall here: each
   is ordinary ASCII to disarm, which reports nothing and decodes nothing.
+- **Substitution into a real script is out of scope.**
+  A text that writes Latin letters as Katakana, Hiragana, Runic, Ogham or Greek by a chosen map has no
+  Unicode answer: the fold works on look-alikes, and `rag_ingest` romanizes by sound, so neither returns
+  the source text. The kept letters do not look like Latin, they stand for a letter only
+  because an author chose a map, and a row for one of them would rewrite real Japanese
+  (#1205).
 - **Charset confusion between two decoders.** disarm reads the bytes one way. If a later
   component decodes the same bytes differently, as UTF-7 or a legacy Chinese charset can
   be, then disarm examined text that component never saw. Fix the charset at the boundary

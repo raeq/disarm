@@ -937,6 +937,39 @@ fn spread_carriers(text: &str) -> Option<((usize, usize), usize)> {
         .flatten()
 }
 
+/// Two or more kinds of exotic space in one text, as the first one's byte offset and length,
+/// then how many kinds (#1207).
+///
+/// A data carrier needs at least two symbols, so one kind is a space doing its job: `Mr.`
+/// `U+2009` `Smith`, or `U+3000` in Japanese. Text-level, because the kinds can sit in
+/// different tokens. Exotic is any `Zs` above `U+007F` but `U+00A0`, which is everywhere.
+///
+/// Matched by UTF-8 bytes, since every non-ASCII text pays for this and few hold one, and no
+/// other walk here reads the spaces. `U+2000` is judged as spelled, as every singleton is: see
+/// "One verdict for every canonically equivalent spelling" in the anomaly guide.
+fn mixed_exotic_spaces(text: &str) -> Option<((usize, usize), u32)> {
+    if text.is_ascii() {
+        return None;
+    }
+    let mut first = None;
+    let mut kinds = 0u32;
+    for (at, bytes) in text.as_bytes().windows(3).enumerate() {
+        let kind = match *bytes {
+            [0xE1, 0x9A, 0x80] => 11,                      // U+1680
+            [0xE2, 0x80, low @ 0x80..=0x8A] => low - 0x80, // U+2000..=U+200A
+            [0xE2, 0x80, 0xAF] => 12,                      // U+202F
+            [0xE2, 0x81, 0x9F] => 13,                      // U+205F
+            [0xE3, 0x80, 0x80] => 14,                      // U+3000
+            _ => continue,
+        };
+        kinds |= 1 << kind;
+        first.get_or_insert((at, 3));
+    }
+    (kinds.count_ones() >= 2)
+        .then(|| first.map(|at| (at, kinds.count_ones())))
+        .flatten()
+}
+
 /// How a run of private-use characters sits between the text `before` it and the character
 /// `after` it: `Some(true)` splits a word, `Some(false)` counts toward
 /// [`SPREAD_CARRIER_FLOOR`], and `None` is neither (#1212).
@@ -2020,6 +2053,10 @@ fn classify(raw: &str, start: usize, lexicon: &HashSet<String>) -> Option<Findin
         // is not what #633 describes — "spelled half in a compatibility form and half in
         // ASCII", the shape nobody writes on purpose. It is a space.
         //
+        // Two or more kinds of exotic space in one text are another shape, and
+        // `mixed_exotic_spaces` reads it (#1207). The floor is two: no benign prompt of 20,456
+        // and no attack of 2,071 holds two kinds, and ST3GG's carrier holds three.
+        //
         // #722: the whole-token exemption is now per BLOCK. It exists to protect `ＮＨＫ`,
         // and was applied to twelve blocks including ones where no `ＮＨＫ` exists — 652
         // Mathematical Alphanumeric code points spell a word that folds to plain ASCII.
@@ -2285,6 +2322,7 @@ pub fn has_anomalies(text: &str, lexicon: &HashSet<String>) -> bool {
     // (#739). `split_tokens` can never present it to `classify`.
     overwriting_cr(text).is_some()
         || spread_carriers(text).is_some()
+        || mixed_exotic_spaces(text).is_some()
         || decoded_payloads(text).next().is_some()
         || split_tokens(text)
             .into_iter()
@@ -2323,6 +2361,20 @@ pub fn inspect_anomalies(text: &str, lexicon: &HashSet<String>) -> AnomalyReport
         .collect();
     for f in smuggled.into_iter().rev() {
         findings.insert(0, f);
+    }
+
+    if let Some(((start, len), kinds)) = mixed_exotic_spaces(text) {
+        let at = findings.partition_point(|f: &Finding| f.start < start);
+        findings.insert(
+            at,
+            Finding {
+                kind: AnomalyKind::CompatFold,
+                token: text[start..start + len].to_owned(),
+                start,
+                end: start + len,
+                detail: format!("U+0020, one of {kinds} kinds of exotic space in the text"),
+            },
+        );
     }
 
     // The input's own tokens did not reach the bar, and its canonical form may (#1209).

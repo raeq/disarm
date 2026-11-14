@@ -173,11 +173,11 @@ def test_parenthesized_letters_fold_to_their_parentheses() -> None:
     assert disarm.has_anomalies(PARENTHESIZED)
 
 
-def test_regional_indicators_have_no_signal_and_two_surfaces_disagree() -> None:
+def test_regional_indicators_report_and_two_surfaces_disagree() -> None:
     assert disarm.canonicalize(REGIONAL) == REGIONAL
     assert disarm.get_pipeline("llm_guardrail")(REGIONAL) == REGIONAL
     assert disarm.get_pipeline("rag_ingest")(REGIONAL) == ""
-    assert not disarm.has_anomalies(REGIONAL)
+    assert disarm.inspect_anomalies(REGIONAL).kinds == ["confusable"]  # #1206
 
 
 def test_turned_letters_are_distinct_letters_and_are_kept() -> None:
@@ -192,8 +192,8 @@ def test_turned_letters_are_distinct_letters_and_are_kept() -> None:
         "`the` written in `U+24AF U+24A3 U+24A0` becomes `(t)(h)(e)`, so a word filter after the "
         "fold does not match it. `has_anomalies` reports `compat_fold`.",
         "Regional indicators have no compatibility mapping and no confusable row. `canonicalize`, "
-        "`search_key` and `llm_guardrail` keep them, `rag_ingest` deletes them, and "
-        "`has_anomalies` is False.",
+        "`search_key` and `llm_guardrail` keep them, and `rag_ingest` deletes them. A run of them "
+        "that is not a sequence of registered flags reports `confusable`",
         "Turned letters such as `U+0250` and `U+0287` are distinct letters with no decomposition. "
         "They are kept, and a transliterating surface may give a different letter. A text "
         "reversed as well as turned has no recoverable form.",

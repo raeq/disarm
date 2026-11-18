@@ -67,14 +67,14 @@ test = [
 ]
 dev = [
     "disarm[test]",
-    "ruff==0.17.2",
+    "ruff==0.17.5",
     "maturin>=1.14.0,<2",
     "pre-commit>=4.6.0",
 ]
 bench = [
     # Exact pins only, so comparator ratios are reproducible (#234 gate V8; see
     # docs/contributing/packaging.md#bench-exact-pins).
-    "pyperf==2.10.0",            # Python-side bench runner (tooling, not a comparator)
+    "pyperf==2.11.0",            # Python-side bench runner (tooling, not a comparator)
     # ── transliterate-axis comparators ──
     "Unidecode==1.4.0",
     "text-unidecode==1.3",

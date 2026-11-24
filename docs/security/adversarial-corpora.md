@@ -75,6 +75,10 @@ checks this table.
 
 ## Reading the two columns
 
+The `whitespace steganography` row is true of its input, which is the base text plus
+`U+200B U+200C U+200B U+200C`. Those are zero-width characters and not whitespace. Trailing spaces and
+tabs read clean, as [the limit](../limitations.md#hiding-data-in-ordinary-characters-1207) says.
+
 They are kept apart for the same reason `cve-validation.md` keeps them apart: a subtype
 that is **neutralized and undetected** is a different situation from one that is
 **detected and unneutralized**, and the asymmetry is the useful output.

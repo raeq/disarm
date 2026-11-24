@@ -1641,9 +1641,12 @@ class St3ggTextExamples(_KnownAnswerSuite):
             of=total,
             higher_is_better=True,
         )
-        for name, detector in sorted(detectors.items()):
-            fired = sum(_fires(detector, text) for text, _ in cases.values())
-            add(outcome, f"techniques_detected:{name}", fired, of=total)
+        detected = {
+            name: {technique: int(_fires(detector, text)) for technique, (text, _) in cases.items()}
+            for name, detector in sorted(detectors.items())
+        }
+        for name, by_technique in detected.items():
+            add(outcome, f"techniques_detected:{name}", sum(by_technique.values()), of=total)
         for key, surface in (
             ("control_delete_everything", _delete_everything),
             ("control_identity", _identity),
@@ -1656,7 +1659,7 @@ class St3ggTextExamples(_KnownAnswerSuite):
             )
         present = sum((root / name).is_file() for name in self.BOUNDARY_FILES)
         add(outcome, "boundary_files", present, unit="files")
-        outcome.extra = {"recovered_by_technique": recovered}
+        outcome.extra = {"recovered_by_technique": recovered, "detected_by_technique": detected}
 
 
 class ArcanumTaxonomy(_FixtureSuite):

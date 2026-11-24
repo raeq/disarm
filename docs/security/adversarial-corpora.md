@@ -56,7 +56,7 @@ checks this table.
 | Homoglyph | `mathematical alphanumerics` | yes | yes |
 | Homoglyph | `small capitals` | yes | yes |
 | Homoglyph | `parenthesized letters` | yes | yes |
-| Homoglyph | `regional indicators` | no | no |
+| Homoglyph | `regional indicators` | no | yes |
 | Homoglyph | `turned letters` | yes | yes |
 | Structural | `bracket nesting` | no | no |
 | Structural | `character deletion` | no | no |

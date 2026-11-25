@@ -868,9 +868,9 @@ jobs:
       # Gradle published before running it: a swapped wrapper would run with every
       # credential this job has. Checked against Gradle's published checksums.
       - name: Validate the Gradle wrapper
-        uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6  # v6.4.0
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c  # v6.4.1
 
-      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad  # v6.1.0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880  # v6.3.0
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
@@ -991,7 +991,7 @@ jobs:
         run: cargo generate-lockfile
 
       - name: Run cargo deny
-        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25  # v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9  # v2.1.2
         with:
           # licenses / bans / sources only — RustSec advisories are owned by the
           # dedicated `cargo audit` job above (#260).
